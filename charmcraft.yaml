@@ -1,0 +1,54 @@
+# This file configures Charmcraft.
+# See https://juju.is/docs/sdk/charmcraft-config for guidance.
+
+name: opentelemetry-collector
+type: charm
+subordinate: true
+summary: Vendor-agnostic way to receive, process and export telemetry data.
+description: |
+  The OpenTelemetry Collector offers a vendor-agnostic implementation on how to receive,
+  process and export telemetry data. In addition, it removes the need to run, operate and
+  maintain multiple agents/collectors in order to support open-source telemetry data formats
+  (e.g. Jaeger, Prometheus, etc.) to multiple open-source or commercial back-ends.
+
+links:
+  # documentation: https://discourse.charmhub.io/
+  website: https://charmhub.io/opentelemetry-collector
+  source: https://github.com/canonical/opentelemetry-collector-operator
+  issues: https://github.com/canonical/opentelemetry-collector-operator/issues
+
+assumes:
+  - juju >= 3.6
+
+platforms:
+  ubuntu@22.04:amd64:
+  ubuntu@22.04:arm64:
+  ubuntu@24.04:amd64:
+  ubuntu@24.04:arm64:
+
+parts:
+  charm:
+    build-packages:
+    - git
+
+    charm-binary-python-packages:
+      # Install PyYAML from binary and avoid building it from sources. This way, we can use PyYAML with C-optimized lib.
+      # With the C-optimized lib, serialization in ops is 20x faster.
+      - PyYAML
+  cos-tool:
+    plugin: dump
+    source: .
+    build-packages:
+      - curl
+    override-pull: |
+      curl -L -O https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-${CRAFT_ARCH_BUILD_FOR}
+      chmod +x cos-tool-*
+
+requires:
+  juju-info:
+    description: |
+      `juju-info` provides basic compatibility with all charms.
+      If all you want is /var/log logs and node_exporter metrics,
+      this relation will be enough.
+    interface: juju-info
+    scope: container
