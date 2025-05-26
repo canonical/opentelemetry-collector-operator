@@ -23,26 +23,28 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        self.framework.breakpoint()
         self._reconcile()
 
 
     def _reconcile(self):
         self._install()
         self._remove()
-
         self.unit.status = ActiveStatus()
 
     def _install(self) -> None:
-        if self.hook == "install":
-            for snap_package in SNAPS:
-                self._install_snap(snap_package)
-                self._start_snap(snap_package)
+        if self.hook != "install":
+            return
+
+        for snap_package in SNAPS:
+            self._install_snap(snap_package)
+            self._start_snap(snap_package)
 
     def _remove(self) -> None:
-        if self.hook == "remove":
-            for snap_package in SNAPS:
-                self._remove_snap(snap_package)
+        if self.hook != "remove":
+            return
+
+        for snap_package in SNAPS:
+            self._remove_snap(snap_package)
 
     def _install_snap(self, snap_name: str) -> None:
         self.unit.status = MaintenanceStatus(f"Installing {snap_name} snap")
