@@ -27,9 +27,7 @@ dev = [
   "pytest",
   "coverage[toml]",
   # Integration
-  "juju<=3.3.0,>=3.0",
-  "websockets<14.0",
-  "pytest-operator>=0.39",
+  "pytest-operator",
   "ops[testing]",
   "sh",
   "jubilant",
@@ -61,7 +59,7 @@ convention = "google"
 
 [tool.pyright]
 extraPaths = ["src", "lib"]
-pythonVersion = "3.10"
+pythonVersion = "3.8"
 pythonPlatform = "All"
 
 [tool.pytest.ini_options]

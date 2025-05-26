@@ -1,3 +1,6 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 # This file configures Charmcraft.
 # See https://juju.is/docs/sdk/charmcraft-config for guidance.
 
@@ -28,21 +31,21 @@ platforms:
 
 parts:
   charm:
-    build-packages:
-    - git
-
-    charm-binary-python-packages:
-      # Install PyYAML from binary and avoid building it from sources. This way, we can use PyYAML with C-optimized lib.
-      # With the C-optimized lib, serialization in ops is 20x faster.
-      - PyYAML
+    source: .
+    plugin: uv
+    build-packages: [git]
+    build-snaps: [astral-uv]
+    override-build: |
+      craftctl default
+      git describe --always > $CRAFT_PART_INSTALL/version
   cos-tool:
     plugin: dump
-    source: .
-    build-packages:
-      - curl
-    override-pull: |
-      curl -L -O https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-${CRAFT_ARCH_BUILD_FOR}
-      chmod +x cos-tool-*
+    source: https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-${CRAFT_ARCH_BUILD_FOR}
+    source-type: file
+    permissions:
+      - path: cos-tool-${CRAFT_ARCH_BUILD_FOR}
+        mode: "755"
+
 
 requires:
   juju-info:
