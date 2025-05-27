@@ -16,6 +16,7 @@ import subprocess
 from typing import Dict, Optional
 
 import charms.operator_libs_linux.v2.snap as snap_lib
+from charms.operator_libs_linux.v2.snap import JSONAble
 
 # Log messages can be retrieved using juju debug-log
 log = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ class SnapServiceError(SnapError):
     pass
 
 
-def install_snap(snap: str, classic: bool = False, config: Optional[Dict[str, str]] = None):
+def install_snap(snap: str, classic: bool = False, config: Optional[Dict[str, JSONAble]] = None):
     """Looks up system details and installs the appropriate snap revision."""
     arch = get_system_arch()
     confinement = "classic" if classic else "strict"
@@ -76,7 +77,7 @@ def _install_snap(
     name: str,
     revision: str,
     classic: bool = False,
-    config: Optional[Dict[str, str]] = None,
+    config: Optional[Dict[str, JSONAble]] = None,
 ):
     """Install and pin the given snap revision.
 
