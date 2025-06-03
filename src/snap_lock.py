@@ -18,9 +18,9 @@ class SnapLock:
     Raises SnapLockError on any error.
     """
 
-    def __init__(self, instance_id: str, lock_timeout_sec: int = 300):
-        self.instance_id = instance_id
-        self.db_path = "/tmp/snap_lock.db"
+    def __init__(self, instance_name: str, lock_timeout_sec: int = 300):
+        self.instance_name = instance_name
+        self.db_path = "/var/lock/snap_lock.db"
         self.lock_timeout = lock_timeout_sec
         self._init_db()
 
@@ -30,9 +30,9 @@ class SnapLock:
                 cursor = conn.cursor()
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS active_instances (
-                        instance_id TEXT,
+                        instance_name TEXT,
                         snap_name TEXT,
-                        PRIMARY KEY (instance_id, snap_name)
+                        PRIMARY KEY (instance_name, snap_name)
                     )
                 """)
                 conn.execute("""
@@ -64,7 +64,7 @@ class SnapLock:
                 cursor.execute(
                     "INSERT INTO active_instances VALUES (?, ?)",
                     (
-                        self.instance_id,
+                        self.instance_name,
                         snap_name,
                     ),
                 )
@@ -90,9 +90,16 @@ class SnapLock:
 
                 # Remove instance record.
                 cursor.execute(
-                    "DELETE FROM active_instances WHERE instance_id = ? AND snap_name = ?",
-                    (self.instance_id, snap_name),
+                    "DELETE FROM active_instances WHERE instance_name = ? AND snap_name = ?",
+                    (self.instance_name, snap_name),
                 )
+
+                # Check if any rows were actually deleted.  If not, it means the record
+                # was already gone, so we don't need to raise an exception.
+                if cursor.rowcount == 0:
+                    # Instance was alredy unregistered, it's OK.
+                    conn.rollback()  # Rollback the transaction as nothing was changed.
+                    return
 
                 conn.commit()
             except Exception as e:
@@ -106,7 +113,7 @@ class SnapLock:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT instance_id FROM active_instances WHERE snap_name = ?
+                SELECT instance_name FROM active_instances WHERE snap_name = ?
                 """,
                 (snap_name,),
             )
@@ -119,35 +126,31 @@ class SnapLock:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT instance_id FROM active_instances WHERE snap_name = ? AND instance_id != ?
+                SELECT instance_name FROM active_instances WHERE snap_name = ? AND instance_name != ?
                 """,
-                (snap_name, self.instance_id),
+                (snap_name, self.instance_name),
             )
             return cursor.fetchone() is not None
 
     @contextmanager
-    def lock_snap(self, snap_name: str, timeout: int = 3) -> Generator[bool, None, None]:
+    def lock_snap(self, snap_name: str, timeout: int = 3) -> Generator[None, None, None]:
         """Context manager to acquire a lock on a snap for exclusive access.
 
         Raises SnapLockError.
 
         Example usage:
 
-        with lock.lock_snap('otelcol') as acquired:
-            if acquired:
-                # Perform operations on the snap
-            else:
-                # Handle the case where the snap lock was not acquired
+        with lock.lock_snap('otelcol'):
+            # Perform operations on the snap - lock is guaranteed to be held
+            ...
         """
-        acquired = False
         try:
-            acquired = self._acquire_snap_lock(snap_name, timeout)
-            yield acquired
+            self._acquire_snap_lock(snap_name, timeout)
+            yield
         except SnapLockError:
             raise
         finally:
-            if acquired:
-                self._release_snap_lock(snap_name)
+            self._release_snap_lock(snap_name)
 
     def _acquire_snap_lock(self, snap_name: str, timeout: int) -> bool:
         start_time = time.time()
@@ -186,7 +189,7 @@ class SnapLock:
                             conn.commit()
                             continue
 
-                        if locked_by == self.instance_id:  # We already hold it.
+                        if locked_by == self.instance_name:  # We already hold it.
                             return True
 
                         # Active lock held by others.
@@ -199,7 +202,7 @@ class SnapLock:
                         INSERT INTO snap_locks 
                         VALUES (?, ?, datetime('now'))
                         """,
-                        (snap_name, self.instance_id),
+                        (snap_name, self.instance_name),
                     )
                     conn.commit()
                     return True
@@ -222,7 +225,7 @@ class SnapLock:
                     DELETE FROM snap_locks
                     WHERE snap_name = ? AND locked_by = ?
                     """,
-                    (snap_name, self.instance_id),
+                    (snap_name, self.instance_name),
                 )
                 conn.commit()
                 return cursor.rowcount > 0
@@ -231,28 +234,24 @@ class SnapLock:
                 return False
 
     @contextmanager
-    def lock_config(self, config_path: str, timeout: int = 3) -> Generator[bool, None, None]:
+    def lock_config(self, config_path: str, timeout: int = 3) -> Generator[None, None, None]:
         """Context manager to acquire a lock on a config file for exclusive access.
 
         Raises SnapLockError.
 
         Example usage:
 
-        with lock.lock_config('/etc/otelcol/config.yaml') as acquired:
-            if acquired:
-                # Perform operations on the config
-            else:
-                # Handle the case where the config lock was not acquired
+        with lock.lock_config('/etc/otelcol/config.yaml'):
+            # Perform operations on the snap - lock is guaranteed to be held
+            ...
         """
-        acquired = False
         try:
-            acquired = self._acquire_config_lock(config_path, timeout)
-            yield acquired
+            self._acquire_config_lock(config_path, timeout)
+            yield
         except SnapLockError:
             raise
         finally:
-            if acquired:
-                self._release_config_lock(config_path)
+            self._release_config_lock(config_path)
 
     def _acquire_config_lock(self, config_path: str, timeout: int) -> bool:
         start_time = time.time()
@@ -291,7 +290,7 @@ class SnapLock:
                             conn.commit()
                             continue
 
-                        if locked_by == self.instance_id:  # We already hold it.
+                        if locked_by == self.instance_name:  # We already hold it.
                             return True
 
                         # Active lock held by others.
@@ -304,7 +303,7 @@ class SnapLock:
                         INSERT INTO config_locks
                         VALUES (?, ?, datetime('now'))
                         """,
-                        (config_path, self.instance_id),
+                        (config_path, self.instance_name),
                     )
                     conn.commit()
                     return True
@@ -328,7 +327,7 @@ class SnapLock:
                     DELETE FROM config_locks
                     WHERE config_path = ? AND locked_by = ?
                     """,
-                    (config_path, self.instance_id),
+                    (config_path, self.instance_name),
                 )
                 conn.commit()
                 return cursor.rowcount > 0
