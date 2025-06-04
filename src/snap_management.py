@@ -12,7 +12,6 @@ Modified from https://github.com/canonical/k8s-operator/blob/main/charms/worker/
 
 import logging
 import platform
-import subprocess
 from typing import Dict, Optional
 
 import charms.operator_libs_linux.v2.snap as snap_lib
