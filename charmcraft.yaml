@@ -46,6 +46,9 @@ parts:
       - path: cos-tool-${CRAFT_ARCH_BUILD_FOR}
         mode: "755"
 
+charm-libs:
+  - lib: operator-libs-linux.snap
+    version: "2.11"
 
 requires:
   juju-info:
