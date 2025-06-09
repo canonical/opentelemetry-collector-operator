@@ -1,5 +1,6 @@
 """SingletonSnap Module using fcntl.flock and file-based reference counting."""
 
+import fcntl
 import os
 import re
 import time
@@ -44,9 +45,9 @@ class SingletonSnapManager:
     Raises SingletonSnapError on any error.
     """
 
-    LOCK_FILE_PREFIX = 'LCK..'
-    SEPARATOR = '--'
-    LOCK_DIR = '/run/lock/singleton_snaps'
+    LOCK_FILE_PREFIX = "LCK.."
+    SEPARATOR = "--"
+    LOCK_DIR = "/run/lock/singleton_snaps"
 
     def __init__(self, unit_name: str):
         """Initialize the manager with a normalized unit name.
@@ -63,7 +64,7 @@ class SingletonSnapManager:
 
         Replace all non-alphanumeric chars (except _-) with _.
         """
-        return re.sub(r'[^\w-]', '_', name)
+        return re.sub(r"[^\w-]", "_", name)
 
     def _ensure_lock_dir_exists(self) -> None:
         """Ensure the lock directory exists with correct permissions."""
@@ -72,7 +73,7 @@ class SingletonSnapManager:
             os.chown(self.LOCK_DIR, os.geteuid(), os.getegid())
         except OSError as e:
             if e.errno != errno.EEXIST:
-                raise SingletonSnapError(f'Error creating lock directory: {e}') from e
+                raise SingletonSnapError(f"Error creating lock directory: {e}") from e
 
     def _get_registration_file_path(self, snap_name: str) -> str:
         """Helper method to construct registration file path.
@@ -80,12 +81,12 @@ class SingletonSnapManager:
         The registration file name is constructed as:
         LCK..{snap_name}--{unit_name}
         """
-        filename = f'{self.LOCK_FILE_PREFIX}{snap_name}{self.SEPARATOR}{self.unit_name}'
+        filename = f"{self.LOCK_FILE_PREFIX}{snap_name}{self.SEPARATOR}{self.unit_name}"
         return os.path.join(self.LOCK_DIR, filename)
 
     def _parse_unit_name_from_file(self, filename: str, snap_name: str) -> str:
         """Helper method to extract unit name from registration filename."""
-        prefix = f'{self.LOCK_FILE_PREFIX}{snap_name}{self.SEPARATOR}'
+        prefix = f"{self.LOCK_FILE_PREFIX}{snap_name}{self.SEPARATOR}"
         return filename[len(prefix) :]
 
     def register(self, snap_name: str) -> None:
@@ -101,20 +102,20 @@ class SingletonSnapManager:
         lock_path = self._get_registration_file_path(snap_name)
         try:
             if create:
-                with open(lock_path, 'w') as f:
-                    f.write('')
+                with open(lock_path, "w") as f:
+                    f.write("")
             else:
                 os.unlink(lock_path)
         except FileNotFoundError:
             if create:
                 raise
         except OSError as e:
-            action = 'registering' if create else 'unregistering'
-            raise SingletonSnapError(f'Error {action} unit: {e}') from e
+            action = "registering" if create else "unregistering"
+            raise SingletonSnapError(f"Error {action} unit: {e}") from e
 
     def get_units(self, snap_name: str) -> list[str]:
         """Get all units currently registered for a snap."""
-        prefix = f'{self.LOCK_FILE_PREFIX}{self._normalize_name(snap_name)}{self.SEPARATOR}'
+        prefix = f"{self.LOCK_FILE_PREFIX}{self._normalize_name(snap_name)}{self.SEPARATOR}"
         units = []
 
         try:
@@ -122,7 +123,7 @@ class SingletonSnapManager:
                 if filename.startswith(prefix):
                     units.append(filename[len(prefix) :])
         except OSError as e:
-            raise SingletonSnapError(f'Error reading unit list: {e}') from e
+            raise SingletonSnapError(f"Error reading unit list: {e}") from e
 
         return units
 
@@ -136,35 +137,21 @@ class SingletonSnapManager:
 
         Uses atomic file creation (O_EXCL) as the locking mechanism.
         """
-        lock_path = os.path.join(self.LOCK_DIR, f'{self.LOCK_FILE_PREFIX}{lock_name}')
-        fd = None
-        deadline = time.time() + timeout
-
-        while True:
+        lock_path = os.path.join(self.LOCK_DIR, f"{self.LOCK_FILE_PREFIX}{lock_name}")
+        with open(lock_path, "w") as f:
+            deadline = time.time() + timeout
+            while True:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.time() > deadline:
+                        raise SingletonSnapError(f"Timeout acquiring lock for {lock_name}")
+                    time.sleep(0.1)
             try:
-                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-                break
-            except FileExistsError:
-                if time.time() > deadline:
-                    raise SingletonSnapError(f'Timeout acquiring lock for {lock_name}')
-                time.sleep(0.1)
-            except OSError as e:
-                raise SingletonSnapError(f'Error creating lock file: {e}') from e
-
-        try:
-            yield
-        finally:
-            try:
-                if fd is not None:
-                    os.close(fd)
-                os.unlink(lock_path)
-            except FileNotFoundError:
-                pass
-            except OSError as e:
-                # Don't raise in finally block to avoid masking original exception.
-                import warnings
-
-                warnings.warn(f'Error releasing lock: {e}')
+                yield
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
 
     @contextmanager
     def snap_operation(self, snap_name: str, timeout: int = 30) -> Generator[None, None, None]:
@@ -185,6 +172,6 @@ class SingletonSnapManager:
             with manager.config_operation('/etc/config.yaml'):
                 # safely modify configuration
         """
-        normalized = self._normalize_name(config_path.replace('/', '_'))
-        with self._acquire_lock(f'config_{normalized}', timeout):
+        normalized = self._normalize_name(config_path.replace("/", "_"))
+        with self._acquire_lock(f"config_{normalized}", timeout):
             yield
