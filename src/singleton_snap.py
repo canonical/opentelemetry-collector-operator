@@ -10,7 +10,7 @@ import errno
 
 
 class SingletonSnapError(Exception):
-    """Base class for SnapLock error."""
+    """Base class for singleton snap error."""
 
     pass
 
@@ -60,10 +60,7 @@ class SingletonSnapManager:
 
     @staticmethod
     def _normalize_name(name: str) -> str:
-        """Normalize names to be filesystem-safe.
-
-        Replace all non-alphanumeric chars (except _-) with _.
-        """
+        """Normalize names to contain only alphanumerics, _ and -."""
         return re.sub(r'[^\w-]', '_', name)
 
     def _ensure_lock_dir_exists(self) -> None:
@@ -97,37 +94,59 @@ class SingletonSnapManager:
         """Unregister current unit from using the specified snap."""
         self._update_registration(snap_name, create=False)
 
-    def _update_registration(self, snap_name: str, create: bool) -> None:
-        """Internal method to handle registration/unregistration."""
-        lock_path = self._get_registration_file_path(snap_name)
+    @contextmanager
+    def _lock_directory(self):
+        dir_fd = os.open(self.LOCK_DIR, os.O_RDONLY)
         try:
-            if create:
-                with open(lock_path, 'w') as f:
-                    f.write('')
-            else:
-                os.unlink(lock_path)
-        except FileNotFoundError:
-            if create:
-                raise
+            fcntl.flock(dir_fd, fcntl.LOCK_SH)
+            yield
+        finally:
+            fcntl.flock(dir_fd, fcntl.LOCK_UN)
+            os.close(dir_fd)
+
+    def _update_registration(self, snap_name: str, create: bool) -> None:
+        """Internal method to handle registration/unregistration (atomic with directory lock)."""
+        lock_path = self._get_registration_file_path(snap_name)
+        action = 'registering' if create else 'unregistering'
+
+        try:
+            with self._lock_directory():
+                if create:
+                    open(lock_path, 'w').close()
+                else:
+                    try:
+                        os.remove(lock_path)
+                    except FileNotFoundError:
+                        pass  # Already unregistered is not an error
         except OSError as e:
-            action = 'registering' if create else 'unregistering'
             raise SingletonSnapError(f'Error {action} unit: {e}') from e
 
     def get_units(self, snap_name: str) -> List[str]:
-        """Get all units currently registered for a snap."""
+        """Get all units currently registered for a snap (atomic with directory lock).
+
+        Args:
+            snap_name: Name of the snap to get units for
+
+        Returns:
+            List of unit names associated with the snap
+
+        Raises:
+            SingletonSnapError: If there's an error accessing the lock directory
+        """
         prefix = f'{self.LOCK_FILE_PREFIX}{self._normalize_name(snap_name)}{self.SEPARATOR}'
         units = []
 
         try:
-            for filename in os.listdir(self.LOCK_DIR):
-                if filename.startswith(prefix):
-                    units.append(filename[len(prefix) :])
+            with self._lock_directory():
+                for filename in os.listdir(self.LOCK_DIR):
+                    if filename.startswith(prefix):
+                        units.append(filename[len(prefix) :])
         except OSError as e:
             raise SingletonSnapError(f'Error reading unit list: {e}') from e
 
         return units
 
-    def is_used_by_others(self, snap_name: str) -> bool:
+    def is_used_by_other_units(self, snap_name: str) -> bool:
         """Check if snap is being used by other units."""
         return any(unit != self.unit_name for unit in self.get_units(snap_name))
 
@@ -135,7 +154,8 @@ class SingletonSnapManager:
     def _acquire_lock(self, lock_name: str, timeout: int) -> Generator[None, None, None]:
         """Internal method to acquire an exclusive lock with timeout.
 
-        Uses atomic file creation (O_EXCL) as the locking mechanism.
+        Uses fcntl.flock to acquire an exclusive lock on a lock file.
+        Retries until the timeout is reached.
         """
         lock_path = os.path.join(self.LOCK_DIR, f'{self.LOCK_FILE_PREFIX}{lock_name}')
         with open(lock_path, 'w') as f:

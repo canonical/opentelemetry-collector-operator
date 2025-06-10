@@ -45,18 +45,10 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
         manager = SingletonSnapManager(self.unit.name)
         for snap_package in SNAPS:
+            manager.register(snap_package)
             with manager.snap_operation(snap_package):
-                manager.register(snap_package)
-
                 self._install_snap(snap_package)
                 self._start_snap(snap_package)
-
-                logger.debug(
-                    f'======= Unit name: {self.unit.name}, snap: {snap_package} registered'
-                )
-                logger.debug(
-                    f'======= Unit name: {self.unit.name}, snap: {snap_package} used by: {manager.get_units(snap_package)}',
-                )
 
             with manager.config_operation(snap_package):
                 # Merge configurations under a directory into one,
@@ -77,14 +69,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         manager = SingletonSnapManager(self.unit.name)
         for snap_package in SNAPS:
             manager.unregister(snap_package)
-            logger.debug(
-                f'======= Unit name: {self.unit.name}, snap: {snap_package} used by: {manager.get_units(snap_package)}',
-            )
-
-            if not manager.is_used_by_others(snap_package):
-                logger.debug(
-                    f'======= Unit name: {self.unit.name}, snap: {snap_package} not used by others'
-                )
+            if not manager.is_used_by_other_units(snap_package):
                 with manager.snap_operation(snap_package):
                     self._remove_snap(snap_package)
 
