@@ -172,6 +172,12 @@ class SingletonSnapManager:
                 yield
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
+                try:
+                    os.remove(lock_path)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    raise SingletonSnapError(f'Error removing lock file for {lock_name}')
 
     @contextmanager
     def snap_operation(self, snap_name: str, timeout: int = 30) -> Generator[None, None, None]:
