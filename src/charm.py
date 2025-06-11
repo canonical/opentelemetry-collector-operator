@@ -22,7 +22,7 @@ from singleton_snap import SingletonSnapManager
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
-VALID_LOG_LEVELS = ['info', 'debug', 'warning', 'error', 'critical']
+VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 SNAPS = [opentelemetry_collector_snap_name, node_exporter_snap_name]
 
@@ -36,11 +36,11 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
     def _reconcile(self):
         self._install()
-        self._remove()
+        self._stop()
         self.unit.status = ActiveStatus()
 
     def _install(self) -> None:
-        if self.hook != 'install':
+        if self.hook != "install":
             return
 
         manager = SingletonSnapManager(self.unit.name)
@@ -62,38 +62,38 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
                 #     f.flush()
                 pass
 
-    def _remove(self) -> None:
-        if self.hook != 'remove':
+    def _stop(self) -> None:
+        if self.hook != "stop":
             return
 
         manager = SingletonSnapManager(self.unit.name)
         for snap_package in SNAPS:
             manager.unregister(snap_package)
-            if not manager.is_used_by_other_units(snap_package):
-                with manager.snap_operation(snap_package):
+            with manager.snap_operation(snap_package):
+                if not manager.is_used_by_other_units(snap_package):
                     self._remove_snap(snap_package)
 
     def _install_snap(self, snap_name: str) -> None:
-        self.unit.status = MaintenanceStatus(f'Installing {snap_name} snap')
+        self.unit.status = MaintenanceStatus(f"Installing {snap_name} snap")
         try:
             install_snap(snap_name)
         except (snap.SnapError, SnapSpecError) as e:
-            raise SnapInstallError(f'Failed to install {snap_name}') from e
+            raise SnapInstallError(f"Failed to install {snap_name}") from e
 
     def _remove_snap(self, snap_name: str) -> None:
-        self.unit.status = MaintenanceStatus(f'Uninstalling {snap_name} snap')
+        self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
         try:
             self.snap(snap_name).ensure(state=snap.SnapState.Absent)
         except (snap.SnapError, SnapSpecError) as e:
-            raise SnapInstallError(f'Failed to uninstall {snap_name}') from e
+            raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
 
     def _start_snap(self, snap_name: str) -> None:
-        self.unit.status = MaintenanceStatus(f'Starting {snap_name} snap')
+        self.unit.status = MaintenanceStatus(f"Starting {snap_name} snap")
 
         try:
             self.snap(snap_name).start(enable=True)
         except snap.SnapError as e:
-            raise SnapServiceError(f'Failed to start {snap_name}') from e
+            raise SnapServiceError(f"Failed to start {snap_name}") from e
 
     def snap(self, snap_name: str):
         """Return the snap object for the given snap."""
@@ -103,8 +103,8 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
     @property
     def hook(self) -> str:
         """Return hook name."""
-        return os.environ['JUJU_HOOK_NAME']
+        return os.environ["JUJU_HOOK_NAME"]
 
 
-if __name__ == '__main__':  # pragma: nocover
+if __name__ == "__main__":  # pragma: nocover
     ops.main(OpentelemetryCollectorOperatorCharm)
