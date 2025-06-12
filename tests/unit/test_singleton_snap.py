@@ -2,7 +2,7 @@ import os
 import time
 import pytest
 from multiprocessing import Process, Queue
-from src.singleton_snap import SingletonSnapManager, SingletonSnapError
+from src.singleton_snap import SingletonSnapManager
 
 
 @pytest.fixture
@@ -26,45 +26,43 @@ def test_register_unregister(lock_dir):
     mgr2.unregister("otelcol")
     assert "unit-2" not in mgr2.get_units("otelcol")
     # Unregistering a unit that is not registered should raise an error.
-    with pytest.raises(SingletonSnapError) as excinfo:
+    with pytest.raises(Exception):
         mgr2.unregister("otelcol")
-    assert "Error unregistering unit" in str(excinfo.value)
 
 
-def test_update_registration(lock_dir):
+def test_register_unregister_creates_removes_lock_file(lock_dir):
     mgr = SingletonSnapManager("unit-test")
     snap_name = "test-snap"
     reg_file = lock_dir / f"LCK..{snap_name}--unit-test"
 
-    # Ensure file does not exist
+    # Ensure file does not exist.
     if reg_file.exists():
         reg_file.unlink()
 
-    # Register (create file)
-    mgr._update_registration(snap_name, create=True)
+    # Register (create file).
+    mgr.register(snap_name)
     assert reg_file.exists()
 
-    # Unregister (remove file)
-    mgr._update_registration(snap_name, create=False)
+    # Unregister (remove file).
+    mgr.unregister(snap_name)
     assert not reg_file.exists()
 
 
-def test_update_registration_nonexistent_file_raises(lock_dir):
+def test_unregister_nonexistent_file_raises(lock_dir):
     mgr = SingletonSnapManager("unit-test")
     snap_name = "test-snap"
     reg_file = lock_dir / f"LCK..{snap_name}--unit-test"
 
-    # Ensure file does not exist
+    # Ensure file does not exist.
     if reg_file.exists():
         reg_file.unlink()
 
-    # Unregister should raise SingletonSnapError if file does not exist
-    with pytest.raises(SingletonSnapError) as excinfo:
-        mgr._update_registration(snap_name, create=False)
-    assert "Error unregistering unit" in str(excinfo.value)
+    # Unregister should raise an error if file does not exist.
+    with pytest.raises(Exception):
+        mgr.unregister(snap_name)
 
 
-def test_update_registration_handles_oserror_on_create(monkeypatch, lock_dir):
+def test_register_handles_oserror(monkeypatch, lock_dir):
     mgr = SingletonSnapManager("unit-test")
     snap_name = "test-snap"
 
@@ -72,9 +70,8 @@ def test_update_registration_handles_oserror_on_create(monkeypatch, lock_dir):
         raise OSError("test error")
 
     monkeypatch.setattr("builtins.open", raise_oserror)
-    with pytest.raises(SingletonSnapError) as excinfo:
-        mgr._update_registration(snap_name, create=True)
-    assert "Error registering unit" in str(excinfo.value)
+    with pytest.raises(Exception):
+        mgr.register(snap_name)
 
 
 def hold_lock(unit, sleep_time, lock_dir):
@@ -100,7 +97,7 @@ def test_lock_timeout(lock_dir):
 
     mgr2 = SingletonSnapManager("unit-2")
     start = time.time()
-    with pytest.raises(SingletonSnapError):
+    with pytest.raises(TimeoutError):
         with mgr2.snap_operation("otelcol", timeout=1):
             pass
     assert time.time() - start >= 1, (
@@ -119,7 +116,7 @@ def try_snap_lock(unit, result_queue, lock_dir):
         with mgr.snap_operation("otelcol", timeout=1):
             result_queue.put(True)
             time.sleep(2)
-    except SingletonSnapError:
+    except TimeoutError:
         result_queue.put(False)
 
 
@@ -162,7 +159,7 @@ def try_config_lock(unit, result_queue, lock_dir):
         with mgr.config_operation("/tmp/test.yaml", timeout=1):
             result_queue.put(True)
             time.sleep(2)
-    except SingletonSnapError:
+    except TimeoutError:
         result_queue.put(False)
 
 

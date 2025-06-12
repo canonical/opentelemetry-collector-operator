@@ -71,10 +71,6 @@ from typing import Generator, List
 import errno
 
 
-class SingletonSnapError(Exception):
-    """Base class for singleton snap error."""
-
-
 class SingletonSnapManager:
     """Manages exclusive access to singleton snaps and configuration files using file-based locks.
 
@@ -105,7 +101,8 @@ class SingletonSnapManager:
         manager.unregister("otelcol")
 
     Raises:
-        SingletonSnapError on any error.
+        TimeoutError: If a lock could not be acquired within the specified timeout.
+        OSError: on I/O related errors.
     """
 
     LOCK_FILE_PREFIX = "LCK.."
@@ -133,7 +130,7 @@ class SingletonSnapManager:
             os.chown(self.LOCK_DIR, os.geteuid(), os.getegid())
         except OSError as e:
             if e.errno != errno.EEXIST:
-                raise SingletonSnapError(f"Error creating lock directory: {e}") from e
+                raise
 
     def _get_registration_file_path(self, snap_name: str) -> str:
         """Helper method to construct registration file path.
@@ -153,63 +150,31 @@ class SingletonSnapManager:
         """Register current unit as using the specified snap.
 
         Raises:
-            SingletonSnapError: if there is an I/O related error creating the lock file.
+            OSError: if there is an I/O related error creating the lock file.
         """
-        self._update_registration(snap_name, create=True)
+        lock_path = self._get_registration_file_path(snap_name)
+        with self._lock_directory():
+            open(lock_path, "w").close()
 
     def unregister(self, snap_name: str) -> None:
         """Unregister current unit from using the specified snap.
 
         Raises:
-            SingletonSnapError: if there is an I/O related error removing the lock file.
+            OSError: if there is an I/O related error removing the lock file.
         """
-        self._update_registration(snap_name, create=False)
+        lock_path = self._get_registration_file_path(snap_name)
+        with self._lock_directory():
+            os.remove(lock_path)
 
     @contextmanager
     def _lock_directory(self):
-        dir_fd = None
+        dir_fd = os.open(self.LOCK_DIR, os.O_RDONLY)
         try:
-            dir_fd = os.open(self.LOCK_DIR, os.O_RDONLY)
             fcntl.flock(dir_fd, fcntl.LOCK_SH)
             yield
-        except TypeError as e:
-            raise SingletonSnapError(f"Invalid lock directory path: {e}") from e
-        except FileNotFoundError as e:
-            raise SingletonSnapError(f"Lock directory not found: {e}") from e
-        except OSError as e:
-            raise SingletonSnapError(f"Error locking directory: {e}") from e
         finally:
-            if dir_fd is not None:
-                try:
-                    fcntl.flock(dir_fd, fcntl.LOCK_UN)
-                    os.close(dir_fd)
-                except Exception as e:
-                    raise SingletonSnapError(f"Failed to release lock: {e}") from e
-
-    def _update_registration(self, snap_name: str, create: bool) -> None:
-        """Internal method to handle registration or unregistration of a snap.
-
-        Achieved by creating or removing a lock file; atomic operation is ensured
-        with a directory lock.
-
-        Raises:
-            SingletonSnapError: If an OS error occurs.
-        """
-        lock_path = self._get_registration_file_path(snap_name)
-        action = "registering" if create else "unregistering"
-
-        try:
-            with self._lock_directory():
-                if create:
-                    open(lock_path, "w").close()
-                else:
-                    try:
-                        os.remove(lock_path)
-                    except FileNotFoundError as e:
-                        # pass
-                        raise SingletonSnapError(f"Error {action} unit: {e}") from e
-        except Exception as e:
-            raise SingletonSnapError(f"Error {action} unit: {e}") from e
+            fcntl.flock(dir_fd, fcntl.LOCK_UN)
+            os.close(dir_fd)
 
     def get_units(self, snap_name: str) -> List[str]:
         """Get all units currently registered for a snap (atomic with directory lock).
@@ -221,18 +186,15 @@ class SingletonSnapManager:
             List of unit names associated with the snap
 
         Raises:
-            SingletonSnapError: If there's an error accessing the lock directory
+            OSError: If there's an error accessing the lock directory
         """
         prefix = f"{self.LOCK_FILE_PREFIX}{self._normalize_name(snap_name)}{self.SEPARATOR}"
         units = []
 
-        try:
-            with self._lock_directory():
-                for filename in os.listdir(self.LOCK_DIR):
-                    if filename.startswith(prefix):
-                        units.append(filename[len(prefix) :])
-        except Exception as e:
-            raise SingletonSnapError(f"Error reading unit list: {e}") from e
+        with self._lock_directory():
+            for filename in os.listdir(self.LOCK_DIR):
+                if filename.startswith(prefix):
+                    units.append(filename[len(prefix) :])
 
         return units
 
@@ -241,22 +203,26 @@ class SingletonSnapManager:
         return any(unit != self.unit_name for unit in self.get_units(snap_name))
 
     @contextmanager
-    def _acquire_lock(self, lock_name: str, timeout: int) -> Generator[None, None, None]:
+    def _acquire_lock(self, lock_name: str, timeout: float) -> Generator[None, None, None]:
         """Internal method to acquire an exclusive lock with timeout.
 
         Uses fcntl.flock to acquire an exclusive lock on a lock file.
         Retries until the timeout is reached.
+
+        Raises:
+            TimeoutError: If the lock could not be acquired within the specified timeout.
+            OSError: If an error occurs while unlocking or removing the lock file.
         """
         lock_path = os.path.join(self.LOCK_DIR, f"{self.LOCK_FILE_PREFIX}{lock_name}")
         with open(lock_path, "w") as f:
-            deadline = time.time() + timeout
+            deadline = time.monotonic() + timeout
             while True:
                 try:
                     fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
                 except BlockingIOError:
-                    if time.time() > deadline:
-                        raise SingletonSnapError(f"Timeout acquiring lock for {lock_name}")
+                    if time.monotonic() > deadline:
+                        raise TimeoutError(f"Timeout acquiring lock for {lock_name}")
                     time.sleep(0.1)
             try:
                 yield
@@ -267,26 +233,36 @@ class SingletonSnapManager:
                 except FileNotFoundError:
                     pass
                 except OSError:
-                    raise SingletonSnapError(f"Error removing lock file for {lock_name}")
+                    raise
 
     @contextmanager
-    def snap_operation(self, snap_name: str, timeout: int = 30) -> Generator[None, None, None]:
+    def snap_operation(self, snap_name: str, timeout: float = 30.0) -> Generator[None, None, None]:
         """Context manager for exclusive snap operations (install/remove/configure).
 
         Example:
             with manager.snap_operation('otelcol'):
                 # perform privileged snap operations
+
+        Raises:
+            TimeoutError: If the lock could not be acquired within the specified timeout.
+            OSError: If an error occurs while unlocking or removing the lock file.
         """
         with self._acquire_lock(self._normalize_name(snap_name), timeout):
             yield
 
     @contextmanager
-    def config_operation(self, config_path: str, timeout: int = 3) -> Generator[None, None, None]:
+    def config_operation(
+        self, config_path: str, timeout: float = 3.0
+    ) -> Generator[None, None, None]:
         """Context manager for exclusive configuration file operations.
 
         Example:
             with manager.config_operation('/etc/config.yaml'):
                 # safely modify configuration
+
+        Raises:
+            TimeoutError: If the lock could not be acquired within the specified timeout.
+            OSError: If an error occurs while unlocking or removing the lock file.
         """
         normalized = self._normalize_name(config_path.replace("/", "_"))
         with self._acquire_lock(f"config_{normalized}", timeout):
