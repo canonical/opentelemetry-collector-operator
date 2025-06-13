@@ -146,15 +146,47 @@ class SingletonSnapManager:
         prefix = f"{self.LOCK_FILE_PREFIX}{snap_name}{self.SEPARATOR}"
         return filename[len(prefix) :]
 
-    def register(self, snap_name: str) -> None:
-        """Register current unit as using the specified snap.
+    def register(self, snap_name: str, revision: str = "") -> None:
+        """Register current unit as using the specified snap and revision.
+
+        Args:
+            snap_name: Name of the snap.
+            revision: Optional revision to put in the lock file. Defaults to an empty string.
 
         Raises:
             OSError: if there is an I/O related error creating the lock file.
         """
         lock_path = self._get_registration_file_path(snap_name)
         with self._lock_directory():
-            open(lock_path, "w").close()
+            with open(lock_path, "w") as f:
+                f.write(revision)
+
+    def get_revisions(self, snap_name: str) -> List[str]:
+        """Get all revisions of a snap currently registered with any unit.
+
+        Args:
+            snap_name: Name of the snap.
+
+        Returns:
+            List of revision strings registered by units for this snap.
+
+        Raises:
+            OSError: If there's an error accessing the lock directory or files.
+        """
+        prefix = f"{self.LOCK_FILE_PREFIX}{snap_name}{self.SEPARATOR}"
+        revisions = set()
+        with self._lock_directory():
+            for filename in os.listdir(self.LOCK_DIR):
+                if filename.startswith(prefix):
+                    path = os.path.join(self.LOCK_DIR, filename)
+                    try:
+                        with open(path, "r") as f:
+                            revision = f.read().strip()
+                            if revision:
+                                revisions.add(revision)
+                    except OSError:
+                        continue
+        return list(revisions)
 
     def unregister(self, snap_name: str) -> None:
         """Unregister current unit from using the specified snap.

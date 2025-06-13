@@ -30,6 +30,36 @@ def test_register_unregister(lock_dir):
         mgr2.unregister("otelcol")
 
 
+def test_register_with_revision(lock_dir):
+    mgr1 = SingletonSnapManager("unit-1")
+    mgr1.register("otelcol", "1.0.0")
+    assert "unit-1" in mgr1.get_units("otelcol")
+    reg_file1 = lock_dir / "LCK..otelcol--unit-1"
+    with open(reg_file1, "r") as f:
+        content = f.read().strip()
+        assert content == "1.0.0"
+
+
+def test_get_revisions(lock_dir):
+    mgr1 = SingletonSnapManager("unit-1")
+    mgr1.register("otelcol", "1.0.0")
+
+    mgr2 = SingletonSnapManager("unit-2")
+    mgr2.register("otelcol", "2.0.0")
+
+    assert sorted(mgr1.get_revisions("otelcol")) == ["1.0.0", "2.0.0"]
+
+    mgr1.unregister("otelcol")
+    assert mgr2.get_revisions("otelcol") == ["2.0.0"]
+
+def test_duplicated_revisions(lock_dir):
+    mgr1 = SingletonSnapManager("unit-1")
+    mgr1.register("otelcol", "1.0.0")
+    mgr2 = SingletonSnapManager("unit-2")
+    mgr2.register("otelcol", "1.0.0")
+    assert mgr1.get_revisions("otelcol") == ["1.0.0"]
+
+
 def test_register_unregister_creates_removes_lock_file(lock_dir):
     mgr = SingletonSnapManager("unit-test")
     snap_name = "test-snap"
