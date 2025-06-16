@@ -1,0 +1,27 @@
+groups:
+  - name: Exporter
+    rules:
+      - alert: failed-logs
+        expr: sum(rate(otelcol_exporter_send_failed_log_records_total{}[1m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Some log points failed to send by exporter
+          description: Destination may have a problem or payload is incorrect
+      - alert: failed-metrics
+        expr: sum(rate(otelcol_exporter_send_failed_metric_points_total{}[1m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Some metric points failed to send by exporter
+          description: Destination may have a problem or payload is incorrect
+      - alert: queue-full-prediction
+        expr: predict_linear(otelcol_exporter_queue_size[1h],3600) > otelcol_exporter_queue_capacity
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The queue is expected to be full within the next hour
+          description: The exporter may be incorrectly configured for the pipeline, check that the exporter's endpoint is operational
