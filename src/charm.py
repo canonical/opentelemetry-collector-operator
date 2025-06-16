@@ -19,6 +19,7 @@ from ops import CharmBase
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus, Relation
 from constants import (
     RECV_CA_CERT_FOLDER_PATH,
+    CONFIG_HASH_PATH,
     CONFIG_PATH,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
@@ -400,9 +401,18 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             self._stop_snap(opentelemetry_collector_snap_name)
             self.unit.status = WaitingStatus("Waiting for cert")
         else:
-            # TODO: Where to store restart_sentinel?
             # Only restart when the sentinel is changed, following the k8s charm's behaviour.
-            self._restart_snap(opentelemetry_collector_snap_name)
+            import time
+            time.sleep(5)
+
+            previous_hash = ""
+            if os.path.exists(CONFIG_HASH_PATH):
+                with open(CONFIG_HASH_PATH, "r") as f:
+                    previous_hash = f.read().strip()
+            if previous_hash != restart_sentinel:
+                self._restart_snap(opentelemetry_collector_snap_name)
+                with open(CONFIG_HASH_PATH, "w") as f:
+                    f.write(restart_sentinel)
             self.unit.status = ActiveStatus()
 
     def _install(self) -> None:
@@ -435,6 +445,8 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
 
     def _start_snap(self, snap_name: str) -> None:
+        import time
+        time.sleep(5)
         self.unit.status = MaintenanceStatus(f"Starting {snap_name} snap")
 
         try:
@@ -443,6 +455,8 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             raise SnapServiceError(f"Failed to start {snap_name}") from e
 
     def _stop_snap(self, snap_name: str) -> None:
+        import time
+        time.sleep(5)
         self.unit.status = MaintenanceStatus(f"Stopping {snap_name} snap")
 
         try:
@@ -451,6 +465,8 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             raise SnapServiceError(f"Failed to stop {snap_name}") from e
 
     def _restart_snap(self, snap_name: str) -> None:
+        import time
+        time.sleep(5)
         self.unit.status = MaintenanceStatus(f"Restarting {snap_name} snap")
 
         try:
