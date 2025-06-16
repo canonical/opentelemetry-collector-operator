@@ -211,6 +211,11 @@ class SingletonSnapManager:
     def get_units(self, snap_name: str) -> List[str]:
         """Get all units currently registered for a snap (atomic with directory lock).
 
+        This method is primarily useful for debugging purposes. In most scenarios, you
+        do not need to call this directly. Instead, use
+        :meth:`SingletonSnapManager.is_used_by_other_units` to detect if there are other
+        units registered with a snap.
+
         Args:
             snap_name: Name of the snap to get units for
 
