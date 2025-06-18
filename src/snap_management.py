@@ -35,26 +35,31 @@ snap_maps = {
         # (confinement, arch): revision
         ("strict", "amd64"): "1904",  # v1.9.1
         ("strict", "arm64"): "1908",  # v1.9.1
-    }
+    },
 }
+
 
 class SnapSpecError(Exception):
     """Custom exception type for errors related to the snap spec."""
+
     pass
 
 
 class SnapError(Exception):
     """Custom exception type for Snaps."""
+
     pass
 
 
 class SnapInstallError(SnapError):
     """Custom exception type for install related errors."""
+
     pass
 
 
 class SnapServiceError(SnapError):
     """Custom exception type for service related errors."""
+
     pass
 
 
