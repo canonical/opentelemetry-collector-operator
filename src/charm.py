@@ -25,6 +25,7 @@ from constants import (
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 import yaml
+from charms.grafana_agent.v0.cos_agent import COSAgentRequirer, ReceiverProtocol
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiConsumer, LokiPushApiProvider
 from charms.prometheus_k8s.v0.prometheus_scrape import (
@@ -386,6 +387,11 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             tempo_url=cloud_integrator.tempo_url if cloud_integrator.tempo_ready else None,
             insecure_skip_verify=insecure_skip_verify,
         )
+
+        # Add COS agent
+        cos_agent = COSAgentRequirer(self)
+        self.otel_config.add_receiver('prometheus/cos-agent', {'config': {'scrape_configs': cos_agent.metrics_jobs}}, pipelines=["metrics"])
+        # self.otel_config.add_prometheus_scrape(cos_agent.metrics_jobs, True, insecure_skip_verify)
 
         # Add custom processors from Juju config
         self._add_custom_processors()

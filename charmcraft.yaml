@@ -120,6 +120,10 @@ requires:
     optional: true
     description: Send traces to a charmed Tempo instance.
 
+peers:
+  peers:
+    interface: otelcol_replica
+
 config:
   options:
     processors:
