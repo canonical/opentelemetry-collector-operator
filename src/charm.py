@@ -390,8 +390,49 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
         # Add COS agent
         cos_agent = COSAgentRequirer(self)
-        self.otel_config.add_receiver('prometheus/cos-agent', {'config': {'scrape_configs': cos_agent.metrics_jobs}}, pipelines=["metrics"])
-        # self.otel_config.add_prometheus_scrape(cos_agent.metrics_jobs, True, insecure_skip_verify)
+        # Add COS agent metrics scrape jobs
+        self.otel_config.add_receiver(
+            "prometheus/cos-agent",
+            {"config": {"scrape_configs": cos_agent.metrics_jobs}},
+            pipelines=["metrics"],
+        )
+        # Add COS agent alert rules
+        _aggregate_alerts(cos_agent.metrics_alerts, metrics_rules_paths, forward_alert_rules)
+        # TODO: Add COS agent logs
+        # Add COS agent loki log rules
+        # endpoint_owners = {
+        #     endpoint.owner: {
+        #         "juju_application": topology.application,
+        #         "juju_unit": topology.unit,
+        #     }
+        #     for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
+        # }
+        # for (
+        #     fstab_entry
+        # ) in otelcol_fstab.entries:  # TODO: otelcol doesn't seem to have an fstab file
+        #     # TODO: check if any of this logging logic makes sense
+        #     self.otel_config.add_receiver(
+        #         f"filelog/{fstab_entry.owner}",  # maybe???
+        #         {
+        #             "include": [
+        #                 f"{fstab_entry.target}/**"
+        #                 if fstab_entry
+        #                 else "/snap/opentelemetry-collector/current/shared-logs/**"
+        #             ],
+        #             "start_at": "beginning",
+        #             "operators": {},
+        #             # operators:
+        #             #   - type: drop
+        #             #     expression: ".*file is a directory.*"
+        #             #   - type: structured_metadata
+        #             #     metadata:
+        #             #       filename: filename
+        #             #   - type: labeldrop
+        #             #     labels: ["filename"]
+        #         },
+        #     )
+        _aggregate_alerts(cos_agent.logs_alerts, loki_rules_paths, forward_alert_rules)
+        # TODO: Add COS agent dashboards
 
         # Add custom processors from Juju config
         self._add_custom_processors()
