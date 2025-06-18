@@ -24,8 +24,8 @@ assumes:
   - juju >= 3.6
 
 platforms:
-  # ubuntu@22.04:amd64:
-  ubuntu@22.04:arm64:
+  ubuntu@22.04:amd64:
+  # ubuntu@22.04:arm64:
   # ubuntu@24.04:amd64:
   # ubuntu@24.04:arm64:
 
@@ -119,6 +119,10 @@ requires:
     limit: 1
     optional: true
     description: Send traces to a charmed Tempo instance.
+
+peers:
+  peers:
+    interface: otelcol_replica
 
 config:
   options:
