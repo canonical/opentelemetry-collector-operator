@@ -105,7 +105,7 @@ def get_dashboards(relations: List[Relation]) -> List[Dict[str, Any]]:
     return list(aggregate.values())
 
 
-def forward_dashboards(charm: CharmBase):
+def forward_dashboards(charm: CharmBase, dashboards: List[Dict[str, Any]]):
     """Instantiate the GrafanaDashboardProvider and update the dashboards in the relation databag.
 
     First, dashboards from relations (including those bundled with Otelcol) and save them to disk.
@@ -124,7 +124,7 @@ def forward_dashboards(charm: CharmBase):
         return
     shutil.rmtree(dashboard_paths.dest)
     shutil.copytree(dashboard_paths.src, dashboard_paths.dest)
-    for dash in get_dashboards(charm.model.relations["grafana-dashboards-consumer"]):
+    for dash in dashboards:
         # Build dashboard custom filename
         charm_name = dash.get("charm", "charm-name")
         rel_id = dash.get("relation_id", "rel_id")
@@ -389,7 +389,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             cast(bool, self.model.config.get("tls_insecure_skip_verify"))
         )
 
-        forward_dashboards(self)
+        forward_dashboards(self, get_dashboards(self.model.relations["grafana-dashboards-consumer"]))
 
         # Logs setup
         loki_rules_paths = PathMapping(
@@ -522,7 +522,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             }
             for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
         }
-        otelcol_fstab = SnapFstab(Path("/var/lib/snapd/mount/snap.grafana-agent.fstab"))
+        otelcol_fstab = SnapFstab(Path("/var/lib/snapd/mount/snap.opentelemetry-collector.fstab"))
         for fstab_entry in otelcol_fstab.entries:
             if fstab_entry.owner not in endpoint_owners.keys():
                 continue
@@ -550,6 +550,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             )
         _aggregate_alerts(cos_agent.logs_alerts, loki_rules_paths, forward_alert_rules)
         # TODO: Add COS agent dashboards
+        forward_dashboards(self, cos_agent.dashboards)
 
         # Add custom processors from Juju config
         self._add_custom_processors()
