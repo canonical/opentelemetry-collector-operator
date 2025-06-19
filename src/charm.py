@@ -10,6 +10,7 @@ import logging
 import socket
 import ops
 import os
+import re
 import shutil
 import subprocess
 from collections import namedtuple
@@ -507,47 +508,49 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         # Add COS agent alert rules
         _aggregate_alerts(cos_agent.metrics_alerts, metrics_rules_paths, forward_alert_rules)
         # TODO: Add COS agent logs
-        # Connect logging snap endpoints
-        for plug in cos_agent.snap_log_endpoints:
-            try:
-                self.snap(opentelemetry_collector_snap_name).connect("logs", service=plug.owner, slot=plug.name)
-            except snap.SnapError as e:
-                logger.error(f"error connecting plug {plug} to grafana-agent:logs")
-                logger.error(e.message)
-        # Add COS agent loki log rules
-        endpoint_owners = {
-            endpoint.owner: {
-                "juju_application": topology.application,
-                "juju_unit": topology.unit,
-            }
-            for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
-        }
-        otelcol_fstab = SnapFstab(Path("/var/lib/snapd/mount/snap.grafana-agent.fstab"))
-        for fstab_entry in otelcol_fstab.entries:
-            if fstab_entry.owner not in endpoint_owners.keys():
-                continue
+        # TODO: add filelog receiver (use otelcol-contrib distribution?) and then
+        # uncomment logging-related setup.
+        # # Connect logging snap endpoints
+        # for plug in cos_agent.snap_log_endpoints:
+        #     try:
+        #         self.snap(opentelemetry_collector_snap_name).connect("logs", service=plug.owner, slot=plug.name)
+        #     except snap.SnapError as e:
+        #         logger.error(f"error connecting plug {plug} to grafana-agent:logs")
+        #         logger.error(e.message)
+        # # Add COS agent loki log rules
+        # endpoint_owners = {
+        #     endpoint.owner: {
+        #         "juju_application": topology.application,
+        #         "juju_unit": topology.unit,
+        #     }
+        #     for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
+        # }
+        # otelcol_fstab = SnapFstab(Path("/var/lib/snapd/mount/snap.opentelemetry-collector.fstab"))
+        # for fstab_entry in otelcol_fstab.entries:
+        #     if fstab_entry.owner not in endpoint_owners.keys():
+        #         continue
 
-            # TODO: check if any of this logging logic makes sense
-            self.otel_config.add_receiver(
-                f"filelog/{fstab_entry.owner}",  # maybe???
-                {
-                    "include": [
-                        f"{fstab_entry.target}/**"
-                        if fstab_entry
-                        else "/snap/opentelemetry-collector/current/shared-logs/**"
-                    ],
-                    "start_at": "beginning",
-                    "operators": {},
-                    # operators:
-                    #   - type: drop
-                    #     expression: ".*file is a directory.*"
-                    #   - type: structured_metadata
-                    #     metadata:
-                    #       filename: filename
-                    #   - type: labeldrop
-                    #     labels: ["filename"]
-                },
-            )
+        #     self.otel_config.add_receiver(
+        #         f"filelog/{fstab_entry.owner}",  # maybe???
+        #         {
+        #             "include": [
+        #                 f"{fstab_entry.target}/**"
+        #                 if fstab_entry
+        #                 else "/snap/opentelemetry-collector/current/shared-logs/**"
+        #             ],
+        #             "start_at": "beginning",
+        #             "operators": {},
+        #             # operators:
+        #             #   - type: drop
+        #             #     expression: ".*file is a directory.*"
+        #             #   - type: structured_metadata
+        #             #     metadata:
+        #             #       filename: filename
+        #             #   - type: labeldrop
+        #             #     labels: ["filename"]
+        #         },
+        #         pipelines=["logs"],
+        #     )
         _aggregate_alerts(cos_agent.logs_alerts, loki_rules_paths, forward_alert_rules)
         # TODO: Add COS agent dashboards
 
