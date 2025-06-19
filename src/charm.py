@@ -13,8 +13,9 @@ import os
 import shutil
 import subprocess
 from collections import namedtuple
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, cast, get_args
+from typing import Any, Dict, List, Optional, Set, Union, cast, get_args
 from ops import CharmBase
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus, Relation
 from constants import (
@@ -39,12 +40,10 @@ from charms.certificate_transfer_interface.v1.certificate_transfer import (
 )
 from charms.grafana_cloud_integrator.v0.cloud_config_requirer import (
     Credentials,
-    GrafanaCloudConfigRequirer,
 )
 from charms.tempo_coordinator_k8s.v0.tracing import (
     ReceiverProtocol,
     TracingEndpointProvider,
-    TracingEndpointRequirer,
     TransportProtocolType,
     receiver_protocol_to_transport_protocol,
 )
@@ -63,6 +62,11 @@ from config import PORTS, Config, sha256, tail_sampling_config
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
+
+_FsType = str
+_MountOption = str
+_MountOptions = List[_MountOption]
+
 PathMapping = namedtuple("PathMapping", ["src", "dest"])
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
@@ -241,6 +245,106 @@ def is_server_cert_on_disk() -> bool:
     )
 
 
+@dataclass
+class _SnapFstabEntry:
+    """Representation of an individual fstab entry for snap plugs."""
+
+    source: str
+    target: str
+    fstype: Union[_FsType, None]
+    options: _MountOptions
+    dump: int
+    fsck: int
+
+    owner: str = field(init=False)
+    endpoint_source: str = field(init=False)
+    relative_target: str = field(init=False)
+
+    def __post_init__(self):
+        """Populate with calculated values at runtime."""
+        self.owner = re.sub(
+            r"^(.*?)?/snap/(?P<owner>([A-Za-z0-9_-])+)/.*$", r"\g<owner>", self.source
+        )
+        self.endpoint_source = re.sub(
+            r"^(.*?)?/snap/([A-Za-z0-9_-])+/(?P<path>.*$)", r"\g<path>", self.source
+        )
+        self.relative_target = re.sub(
+            r"^(.*?)?/snap/grafana-agent/\d+/shared-logs+(?P<path>/.*$)", r"\g<path>", self.target
+        )
+
+@dataclass
+class SnapFstab:
+    """Build a small representation/wrapper for snap fstab files."""
+
+    fstab_file: Union[Path, str]
+    entries: List[_SnapFstabEntry] = field(init=False)
+
+    def __post_init__(self):
+        """Populate with calculated values at runtime."""
+        self.fstab_file = (
+            self.fstab_file if isinstance(self.fstab_file, Path) else Path(self.fstab_file)
+        )
+        if not self.fstab_file.exists():
+            self.entries = []
+            return
+
+        entries = []
+        for line in self.fstab_file.read_text().split("\n"):
+            if not line.strip():
+                # skip whitespace-only lines
+                continue
+            raw_entry = line.split()
+            fields = {
+                "source": raw_entry[0],
+                "target": raw_entry[1],
+                "fstype": None if raw_entry[2] == "none" else raw_entry[2],
+                "options": raw_entry[3].split(","),
+                "dump": int(raw_entry[4]),
+                "fsck": int(raw_entry[5]),
+            }
+            entry = _SnapFstabEntry(**fields)
+            entries.append(entry)
+
+        self.entries = entries
+
+    def entry(self, owner: str, endpoint_name: Optional[str]) -> Optional[_SnapFstabEntry]:
+        """Find and return a specific entry if it exists."""
+        entries = [e for e in self.entries if e.owner == owner]
+
+        if len(entries) > 1 and endpoint_name:
+            # If there's more than one entry, the endpoint name may not directly map to
+            # the source *or* path. charmed-kafka uses 'logs' as the plug name, and maps
+            # .../common/logs to .../log inside Grafana Agent
+            #
+            # The only meaningful scenario in which this could happen (multiple fstab
+            # entries with the same snap "owning" the originating path) is if a snap provides
+            # multiple paths as part of the same plug.
+            #
+            # In this case, for a cheap comparison (rather than implementing some recursive
+            # LCS just for this), convert all possible endpoint sources into a list of unique
+            # characters, as well as the endpoint name, and build a sequence of entries with
+            # a value that's the length of the intersection, the pick the first one i.e. the one
+            # with the largest intersection.
+            ordered_entries = sorted(
+                entries,
+                # descending order
+                reverse=True,
+                # size of the character-level similarity of the two strings
+                key=lambda e: len(set(endpoint_name) & set(e.endpoint_source)),
+            )
+            return ordered_entries[0]
+
+        if len(entries) > 1 or not entries:
+            logger.debug(
+                "Ambiguous or unknown mountpoint for snap %s at slot %s, not relabeling.",
+                owner,
+                endpoint_name,
+            )
+            return None
+
+        return entries[0]
+
+
 class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
     """Charm the service."""
 
@@ -355,42 +459,46 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
                 )
             )
         self._add_traces_ingestion(requested_tracing_protocols)
-        # Add default processors to traces
-        self._add_traces_processing()
-        # Enable pushing traces to a backend (i.e. Tempo) with TracingEndpointRequirer, i.e. configure the exporters
-        tracing_requirer = TracingEndpointRequirer(
-            self,
-            relation_name="send-traces",
-            protocols=[
-                "otlp_http",  # for charm traces
-                "otlp_grpc",  # for forwarding workload traces
-            ],
-        )
-        if tracing_requirer.is_ready():
-            if tracing_otlp_http_endpoint := tracing_requirer.get_endpoint("otlp_http"):
-                self.otel_config.add_exporter(
-                    name="otlphttp/tempo",
-                    exporter_config={"endpoint": tracing_otlp_http_endpoint},
-                    pipelines=["traces"],
-                )
 
-        # Enable forwarding telemetry with GrafanaCloudIntegrator
-        cloud_integrator = GrafanaCloudConfigRequirer(self, relation_name="cloud-config")
-        # We're intentionally not getting the CA cert from Grafana Cloud Integrator;
-        # we decided that we should only get certs from receive-ca-cert.
-        self._add_cloud_integrator(
-            credentials=cloud_integrator.credentials,
-            prometheus_url=cloud_integrator.prometheus_url
-            if cloud_integrator.prometheus_ready
-            else None,
-            loki_url=cloud_integrator.loki_url if cloud_integrator.loki_ready else None,
-            tempo_url=cloud_integrator.tempo_url if cloud_integrator.tempo_ready else None,
-            insecure_skip_verify=insecure_skip_verify,
-        )
+        # TODO: add tail sampling processor (use otelcol-contrib distribution?) and then
+        # uncomment tracing-related setup.
+
+        # Add default processors to traces
+        # self._add_traces_processing()
+        # # Enable pushing traces to a backend (i.e. Tempo) with TracingEndpointRequirer, i.e. configure the exporters
+        # tracing_requirer = TracingEndpointRequirer(
+        #     self,
+        #     relation_name="send-traces",
+        #     protocols=[
+        #         "otlp_http",  # for charm traces
+        #         "otlp_grpc",  # for forwarding workload traces
+        #     ],
+        # )
+        # if tracing_requirer.is_ready():
+        #     if tracing_otlp_http_endpoint := tracing_requirer.get_endpoint("otlp_http"):
+        #         self.otel_config.add_exporter(
+        #             name="otlphttp/tempo",
+        #             exporter_config={"endpoint": tracing_otlp_http_endpoint},
+        #             pipelines=["traces"],
+        #         )
+
+        # # Enable forwarding telemetry with GrafanaCloudIntegrator
+        # cloud_integrator = GrafanaCloudConfigRequirer(self, relation_name="cloud-config")
+        # # We're intentionally not getting the CA cert from Grafana Cloud Integrator;
+        # # we decided that we should only get certs from receive-ca-cert.
+        # self._add_cloud_integrator(
+        #     credentials=cloud_integrator.credentials,
+        #     prometheus_url=cloud_integrator.prometheus_url
+        #     if cloud_integrator.prometheus_ready
+        #     else None,
+        #     loki_url=cloud_integrator.loki_url if cloud_integrator.loki_ready else None,
+        #     tempo_url=cloud_integrator.tempo_url if cloud_integrator.tempo_ready else None,
+        #     insecure_skip_verify=insecure_skip_verify,
+        # )
 
         # Add COS agent
         cos_agent = COSAgentRequirer(self)
-        # Add COS agent metrics scrape jobs
+        # Add COS agent metrics scrape jobs and add the receiver in the metrics pipeline
         self.otel_config.add_receiver(
             "prometheus/cos-agent",
             {"config": {"scrape_configs": cos_agent.metrics_jobs}},
@@ -399,38 +507,47 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         # Add COS agent alert rules
         _aggregate_alerts(cos_agent.metrics_alerts, metrics_rules_paths, forward_alert_rules)
         # TODO: Add COS agent logs
+        # Connect logging snap endpoints
+        for plug in cos_agent.snap_log_endpoints:
+            try:
+                self.snap(opentelemetry_collector_snap_name).connect("logs", service=plug.owner, slot=plug.name)
+            except snap.SnapError as e:
+                logger.error(f"error connecting plug {plug} to grafana-agent:logs")
+                logger.error(e.message)
         # Add COS agent loki log rules
-        # endpoint_owners = {
-        #     endpoint.owner: {
-        #         "juju_application": topology.application,
-        #         "juju_unit": topology.unit,
-        #     }
-        #     for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
-        # }
-        # for (
-        #     fstab_entry
-        # ) in otelcol_fstab.entries:  # TODO: otelcol doesn't seem to have an fstab file
-        #     # TODO: check if any of this logging logic makes sense
-        #     self.otel_config.add_receiver(
-        #         f"filelog/{fstab_entry.owner}",  # maybe???
-        #         {
-        #             "include": [
-        #                 f"{fstab_entry.target}/**"
-        #                 if fstab_entry
-        #                 else "/snap/opentelemetry-collector/current/shared-logs/**"
-        #             ],
-        #             "start_at": "beginning",
-        #             "operators": {},
-        #             # operators:
-        #             #   - type: drop
-        #             #     expression: ".*file is a directory.*"
-        #             #   - type: structured_metadata
-        #             #     metadata:
-        #             #       filename: filename
-        #             #   - type: labeldrop
-        #             #     labels: ["filename"]
-        #         },
-        #     )
+        endpoint_owners = {
+            endpoint.owner: {
+                "juju_application": topology.application,
+                "juju_unit": topology.unit,
+            }
+            for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
+        }
+        otelcol_fstab = SnapFstab(Path("/var/lib/snapd/mount/snap.grafana-agent.fstab"))
+        for fstab_entry in otelcol_fstab.entries:
+            if fstab_entry.owner not in endpoint_owners.keys():
+                continue
+
+            # TODO: check if any of this logging logic makes sense
+            self.otel_config.add_receiver(
+                f"filelog/{fstab_entry.owner}",  # maybe???
+                {
+                    "include": [
+                        f"{fstab_entry.target}/**"
+                        if fstab_entry
+                        else "/snap/opentelemetry-collector/current/shared-logs/**"
+                    ],
+                    "start_at": "beginning",
+                    "operators": {},
+                    # operators:
+                    #   - type: drop
+                    #     expression: ".*file is a directory.*"
+                    #   - type: structured_metadata
+                    #     metadata:
+                    #       filename: filename
+                    #   - type: labeldrop
+                    #     labels: ["filename"]
+                },
+            )
         _aggregate_alerts(cos_agent.logs_alerts, loki_rules_paths, forward_alert_rules)
         # TODO: Add COS agent dashboards
 
