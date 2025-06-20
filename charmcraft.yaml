@@ -46,6 +46,7 @@ parts:
       - path: cos-tool-${CRAFT_ARCH_BUILD_FOR}
         mode: "755"
 
+
 requires:
   juju-info:
     description: |
