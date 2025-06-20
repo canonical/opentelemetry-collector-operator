@@ -1,0 +1,11 @@
+groups:
+  - name: Hardware
+    rules:
+      - alert: high-cpu-usage
+        expr: max(rate(otelcol_process_cpu_seconds_total{}[1m])*100) > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: High max CPU usage
+          description: Collector needs to scale up

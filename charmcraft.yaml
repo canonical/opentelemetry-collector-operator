@@ -46,6 +46,19 @@ parts:
       - path: cos-tool-${CRAFT_ARCH_BUILD_FOR}
         mode: "755"
 
+provides:
+  grafana-dashboards-provider:
+    interface: grafana_dashboard
+    description: |
+      Send own and aggregated dashboards to grafana.
+  receive-loki-logs:
+    interface: loki_push_api
+    optional: true
+    description: To receive logs by allowing Promtail instances to specify otelcol as their Loki address.
+  receive-traces:
+    interface: tracing
+    optional: true
+    description: Receive traces from other charms.
 
 requires:
   juju-info:
@@ -55,3 +68,145 @@ requires:
       this relation will be enough.
     interface: juju-info
     scope: container
+  cos-agent:
+    description: |
+      `cos-agent` is a dedicated relation for the grafana agent machine
+      charm. It will allow you to set up custom scrape jobs, fetch files
+      from arbitrary locations, send alert rules, dashboards, etc.
+    interface: cos_agent
+    scope: container
+    optional: true
+  grafana-dashboards-consumer:
+    interface: grafana_dashboard
+    description: |
+      Collect dashboards to be forwarded to grafana.
+  metrics-endpoint:
+    interface: prometheus_scrape
+    optional: true
+    description: To scrape other charms' metrics endpoints.
+  send-remote-write:
+    interface: prometheus_remote_write
+    optional: true
+    description: To forward collected metrics to a Prometheus backend.
+  send-loki-logs:
+    interface: loki_push_api
+    optional: true
+    description: To forward collected logs to a Loki backend.
+  receive-ca-cert:
+    interface: certificate_transfer
+    optional: true
+    description: |
+      For otelcol to create a trusted (TLS) connection with servers
+      it scrapes, pushes to, etc., it needs to trust the CA that signed
+      the server it talks to. CA certs forwarded over this relation are
+      installed in the root CA store.
+  cloud-config:
+    interface: grafana_cloud_config
+    optional: true
+    limit: 1
+    description: Forward telemetry to another Observability stack (Grafana Cloud, COS, etc.).
+  receive-server-cert:
+    interface: tls-certificates
+    optional: true
+    limit: 1
+    description: |
+      Obtain a certificate from a CA.
+      The charm sends a CSR over this relation and receives a signed certificate back.
+      That is the cert that would be presented to incoming TLS connections.
+  # TODO: remove limit once https://github.com/canonical/tempo-coordinator-k8s-operator/issues/168 is resolved
+  send-traces:
+    interface: tracing
+    limit: 1
+    optional: true
+    description: Send traces to a charmed Tempo instance.
+
+peers:
+  peers:
+    interface: otelcol_replica
+
+config:
+  options:
+    processors:
+      type: string
+      description: |
+        A global opentelemetry-collector "processors" config in YAML format, without the
+        "processors:" top-level key. For example, to represent a "processors" section
+        such as:
+        
+            processors:
+              batch:
+              memory_limiter:
+                limit_mib: 4000
+
+        you could use `juju config otelcol processors=@processors.yaml`, with:
+
+            # processors.yaml
+            batch:
+            memory_limiter:
+              limit_mib: 4000
+
+        The provided processors section will be applied to all relevant pipelines.
+
+        Reference: https://opentelemetry.io/docs/collector/configuration/#processors
+    forward_alert_rules:
+      description: >
+        Toggle forwarding of alert rules.
+      type: boolean
+      default: true
+    tls_insecure_skip_verify:
+      description: |
+        Flag to skip the validation of certificates from servers we connect to with TLS.
+        If "true", self-signed certs can be used seamlessly; this setting will be applied
+        to all the otelcol exporter configurations and any receivers which actively make
+        requests to servers, e.g. the prometheus receiver scraping metrics endpoints.
+      type: boolean
+      default: false
+    # Tracing config options
+    always_enable_zipkin:
+      description: >
+        Force-enable the receiver for the 'zipkin' protocol in OpenTelemetry Collector, 
+        even if there is no integration currently requesting it.
+      type: boolean
+      default: false
+    always_enable_jaeger_grpc:
+      description: >
+        Force-enable the receiver for the 'jaeger_grpc' protocol in OpenTelemetry Collector, 
+        even if there is no integration currently requesting it.
+      type: boolean
+      default: false
+    always_enable_jaeger_thrift_http:
+      description: >
+        Force-enable the receiver for the 'jaeger_thrift_http' protocol in OpenTelemetry Collector, 
+        even if there is no integration currently requesting it.
+      type: boolean
+      default: false
+    tracing_sampling_rate_charm:
+      description: >
+        This property defines the percentage of charm traces that are sent to the tracing backend.
+        Setting it to 100 would mean all charm traces are kept, setting to 0 means charm traces
+        aren't sent to the tracing backend at all. Anything outside of 0-100 range will be clamped 
+        to this range by OpenTelemetry Collector.
+      type: float
+      default: 100.0
+    tracing_sampling_rate_workload:
+      description: >
+        This property defines the percentage of workload traces that are sent to the tracing backend.
+        Setting it to 100 would mean all workload traces are kept, setting to 0 means workload traces
+        aren't sent to the tracing backend at all. Anything outside of 0-100 range will be clamped 
+        to this range by OpenTelemetry Collector.
+      type: float
+      default: 1.0
+    tracing_sampling_rate_error:
+      description: >
+        This property defines the percentage of error traces (from all sources) that are sent to the tracing backend.
+        Setting it to 100 would mean all error traces are kept, setting to 0 means error traces
+        aren't sent to the tracing backend at all. Anything outside of 0-100 range will be clamped 
+        to this range by OpenTelemetry Collector.
+      type: float
+      default: 100.0
+
+actions:
+  reconcile:
+    description: >
+      Regenerate the world state from scratch. This includes the configuration file,
+      but also relation data set by the charm.
