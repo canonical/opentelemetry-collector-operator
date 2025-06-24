@@ -12,7 +12,6 @@ Modified from https://github.com/canonical/k8s-operator/blob/main/charms/worker/
 
 import logging
 import platform
-import subprocess
 from typing import Dict, Optional
 
 import charms.operator_libs_linux.v2.snap as snap_lib
@@ -94,23 +93,9 @@ def _install_snap(
         f"Ensuring {name} snap is installed at revision={revision}"
         f" with classic confinement={classic}"
     )
-    # snap.ensure(state=snap_lib.SnapState.Present, revision=revision, classic=classic)
-    # Currently, snap.ensure does not properly use the classic flag. Use the commented line above
-    # instead of the below code once the issue is resolved.
-    # https://github.com/canonical/operator-libs-linux/issues/129
-    if snap.present:
-        if snap.revision != revision:
-            cmd = ["snap", "refresh", f"{name}", f'--revision="{revision}"']
-            if classic:
-                cmd.append("--classic")
-            subprocess.run(cmd)
-            snap.start(enable=True)
-    else:
-        snap.ensure(state=snap_lib.SnapState.Present, revision=revision, classic=classic)
-
+    snap.ensure(state=snap_lib.SnapState.Present, revision=revision, classic=classic)
     if config:
         snap.set(config)
-
     snap.hold()
 
 
