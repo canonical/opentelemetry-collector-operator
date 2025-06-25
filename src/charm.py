@@ -39,6 +39,10 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
     def _reconcile(self):
         self._install()
         self._stop()
+        # TODO: when removing the locking mechanism, change manager.get_revisions
+        # to a free function, and use it to set to BlockedStatus on update-status
+        # if the installed snap revision (max(get_revisions())) doesn't match the
+        # one required by the charm.
         self.unit.status = ActiveStatus()
 
     def _install(self) -> None:
