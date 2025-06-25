@@ -14,9 +14,11 @@ from snap_management import (
     SnapSpecError,
     SnapInstallError,
     SnapServiceError,
+    get_system_arch,
     install_snap,
     node_exporter_snap_name,
     opentelemetry_collector_snap_name,
+    snap_maps,
 )
 from singleton_snap import SingletonSnapManager
 
@@ -44,11 +46,15 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             return
 
         manager = SingletonSnapManager(self.unit.name)
+        arch = get_system_arch()
+
         for snap_package in SNAPS:
-            manager.register(snap_package)
+            snap_revision = snap_maps[snap_package][("strict", arch)]
+            manager.register(snap_package, snap_revision)
             with manager.snap_operation(snap_package):
-                self._install_snap(snap_package)
-                self._start_snap(snap_package)
+                if snap_revision > max(manager.get_revisions(snap_package)):
+                    self._install_snap(snap_package)
+                    self._start_snap(snap_package)
 
             with manager.config_operation(snap_package):
                 # Merge configurations under a directory into one,

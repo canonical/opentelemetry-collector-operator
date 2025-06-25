@@ -146,7 +146,7 @@ class SingletonSnapManager:
         prefix = f"{self.LOCK_FILE_PREFIX}{snap_name}{self.SEPARATOR}"
         return filename[len(prefix) :]
 
-    def register(self, snap_name: str, revision: str = "") -> None:
+    def register(self, snap_name: str, revision: int) -> None:
         """Register current unit as using the specified snap and revision.
 
         Args:
@@ -159,16 +159,16 @@ class SingletonSnapManager:
         lock_path = self._get_registration_file_path(snap_name)
         with self._lock_directory():
             with open(lock_path, "w") as f:
-                f.write(revision)
+                f.write(str(revision))
 
-    def get_revisions(self, snap_name: str) -> List[str]:
+    def get_revisions(self, snap_name: str) -> List[int]:
         """Get all revisions of a snap currently registered with any unit.
 
         Args:
             snap_name: Name of the snap.
 
         Returns:
-            List of revision strings registered by units for this snap.
+            List of revision integers registered by units for this snap.
 
         Raises:
             OSError: If there's an error accessing the lock directory or files.
@@ -183,7 +183,7 @@ class SingletonSnapManager:
                         with open(path, "r") as f:
                             revision = f.read().strip()
                             if revision:
-                                revisions.add(revision)
+                                revisions.add(int(revision))
                     except OSError:
                         continue
         return list(revisions)
