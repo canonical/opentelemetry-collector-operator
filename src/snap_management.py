@@ -27,33 +27,38 @@ node_exporter_snap_name = "node-exporter"
 snap_maps = {
     opentelemetry_collector_snap_name: {
         # (confinement, arch): revision
-        ("strict", "amd64"): "9",  # 0.119.0
-        ("strict", "arm64"): "10",  # 0.119.0
+        ("strict", "amd64"): 9,  # 0.119.0
+        ("strict", "arm64"): 10,  # 0.119.0
     },
     node_exporter_snap_name: {
         # (confinement, arch): revision
-        ("strict", "amd64"): "1904",  # v1.9.1
-        ("strict", "arm64"): "1908",  # v1.9.1
-    }
+        ("strict", "amd64"): 1904,  # v1.9.1
+        ("strict", "arm64"): 1908,  # v1.9.1
+    },
 }
+
 
 class SnapSpecError(Exception):
     """Custom exception type for errors related to the snap spec."""
+
     pass
 
 
 class SnapError(Exception):
     """Custom exception type for Snaps."""
+
     pass
 
 
 class SnapInstallError(SnapError):
     """Custom exception type for install related errors."""
+
     pass
 
 
 class SnapServiceError(SnapError):
     """Custom exception type for service related errors."""
+
     pass
 
 
@@ -74,7 +79,7 @@ def install_snap(snap: str, classic: bool = False, config: Optional[Dict[str, JS
 
 def _install_snap(
     name: str,
-    revision: str,
+    revision: int,
     classic: bool = False,
     config: Optional[Dict[str, JSONAble]] = None,
 ):
@@ -88,7 +93,7 @@ def _install_snap(
         f"Ensuring {name} snap is installed at revision={revision}"
         f" with classic confinement={classic}"
     )
-    snap.ensure(state=snap_lib.SnapState.Present, revision=revision, classic=classic)
+    snap.ensure(state=snap_lib.SnapState.Present, revision=str(revision), classic=classic)
     if config:
         snap.set(config)
     snap.hold()
