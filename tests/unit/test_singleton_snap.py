@@ -131,9 +131,9 @@ def test_lock_timeout(lock_dir):
     with pytest.raises(TimeoutError):
         with mgr2.snap_operation("otelcol", timeout=1):
             pass
-    assert (
-        time.time() - start >= 1
-    ), "Second, conflicting lockmgr wrongfully succeeded to grab the lock before it was released by the first lockmgr."
+    assert time.time() - start >= 1, (
+        "Second, conflicting lockmgr wrongfully succeeded to grab the lock before it was released by the first lockmgr."
+    )
 
     p.join()
 
