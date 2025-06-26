@@ -1,7 +1,4 @@
-import os
-import time
 import pytest
-from multiprocessing import Process, Queue
 from src.singleton_snap import SingletonSnapManager
 
 
