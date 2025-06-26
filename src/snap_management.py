@@ -124,11 +124,11 @@ def install_snap(
     # Install the Snap
     cache = snap_lib.SnapCache()
     snap = cache[snap_name]
+    snap.ensure(state=snap_lib.SnapState.Present, revision=str(revision), classic=classic)
     log.info(
-        f"Ensuring {snap_name} snap is installed at revision={revision}"
+        f"{snap_name} snap has been installed at revision={revision}"
         f" with confinement={'classic' if classic else 'strict'}"
     )
-    snap.ensure(state=snap_lib.SnapState.Present, revision=str(revision), classic=classic)
     if config:
         snap.set(config)
     snap.hold()
