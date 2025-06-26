@@ -62,11 +62,12 @@ For testing, this directory is patched to a temporary location.
      (such as Windows), you may need to adapt the locking mechanism.
 """
 
-from dataclasses import dataclass
+import errno
 import os
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Set
-import errno
 
 
 @dataclass
@@ -147,7 +148,7 @@ class SingletonSnapManager:
         OSError: on I/O related errors.
     """
 
-    LOCK_DIR = "/run/lock/singleton_snaps"
+    LOCK_DIR: Path = Path("/run/lock/singleton_snaps")
 
     def __init__(self, unit_name: str):
         """Initialize the manager with a normalized unit name.
@@ -182,7 +183,7 @@ class SingletonSnapManager:
             snap_name=snap_name,
             snap_revision=snap_revision,
         )
-        with open(registration_file.filename, "w") as f:
+        with open(self.LOCK_DIR.joinpath(registration_file.filename), "w") as f:
             f.write(str(snap_revision))
 
     def unregister(self, snap_name: str, snap_revision: int) -> None:
@@ -196,7 +197,7 @@ class SingletonSnapManager:
             snap_name=snap_name,
             snap_revision=snap_revision,
         )
-        os.remove(registration_file.filename)
+        os.remove(self.LOCK_DIR.joinpath(registration_file.filename))
 
     def get_revisions(self, snap_name: str) -> Set[int]:
         """Get all revisions of a snap currently registered with any unit.
@@ -214,7 +215,7 @@ class SingletonSnapManager:
         for filename in os.listdir(self.LOCK_DIR):
             registration_file = SnapRegistrationFile.from_filename(filename)
             if registration_file.snap_name == snap_name:
-                path = os.path.join(self.LOCK_DIR, filename)
+                path = self.LOCK_DIR.joinpath(filename)
                 try:
                     with open(path, "r") as f:
                         revision = f.read().strip()
