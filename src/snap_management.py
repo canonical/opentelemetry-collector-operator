@@ -31,7 +31,6 @@ def get_system_arch() -> str:
     return arch
 
 
-@dataclass
 class SnapMap:
     """Maps snap revisions based on architecture and confinement mode.
 

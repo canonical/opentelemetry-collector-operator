@@ -119,8 +119,8 @@ class SnapRegistrationFile:
             snap_revision=int(snap_revision),
         )
 
-    @staticmethod
-    def _normalize_name(name: str) -> str:
+    @classmethod
+    def _normalize_name(cls, name: str) -> str:
         """Normalize names to contain only alphanumerics, _ and -."""
         return re.sub(r"[^\w-]", "_", name)
 
@@ -148,7 +148,7 @@ class SingletonSnapManager:
         OSError: on I/O related errors.
     """
 
-    LOCK_DIR: Path = Path("/run/lock/singleton_snaps")
+    LOCK_DIR: Path = Path("/opt/singleton_snaps")
 
     def __init__(self, unit_name: str):
         """Initialize the manager with a normalized unit name.

@@ -91,15 +91,6 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
         This method provides lazy initialization of snap objects, avoiding unnecessary
         calls to snapd until they're actually needed.
-
-        Args:
-            snap_name: Name of the snap to retrieve
-
-        Returns:
-            The Snap object for the requested snap
-
-        Raises:
-            snap.SnapError: If there's an error accessing the snap
         """
         return snap.SnapCache()[snap_name]
 
