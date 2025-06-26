@@ -251,15 +251,5 @@ class SingletonSnapManager:
         return units
 
     def is_used_by_other_units(self, snap_name: str) -> bool:
-        """Check if the specified snap is being used by other units.
-
-        Args:
-            snap_name: Name of the snap to check
-
-        Returns:
-            bool: True if the snap is used by other units, False otherwise
-
-        Raises:
-            OSError: If there's an error accessing the lock directory
-        """
+        """Check if the specified snap is being used by other units."""
         return any(unit != self.unit_name for unit in self.get_units(snap_name))
