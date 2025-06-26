@@ -15,10 +15,10 @@ def lock_dir(monkeypatch, tmp_path):
 
 def test_register_unregister(lock_dir):
     mgr1 = SingletonSnapManager("unit-1")
-    mgr1.register("otelcol")
+    mgr1.register("otelcol", revision=1)
     assert "unit-1" in mgr1.get_units("otelcol")
     mgr2 = SingletonSnapManager("unit-2")
-    mgr2.register("otelcol")
+    mgr2.register("otelcol", revision=2)
     assert "unit-1" in mgr2.get_units("otelcol")
     assert "unit-2" in mgr2.get_units("otelcol")
     mgr1.unregister("otelcol")
@@ -32,32 +32,33 @@ def test_register_unregister(lock_dir):
 
 def test_register_with_revision(lock_dir):
     mgr1 = SingletonSnapManager("unit-1")
-    mgr1.register("otelcol", "1.0.0")
+    mgr1.register("otelcol", revision=1)
     assert "unit-1" in mgr1.get_units("otelcol")
     reg_file1 = lock_dir / "LCK..otelcol--unit-1"
     with open(reg_file1, "r") as f:
         content = f.read().strip()
-        assert content == "1.0.0"
+        assert content == "1"
 
 
 def test_get_revisions(lock_dir):
     mgr1 = SingletonSnapManager("unit-1")
-    mgr1.register("otelcol", "1.0.0")
+    mgr1.register("otelcol", revision=1)
 
     mgr2 = SingletonSnapManager("unit-2")
-    mgr2.register("otelcol", "2.0.0")
+    mgr2.register("otelcol", revision=2)
 
-    assert sorted(mgr1.get_revisions("otelcol")) == ["1.0.0", "2.0.0"]
+    assert sorted(mgr1.get_revisions("otelcol")) == [1, 2]
 
     mgr1.unregister("otelcol")
-    assert mgr2.get_revisions("otelcol") == ["2.0.0"]
+    assert mgr2.get_revisions("otelcol") == [2]
+
 
 def test_duplicated_revisions(lock_dir):
     mgr1 = SingletonSnapManager("unit-1")
-    mgr1.register("otelcol", "1.0.0")
+    mgr1.register("otelcol", revision=1)
     mgr2 = SingletonSnapManager("unit-2")
-    mgr2.register("otelcol", "1.0.0")
-    assert mgr1.get_revisions("otelcol") == ["1.0.0"]
+    mgr2.register("otelcol", revision=1)
+    assert mgr1.get_revisions("otelcol") == [1]
 
 
 def test_register_unregister_creates_removes_lock_file(lock_dir):
@@ -70,7 +71,7 @@ def test_register_unregister_creates_removes_lock_file(lock_dir):
         reg_file.unlink()
 
     # Register (create file).
-    mgr.register(snap_name)
+    mgr.register(snap_name, revision=1)
     assert reg_file.exists()
 
     # Unregister (remove file).
@@ -101,7 +102,7 @@ def test_register_handles_oserror(monkeypatch, lock_dir):
 
     monkeypatch.setattr("builtins.open", raise_oserror)
     with pytest.raises(Exception):
-        mgr.register(snap_name)
+        mgr.register(snap_name, revision=1)
 
 
 def hold_lock(unit, sleep_time, lock_dir):
@@ -130,9 +131,9 @@ def test_lock_timeout(lock_dir):
     with pytest.raises(TimeoutError):
         with mgr2.snap_operation("otelcol", timeout=1):
             pass
-    assert time.time() - start >= 1, (
-        "Second, conflicting lockmgr wrongfully succeeded to grab the lock before it was released by the first lockmgr."
-    )
+    assert (
+        time.time() - start >= 1
+    ), "Second, conflicting lockmgr wrongfully succeeded to grab the lock before it was released by the first lockmgr."
 
     p.join()
 
