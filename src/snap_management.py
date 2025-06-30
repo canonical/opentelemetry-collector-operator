@@ -5,7 +5,6 @@
 Modified from https://github.com/canonical/k8s-operator/blob/main/charms/worker/k8s/src/snap.py
 """
 
-from dataclasses import dataclass
 import logging
 import platform
 from typing import Dict, Optional, Set

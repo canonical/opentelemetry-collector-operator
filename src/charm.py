@@ -10,7 +10,7 @@ from typing import cast
 import ops
 import sh
 from charmlibs.pathops import LocalPath
-from charms.grafana_agent.v0.cos_agent import COSAgentRequirer, ReceiverProtocol
+from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology
 from ops import BlockedStatus
@@ -21,8 +21,6 @@ from config_builder import Component, Port
 from config_manager import ConfigManager
 from constants import (
     CONFIG_PATH,
-    LOKI_RULES_DEST_PATH,
-    LOKI_RULES_SRC_PATH,
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
     RECV_CA_CERT_FOLDER_PATH,
@@ -30,7 +28,6 @@ from constants import (
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager
-from snap_fstab import SnapFstab
 from snap_management import (
     SnapInstallError,
     SnapMap,
