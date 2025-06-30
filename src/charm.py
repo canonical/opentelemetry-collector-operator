@@ -8,7 +8,7 @@ import os
 from typing import cast
 
 import ops
-import sh
+import subprocess
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
@@ -50,7 +50,7 @@ def is_tls_ready() -> bool:
 
 def refresh_certs():
     """Run `update-ca-certificates` to refresh the trusted system certs."""
-    sh.update_ca_certificates(fresh=True)  # type: ignore
+    subprocess.run(["update-ca-certificates", "--fresh"], check=True)
 
 
 def hook() -> str:
@@ -163,7 +163,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         # Logs setup
         integrations.receive_loki_logs(self, tls=is_tls_ready())
         loki_endpoints = integrations.send_loki_logs(self)
-        if self._incoming_logs:
+        if self._has_incoming_logs_relation:
             config_manager.add_log_ingestion()
         config_manager.add_log_forwarding(loki_endpoints, insecure_skip_verify)
 
@@ -313,7 +313,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         return snap.SnapCache()[snap_name]
 
     @property
-    def _incoming_logs(self) -> bool:
+    def _has_incoming_logs_relation(self) -> bool:
         return any(self.model.relations.get("receive-loki-logs", []))
 
     @property

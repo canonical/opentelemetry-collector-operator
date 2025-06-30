@@ -15,7 +15,6 @@ dependencies = [
   "cosl",
   "pydantic",
   "charmlibs-pathops",
-  "sh", 
 ]
 
 [project.optional-dependencies]
