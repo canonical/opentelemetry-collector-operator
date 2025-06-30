@@ -4,22 +4,56 @@
 """A Juju charm for OpenTelemetry Collector on machines."""
 
 import logging
-import ops
 import os
+from typing import cast
+
+import ops
+import sh
+from charmlibs.pathops import LocalPath
+from charms.grafana_agent.v0.cos_agent import COSAgentRequirer, ReceiverProtocol
 from charms.operator_libs_linux.v2 import snap  # type: ignore
-from ops.model import ActiveStatus, MaintenanceStatus
-from snap_management import (
-    SnapSpecError,
-    SnapInstallError,
-    SnapServiceError,
-    install_snap,
-    SnapMap,
+from cosl import JujuTopology
+from ops import BlockedStatus
+from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
+
+import integrations
+from config_builder import Component, Port
+from config_manager import ConfigManager
+from constants import (
+    CONFIG_PATH,
+    LOKI_RULES_DEST_PATH,
+    LOKI_RULES_SRC_PATH,
+    METRICS_RULES_DEST_PATH,
+    METRICS_RULES_SRC_PATH,
+    RECV_CA_CERT_FOLDER_PATH,
+    SERVER_CERT_PATH,
+    SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager
+from snap_fstab import SnapFstab
+from snap_management import (
+    SnapInstallError,
+    SnapMap,
+    SnapServiceError,
+    SnapSpecError,
+    install_snap,
+)
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
+
+
+def is_tls_ready() -> bool:
+    """Return True if the server cert and private key are present on disk."""
+    return (
+        LocalPath(SERVER_CERT_PATH).exists() and LocalPath(SERVER_CERT_PRIVATE_KEY_PATH).exists()
+    )
+
+
+def refresh_certs():
+    """Run `update-ca-certificates` to refresh the trusted system certs."""
+    sh.update_ca_certificates(fresh=True)  # type: ignore
 
 
 def hook() -> str:
@@ -39,10 +73,197 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         self._reconcile()
 
     def _reconcile(self):
-        # TODO: when removing the locking mechanism, change manager.get_revisions
-        # to a free function, and use it to set to BlockedStatus on update-status
-        # if the installed snap revision (max(get_revisions())) doesn't match the
-        # one required by the charm.
+        insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
+
+        # Integrate with TLS relations
+        receive_ca_certs_hash = integrations.receive_ca_cert(
+            self,
+            recv_ca_cert_folder_path=LocalPath(RECV_CA_CERT_FOLDER_PATH),
+            refresh_certs=refresh_certs,
+        )
+        server_cert_hash = integrations.receive_server_cert(
+            self,
+            server_cert_path=LocalPath(SERVER_CERT_PATH),
+            private_key_path=LocalPath(SERVER_CERT_PRIVATE_KEY_PATH),
+        )
+
+        # Create the config manager
+        config_manager = ConfigManager(
+            receiver_tls=is_tls_ready(),
+            insecure_skip_verify=cast(bool, self.config.get("tls_insecure_skip_verify")),
+        )
+
+        # COS Agent setup
+        cos_agent = COSAgentRequirer(self)
+        ## COS Agent metrics
+        if cos_agent.metrics_jobs:
+            config_manager.config.add_component(
+                Component.receiver,
+                name="prometheus/cos-agent",
+                config={"config": {"scrape_configs": cos_agent.metrics_jobs}},
+                pipelines=["metrics"],
+            )
+        ## COS Agent alerts
+        integrations._aggregate_alerts(
+            alerts=cos_agent.metrics_alerts,
+            src_path=LocalPath(METRICS_RULES_SRC_PATH),
+            dest_path=LocalPath(METRICS_RULES_DEST_PATH),
+        )
+        # TODO: uncomment logs setup when we have filelog receiver in the snap
+        ## COS Agent logs
+        ### Connect logging snap endpoints
+        # for plug in cos_agent.snap_log_endpoints:
+        #     try:
+        #         self.snap("opentelemetry-collector").connect(
+        #             "logs", service=plug.owner, slot=plug.name
+        #         )
+        #     except snap.SnapError as e:
+        #         logger.error(f"error connecting plug {plug} to opentelemetry-collector:logs")
+        #         logger.error(e.message)
+        #         # TODO: should we fail loudly and error?
+        # endpoint_owners = {
+        #     endpoint.owner: {
+        #         "juju_application": topology.application,
+        #         "juju_unit": topology.unit,
+        #     }
+        #     for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
+        # }
+        # otelcol_fstab = SnapFstab(
+        #     LocalPath("/var/lib/snapd/mount/snap.opentelemetry-collector.fstab")
+        # )
+        # for fstab_entry in otelcol_fstab.entries:
+        #     if fstab_entry.owner not in endpoint_owners.keys():
+        #         continue
+        #
+        #     config_manager.config.add_component(
+        #         component=Component.receiver,
+        #         name=f"filelog/{fstab_entry.owner}",  # TODO: maybe???
+        #         config={
+        #             "include": [
+        #                 f"{fstab_entry.target}/**"
+        #                 if fstab_entry
+        #                 else "/snap/opentelemetry-collector/current/shared-logs/**"
+        #             ],
+        #             "start_at": "beginning",
+        #             "operators": {},
+        #             # operators:
+        #             #   - type: drop
+        #             #     expression: ".*file is a directory.*"
+        #             #   - type: structured_metadata
+        #             #     metadata:
+        #             #       filename: filename
+        #             #   - type: labeldrop
+        #             #     labels: ["filename"]
+        #         },
+        #         pipelines=["logs"],
+        #     )
+        # integrations._aggregate_alerts(
+        #     alerts=cos_agent.logs_alerts,
+        #     src_path=LocalPath(LOKI_RULES_SRC_PATH),
+        #     dest_path=LocalPath(LOKI_RULES_DEST_PATH),
+        # )
+
+        # Logs setup
+        integrations.receive_loki_logs(self, tls=is_tls_ready())
+        loki_endpoints = integrations.send_loki_logs(self)
+        if self._incoming_logs:
+            config_manager.add_log_ingestion()
+        config_manager.add_log_forwarding(loki_endpoints, insecure_skip_verify)
+
+        # Metrics setup
+        topology = JujuTopology.from_charm(self)
+        config_manager.add_self_scrape(
+            identifier=topology.identifier,
+            labels={
+                "instance": f"{topology.identifier}_{topology.unit}",
+                "juju_charm": topology.charm_name,
+                "juju_model": topology.model,
+                "juju_model_uuid": topology.model_uuid,
+                "juju_application": topology.application,
+                "juju_unit": topology.unit,
+            },
+        )
+        # For now, the only incoming and outgoing metrics relations are remote-write/scrape
+        metrics_consumer_jobs = integrations.scrape_metrics(self)
+        config_manager.add_prometheus_scrape_jobs(metrics_consumer_jobs)
+        remote_write_endpoints = integrations.send_remote_write(self)
+        config_manager.add_remote_write(remote_write_endpoints)
+
+        # Tracing setup
+        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
+        config_manager.add_traces_ingestion(requested_tracing_protocols)
+        # TODO: Luca: uncomment this as soon as we have tail sampling in the snap
+        # Add default processors to traces
+        # config_manager.add_traces_processing(
+        #     sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
+        #     sampling_rate_workload=cast(bool, self.config.get("tracing_sampling_rate_workload")),
+        #     sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
+        # )
+        tracing_otlp_http_endpoint = integrations.send_traces(self)
+        if tracing_otlp_http_endpoint:
+            config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
+
+        # Dashboards setup
+        integrations.forward_dashboards(self)
+
+        # GrafanaCloudIntegrator setup
+        cloud_integrator_data = integrations.cloud_integrator(self)
+        config_manager.add_cloud_integrator(
+            username=cloud_integrator_data.username,
+            password=cloud_integrator_data.password,
+            prometheus_url=cloud_integrator_data.prometheus_url,
+            loki_url=cloud_integrator_data.loki_url,
+            tempo_url=cloud_integrator_data.tempo_url,
+        )
+
+        # Add custom processors from Juju config
+        if custom_processors := cast(str, self.config.get("processors")):
+            config_manager.add_custom_processors(custom_processors)
+
+        # Push the config and Push the config and deploy/update
+        config_path = LocalPath(CONFIG_PATH)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(config_manager.config.build())
+
+        # TODO: Conditionally open ports based on the otelcol config file rather than opening all ports
+        # Append port 9100 for Node Exporter # TODO: is this needed?
+        self.unit.set_ports(*[port.value for port in Port])
+
+        # If the config file or any cert has changed, a change in the hash
+        # will trigger a restart
+        hash_file = LocalPath("/opt/otelcol_reload")
+        old_hash = ""
+        if hash_file.exists():
+            old_hash = hash_file.read_text()
+        current_hash = ",".join(
+            [config_manager.config.hash, receive_ca_certs_hash, server_cert_hash]
+        )
+        if current_hash != old_hash:
+            for snap_name in SnapMap.snaps():
+                self.snap(snap_name).restart()
+
+        # Set status
+        if self._has_server_cert_relation and not is_tls_ready():
+            # A tls relation to a CA was formed, but we didn't get the cert yet.
+            self.snap("opentelemetry-collector").stop()
+            self.unit.status = WaitingStatus("CSR sent; otelcol down while waiting for a cert")
+            return
+
+        for snap_name in SnapMap.snaps():
+            snap_revision = SnapMap.get_revision(snap_name)
+            installed_revision = max(SingletonSnapManager.get_revisions(snap_name))
+            if snap_revision != installed_revision:
+                logger.error(
+                    f"Mismatching snap revisions for {snap_name}. "
+                    f"The charm requested rev{snap_revision}, but a different app installed"
+                    f"rev{installed_revision}. When multiple collector units require different "
+                    "snap revisions, the newest one will be installed. "
+                    "Please refresh this charm to a revision that uses the same snap as your "
+                    "most-recently updated collector."
+                )
+                self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
+                return
+
         self.unit.status = ActiveStatus()
 
     def _install(self) -> None:
@@ -51,7 +272,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
             manager.register(snap_name, snap_revision)
-            if snap_revision > max(manager.get_revisions(snap_name)):
+            if snap_revision >= max(manager.get_revisions(snap_name)):
                 # Install the snap
                 self.unit.status = MaintenanceStatus(f"Installing {snap_name} snap")
                 install_snap(snap_name)
@@ -93,6 +314,14 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         calls to snapd until they're actually needed.
         """
         return snap.SnapCache()[snap_name]
+
+    @property
+    def _incoming_logs(self) -> bool:
+        return any(self.model.relations.get("receive-loki-logs", []))
+
+    @property
+    def _has_server_cert_relation(self) -> bool:
+        return any(self.model.relations.get("receive-server-cert", []))
 
 
 if __name__ == "__main__":  # pragma: nocover

@@ -28,8 +28,8 @@ class SnapRegistrationFile:
     snap_revision: int
 
     PREFIX = "LCK.."
-    SEPARATOR_REVISION = "__"
-    SEPARATOR_UNIT = "--"
+    SEPARATOR_REVISION = "--rev"
+    SEPARATOR_UNIT = "__"
 
     @property
     def filename(self):
@@ -137,7 +137,8 @@ class SingletonSnapManager:
         )
         os.remove(self.LOCK_DIR.joinpath(registration_file.filename))
 
-    def get_revisions(self, snap_name: str) -> Set[int]:
+    @classmethod
+    def get_revisions(cls, snap_name: str) -> Set[int]:
         """Get all revisions of a snap currently registered with any unit.
 
         Args:
@@ -150,10 +151,10 @@ class SingletonSnapManager:
             OSError: If there's an error accessing the lock directory or files.
         """
         revisions = set()
-        for filename in os.listdir(self.LOCK_DIR):
+        for filename in os.listdir(cls.LOCK_DIR):
             registration_file = SnapRegistrationFile.from_filename(filename)
             if registration_file.snap_name == snap_name:
-                path = self.LOCK_DIR.joinpath(filename)
+                path = cls.LOCK_DIR.joinpath(filename)
                 try:
                     with open(path, "r") as f:
                         revision = f.read().strip()
@@ -162,7 +163,8 @@ class SingletonSnapManager:
                     continue
         return revisions
 
-    def get_units(self, snap_name: str) -> Set[str]:
+    @classmethod
+    def get_units(cls, snap_name: str) -> Set[str]:
         """Get all units currently registered for a snap (atomic with directory lock).
 
         This method is primarily useful for debugging purposes. In most scenarios, you
@@ -181,7 +183,7 @@ class SingletonSnapManager:
         """
         units = set()
 
-        for filename in os.listdir(self.LOCK_DIR):
+        for filename in os.listdir(cls.LOCK_DIR):
             registration_file = SnapRegistrationFile.from_filename(filename)
             if registration_file.snap_name == snap_name:
                 units.add(registration_file.unit_name)
