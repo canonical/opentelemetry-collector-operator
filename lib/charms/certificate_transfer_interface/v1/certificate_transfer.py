@@ -94,6 +94,7 @@ import json
 import logging
 from typing import List, MutableMapping, Optional, Set
 
+import pydantic
 from ops import (
     CharmEvents,
     EventBase,
@@ -106,7 +107,6 @@ from ops import (
 )
 from ops.charm import CharmBase
 from ops.framework import Object
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # The unique Charmhub library identifier, never change it
 LIBID = "3785165b24a743f2b0c60de52db25c8b"
@@ -116,7 +116,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 7
 
 logger = logging.getLogger(__name__)
 
@@ -131,83 +131,153 @@ class DataValidationError(TLSCertificatesError):
     """Raised when data validation fails."""
 
 
-class DatabagModel(BaseModel):
-    """Base databag model."""
+if int(pydantic.version.VERSION.split(".")[0]) < 2:
 
-    model_config = ConfigDict(
-        # tolerate additional keys in databag
-        extra="ignore",
-        # Allow instantiating this class by field name (instead of forcing alias).
-        populate_by_name=True,
-        # Custom config key: whether to nest the whole datastructure (as json)
-        # under a field or spread it out at the toplevel.
-        _NEST_UNDER=None,
-    )  # type: ignore
-    """Pydantic config."""
+    class DatabagModel(pydantic.BaseModel):  # type: ignore
+        """Base databag model."""
 
-    @classmethod
-    def load(cls, databag: MutableMapping):
-        """Load this model from a Juju databag."""
-        nest_under = cls.model_config.get("_NEST_UNDER")
-        if nest_under:
-            return cls.model_validate(json.loads(databag[nest_under]))
+        class Config:
+            """Pydantic config."""
 
-        try:
-            data = {
-                k: json.loads(v)
-                for k, v in databag.items()
-                # Don't attempt to parse model-external values
-                if k in {(f.alias or n) for n, f in cls.model_fields.items()}
-            }
-        except json.JSONDecodeError as e:
-            msg = f"invalid databag contents: expecting json. {databag}"
-            logger.error(msg)
-            raise DataValidationError(msg) from e
+            # ignore any extra fields in the databag
+            extra = "ignore"
+            """Ignore any extra fields in the databag."""
+            allow_population_by_field_name = True
+            """Allow instantiating this class by field name (instead of forcing alias)."""
 
-        try:
-            return cls.model_validate_json(json.dumps(data))
-        except ValidationError as e:
-            msg = f"failed to validate databag: {databag}"
-            logger.debug(msg, exc_info=True)
-            raise DataValidationError(msg) from e
+        _NEST_UNDER = None
 
-    def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
-        """Write the contents of this model to Juju databag.
+        @classmethod
+        def load(cls, databag: MutableMapping):
+            """Load this model from a Juju databag."""
+            if cls._NEST_UNDER:
+                return cls.parse_obj(json.loads(databag[cls._NEST_UNDER]))
 
-        Args:
-            databag: The databag to write to.
-            clear: Whether to clear the databag before writing.
+            try:
+                data = {
+                    k: json.loads(v)
+                    for k, v in databag.items()
+                    # Don't attempt to parse model-external values
+                    if k in {f.alias for f in cls.__fields__.values()}
+                }
+            except json.JSONDecodeError as e:
+                msg = f"invalid databag contents: expecting json. {databag}"
+                logger.error(msg)
+                raise DataValidationError(msg) from e
 
-        Returns:
-            MutableMapping: The databag.
-        """
-        if clear and databag:
-            databag.clear()
+            try:
+                return cls.parse_raw(json.dumps(data))  # type: ignore
+            except pydantic.ValidationError as e:
+                msg = f"failed to validate databag: {databag}"
+                logger.debug(msg, exc_info=True)
+                raise DataValidationError(msg) from e
 
-        if databag is None:
-            databag = {}
-        nest_under = self.model_config.get("_NEST_UNDER")
-        if nest_under:
-            databag[nest_under] = self.model_dump_json(
-                by_alias=True,
-                # skip keys whose values are default
-                exclude_defaults=True,
-            )
+        def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
+            """Write the contents of this model to Juju databag.
+
+            :param databag: the databag to write the data to.
+            :param clear: ensure the databag is cleared before writing it.
+            """
+            if clear and databag:
+                databag.clear()
+
+            if databag is None:
+                databag = {}
+
+            if self._NEST_UNDER:
+                databag[self._NEST_UNDER] = self.json(by_alias=True, exclude_defaults=False)
+                return databag
+
+            dct = json.loads(self.json(by_alias=True, exclude_defaults=False))
+            databag.update({k: json.dumps(v) for k, v in dct.items()})
+
             return databag
 
-        dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=False)
-        databag.update({k: json.dumps(v) for k, v in dct.items()})
-        return databag
+else:
+
+    class DatabagModel(pydantic.BaseModel):
+        """Base databag model."""
+
+        model_config = pydantic.ConfigDict(
+            # tolerate additional keys in databag
+            extra="ignore",
+            # Allow instantiating this class by field name (instead of forcing alias).
+            populate_by_name=True,
+            # Custom config key: whether to nest the whole datastructure (as json)
+            # under a field or spread it out at the toplevel.
+            _NEST_UNDER=None,
+        )  # type: ignore
+        """Pydantic config."""
+
+        @classmethod
+        def load(cls, databag: MutableMapping):
+            """Load this model from a Juju databag."""
+            nest_under = cls.model_config.get("_NEST_UNDER")
+            if nest_under:
+                return cls.model_validate(json.loads(databag[nest_under]))
+
+            try:
+                data = {
+                    k: json.loads(v)
+                    for k, v in databag.items()
+                    # Don't attempt to parse model-external values
+                    if k in {(f.alias or n) for n, f in cls.model_fields.items()}
+                }
+            except json.JSONDecodeError as e:
+                msg = f"invalid databag contents: expecting json. {databag}"
+                logger.error(msg)
+                raise DataValidationError(msg) from e
+
+            try:
+                return cls.model_validate_json(json.dumps(data))
+            except pydantic.ValidationError as e:
+                msg = f"failed to validate databag: {databag}"
+                logger.debug(msg, exc_info=True)
+                raise DataValidationError(msg) from e
+
+        def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
+            """Write the contents of this model to Juju databag.
+
+            Args:
+                databag: The databag to write to.
+                clear: Whether to clear the databag before writing.
+
+            Returns:
+                MutableMapping: The databag.
+            """
+            if clear and databag:
+                databag.clear()
+
+            if databag is None:
+                databag = {}
+            nest_under = self.model_config.get("_NEST_UNDER")
+            if nest_under:
+                databag[nest_under] = self.model_dump_json(
+                    by_alias=True,
+                    # skip keys whose values are default
+                    exclude_defaults=True,
+                )
+                return databag
+
+            dct = self.model_dump(mode="json", by_alias=True, exclude_defaults=False)
+            databag.update({k: json.dumps(v) for k, v in dct.items()})
+            return databag
 
 
 class ProviderApplicationData(DatabagModel):
     """Provider App databag model."""
 
-    certificates: Set[str] = Field(
-        description="The set of certificates that will be transferred to a requirer",
-        default=set(),
-    )
-    version: int = Field(
+    if int(pydantic.version.VERSION.split(".")[0]) < 2:
+        certificates: Set[str] = pydantic.Field(
+            description="The set of certificates that will be transferred to a requirer",
+            default_factory=set,
+        )
+    else:
+        certificates: Set[str] = pydantic.Field(
+            description="The set of certificates that will be transferred to a requirer",
+            default=set(),
+        )
+    version: int = pydantic.Field(
         description="Version of the interface used in this databag",
         default=1,
     )
@@ -216,7 +286,7 @@ class ProviderApplicationData(DatabagModel):
 class RequirerApplicationData(DatabagModel):
     """Requirer App databag model."""
 
-    version: int = Field(
+    version: int = pydantic.Field(
         description="Version of the interface supported by this requirer",
         default=1,
     )
@@ -247,7 +317,7 @@ class CertificateTransferProvides(Object):
             return
         relations = self._get_relevant_relations(relation_id)
         if not relations:
-            logger.error(
+            logger.warning(
                 "At least 1 matching relation ID not found with the relation name '%s'",
                 self.relationship_name,
             )
@@ -274,7 +344,7 @@ class CertificateTransferProvides(Object):
             return
         relations = self._get_relevant_relations(relation_id)
         if not relations:
-            logger.error(
+            logger.warning(
                 "At least 1 matching relation ID not found with the relation name '%s'",
                 self.relationship_name,
             )
@@ -304,7 +374,7 @@ class CertificateTransferProvides(Object):
             return
         relations = self._get_relevant_relations(relation_id)
         if not relations:
-            logger.error(
+            logger.warning(
                 "At least 1 matching relation ID not found with the relation name '%s'",
                 self.relationship_name,
             )
