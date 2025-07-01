@@ -13,7 +13,7 @@ from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology
-from ops import BlockedStatus
+from ops import BlockedStatus, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 
 import integrations
@@ -21,8 +21,9 @@ from config_builder import Component, Port
 from config_manager import ConfigManager
 from constants import (
     CONFIG_PATH,
+    DASHBOARDS_DEST_PATH,
+    LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
-    METRICS_RULES_SRC_PATH,
     RECV_CA_CERT_FOLDER_PATH,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
@@ -35,6 +36,7 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+from snap_fstab import SnapFstab
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -63,7 +65,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "install":
+        if hook() == "install":  # FIXME: install is not enough, we also need upgrade
             self._install()
         if hook() == "stop":
             self._stop()
@@ -71,7 +73,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
-        forward_alert_rules = cast(bool, self.config.get("forward_alert_rules"))
+        integrations.cleanup()
 
         # Integrate with TLS relations
         receive_ca_certs_hash = integrations.receive_ca_cert(
@@ -93,6 +95,19 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
         # COS Agent setup
         cos_agent = COSAgentRequirer(self)
+        cos_agent_relations = self.model.relations.get("cos-agent", [])
+        # Trigger _on_relation_data_changed so that data from cos-agent is stored in the peer relation
+        # TODO: instead of calling a private method, expose a public one in the COS Agent library
+        for relation in cos_agent_relations:
+            if not relation.units:
+                continue
+            changed_event = RelationChangedEvent(
+                handle=self.handle,
+                relation=relation,
+                app=relation.app,
+                unit=next(iter(relation.units)),  # subordinate relations only have one unit
+            )
+            cos_agent._on_relation_data_changed(changed_event)
         ## COS Agent metrics
         if cos_agent.metrics_jobs:
             config_manager.config.add_component(
@@ -101,65 +116,61 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
                 config={"config": {"scrape_configs": cos_agent.metrics_jobs}},
                 pipelines=["metrics"],
             )
-        ## COS Agent alerts
-        integrations._aggregate_alerts(
-            alerts=cos_agent.metrics_alerts if forward_alert_rules else {},
-            src_path=LocalPath(METRICS_RULES_SRC_PATH),
-            dest_path=LocalPath(METRICS_RULES_DEST_PATH),
+        integrations._add_alerts(
+            alerts=cos_agent.metrics_alerts,
+            dest_path=self.charm_dir.absolute().joinpath(METRICS_RULES_DEST_PATH),
         )
-        # TODO: uncomment logs setup when we have filelog receiver in the snap
         ## COS Agent logs
         ### Connect logging snap endpoints
-        # for plug in cos_agent.snap_log_endpoints:
-        #     try:
-        #         self.snap("opentelemetry-collector").connect(
-        #             "logs", service=plug.owner, slot=plug.name
-        #         )
-        #     except snap.SnapError as e:
-        #         logger.error(f"error connecting plug {plug} to opentelemetry-collector:logs")
-        #         logger.error(e.message)
-        #         # TODO: should we fail loudly and error?
-        # endpoint_owners = {
-        #     endpoint.owner: {
-        #         "juju_application": topology.application,
-        #         "juju_unit": topology.unit,
-        #     }
-        #     for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
-        # }
-        # otelcol_fstab = SnapFstab(
-        #     LocalPath("/var/lib/snapd/mount/snap.opentelemetry-collector.fstab")
-        # )
-        # for fstab_entry in otelcol_fstab.entries:
-        #     if fstab_entry.owner not in endpoint_owners.keys():
-        #         continue
-        #
-        #     config_manager.config.add_component(
-        #         component=Component.receiver,
-        #         name=f"filelog/{fstab_entry.owner}",  # TODO: maybe???
-        #         config={
-        #             "include": [
-        #                 f"{fstab_entry.target}/**"
-        #                 if fstab_entry
-        #                 else "/snap/opentelemetry-collector/current/shared-logs/**"
-        #             ],
-        #             "start_at": "beginning",
-        #             "operators": {},
-        #             # operators:
-        #             #   - type: drop
-        #             #     expression: ".*file is a directory.*"
-        #             #   - type: structured_metadata
-        #             #     metadata:
-        #             #       filename: filename
-        #             #   - type: labeldrop
-        #             #     labels: ["filename"]
-        #         },
-        #         pipelines=["logs"],
-        #     )
-        # integrations._aggregate_alerts(
-        #     alerts=cos_agent.logs_alerts,
-        #     src_path=LocalPath(LOKI_RULES_SRC_PATH),
-        #     dest_path=LocalPath(LOKI_RULES_DEST_PATH),
-        # )
+        for plug in cos_agent.snap_log_endpoints:
+            try:
+                self.snap("opentelemetry-collector").connect(
+                    "logs", service=plug.owner, slot=plug.name
+                )
+            except snap.SnapError as e:
+                logger.error(f"error connecting plug {plug} to opentelemetry-collector:logs")
+                logger.error(e.message)
+                # TODO: should we fail loudly and error?
+        endpoint_owners = {
+            endpoint.owner: {
+                "juju_application": topology.application,
+                "juju_unit": topology.unit,
+            }
+            for endpoint, topology in cos_agent.snap_log_endpoints_with_topology
+        }
+        otelcol_fstab = SnapFstab(
+            LocalPath("/var/lib/snapd/mount/snap.opentelemetry-collector.fstab")
+        )
+        for fstab_entry in otelcol_fstab.entries:
+            if fstab_entry.owner not in endpoint_owners.keys():
+                continue
+
+            config_manager.config.add_component(
+                component=Component.receiver,
+                name=f"filelog/{fstab_entry.owner}",  # TODO: maybe???
+                config={
+                    "include": [
+                        f"{fstab_entry.target}/**"
+                        if fstab_entry
+                        else "/snap/opentelemetry-collector/current/shared-logs/**"
+                    ],
+                    "start_at": "beginning",
+                    "operators": [],
+                    # operators:
+                    #   - type: drop
+                    #     expression: ".*file is a directory.*"
+                    #   - type: structured_metadata
+                    #     metadata:
+                    #       filename: filename
+                    #   - type: labeldrop
+                    #     labels: ["filename"]
+                },
+                pipelines=["logs"],
+            )
+        integrations._add_alerts(
+            alerts=cos_agent.logs_alerts,
+            dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
+        )
 
         # Logs setup
         integrations.receive_loki_logs(self, tls=is_tls_ready())
@@ -184,8 +195,10 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         # For now, the only incoming and outgoing metrics relations are remote-write/scrape
         metrics_consumer_jobs = integrations.scrape_metrics(self)
         config_manager.add_prometheus_scrape_jobs(metrics_consumer_jobs)
-        remote_write_endpoints = integrations.send_remote_write(self)
-        config_manager.add_remote_write(remote_write_endpoints)
+        if self._has_outgoing_metrics_relation:
+            # This is conditional because otherwise remote_write.endpoints causes error on relation-broken
+            remote_write_endpoints = integrations.send_remote_write(self)
+            config_manager.add_remote_write(remote_write_endpoints)
 
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
@@ -202,6 +215,11 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
 
         # Dashboards setup
+        ## COS Agent dashboards
+        integrations._add_dashboards(
+            dashboards=cos_agent.dashboards,
+            dest_path=LocalPath(self.charm_dir.absolute().joinpath(DASHBOARDS_DEST_PATH)),
+        )
         integrations.forward_dashboards(self)
 
         # GrafanaCloudIntegrator setup
@@ -306,6 +324,8 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
                     self.snap(snap_name).ensure(state=snap.SnapState.Absent)
                 except (snap.SnapError, SnapSpecError) as e:
                     raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
+            # TODO: Luca if the snap is used by other units, we should probably `ensure`
+            # that the max_revision is installed instead.
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
@@ -318,6 +338,10 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
     @property
     def _has_incoming_logs_relation(self) -> bool:
         return any(self.model.relations.get("receive-loki-logs", []))
+
+    @property
+    def _has_outgoing_metrics_relation(self) -> bool:
+        return any(self.model.relations.get("send-remote-write", []))
 
     @property
     def _has_server_cert_relation(self) -> bool:

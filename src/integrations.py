@@ -57,21 +57,28 @@ from charmlibs.pathops import PathProtocol
 logger = logging.getLogger(__name__)
 
 
-def _aggregate_alerts(alerts: Dict, src_path: Path, dest_path: Path):
-    """Aggregate the alerts in src_path with the ones passed to the function.
+def cleanup():
+    """Cleanup folders for alerts and dashboards.
 
-    For K8s charms, alerts are aggregated in the charm container.
+    This function should be called before all integrations to ensure the charm works holistically.
+    """
+    shutil.rmtree(METRICS_RULES_DEST_PATH, ignore_errors=True)
+    shutil.rmtree(LOKI_RULES_DEST_PATH, ignore_errors=True)
+    shutil.rmtree(DASHBOARDS_DEST_PATH, ignore_errors=True)
+
+
+def _add_alerts(alerts: Dict, dest_path: Path):
+    """Save the alerts to files in the specified destination folder.
+
+    For K8s charms, alerts are saved in the charm container.
 
     Args:
-        alerts: Dictionary of alerts to aggregate with the ones present in src_path
-        src_path: Path to some already-existing alerts
-        dest_path: Path to the folder where both alert sources will be aggregated
+        alerts: Dictionary of alerts to save to disk
+        dest_path: Path to the folder where alerts will be saved
     """
-    if os.path.exists(dest_path):
-        shutil.rmtree(dest_path)
-    shutil.copytree(src_path, dest_path)
+    dest_path.mkdir(parents=True, exist_ok=True)
     for topology_identifier, rule in alerts.items():
-        rule_file = Path(dest_path) / f"juju_{topology_identifier}.rules"
+        rule_file = dest_path.joinpath(f"juju_{topology_identifier}.rules")
         rule_file.write_text(yaml.safe_dump(rule))
         logger.debug(f"updated alert rules file {rule_file.as_posix()}")
 
@@ -91,9 +98,13 @@ def receive_loki_logs(charm: CharmBase, tls: bool):
         port=Port.loki_http.value,
         scheme="https" if tls else "http",
     )
-    _aggregate_alerts(
+    shutil.copytree(
+        charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+    _add_alerts(
         alerts=loki_provider.alerts if forward_alert_rules else {},
-        src_path=charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
         dest_path=charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
     )
 
@@ -136,9 +147,14 @@ def scrape_metrics(charm: CharmBase) -> List:
     metrics_consumer = MetricsEndpointConsumer(charm)
     forward_alert_rules = cast(bool, charm.config.get("forward_alert_rules"))
     charm_root = charm.charm_dir.absolute()
-    _aggregate_alerts(
+
+    shutil.copytree(
+        charm_root.joinpath(*METRICS_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+    _add_alerts(
         alerts=metrics_consumer.alerts if forward_alert_rules else {},
-        src_path=charm_root.joinpath(*METRICS_RULES_SRC_PATH.split("/")),
         dest_path=charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")),
     )
     return metrics_consumer.jobs()
@@ -151,7 +167,11 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
         A list of dictionaries where each dictionary provides information about
         a single remote_write endpoint.
     """
-    remote_write = PrometheusRemoteWriteConsumer(charm, alert_rules_path=METRICS_RULES_DEST_PATH)
+    charm_root = charm.charm_dir.absolute()
+    remote_write = PrometheusRemoteWriteConsumer(
+        charm,
+        alert_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
+    )
     # TODO: add alerts from remote write
     # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
     # TODO: Luca: probably don't need this anymore
@@ -259,6 +279,33 @@ def _get_dashboards(relations: List[Relation]) -> List[Dict[str, Any]]:
     return list(aggregate.values())
 
 
+def _add_dashboards(dashboards: List[Dict[str, str]], dest_path: Path):
+    """Save the dashboards to files in the specified destination folder.
+
+    For K8s charms, dashboards are saved in the charm container.
+
+    Args:
+        dashboards: List of dictionaries representing a dashboard, with the following format:
+            {
+                "charm": charm_name,
+                "relation_id": data.relation_id,
+                "content": content,
+                "title": title,
+            }
+        dest_path: Path to the folder where dashboards will be saved
+    """
+    dest_path.mkdir(parents=True, exist_ok=True)
+    for dash in dashboards:
+        # Build dashboard custom filename
+        charm_name = dash.get("charm", "charm-name")
+        rel_id = dash.get("relation_id", "rel_id")
+        title = dash.get("title", "").replace(" ", "_").replace("/", "_").lower()
+        filename = f"juju_{title}-{charm_name}-{rel_id}.json"
+        with open(Path(dest_path, filename), mode="w", encoding="utf-8") as f:
+            f.write(json.dumps(dash["content"]))
+            logger.debug("updated dashboard file %s", f.name)
+
+
 def forward_dashboards(charm: CharmBase):
     """Instantiate the GrafanaDashboardProvider and update the dashboards in the relation databag.
 
@@ -271,17 +318,12 @@ def forward_dashboards(charm: CharmBase):
     # The leader copies dashboards from relations and save them to disk."""
     if not charm.unit.is_leader():
         return
-    shutil.rmtree(dest_path, ignore_errors=True)
-    shutil.copytree(src_path, dest_path)
-    for dash in _get_dashboards(charm.model.relations["grafana-dashboards-consumer"]):
-        # Build dashboard custom filename
-        charm_name = dash.get("charm", "charm-name")
-        rel_id = dash.get("relation_id", "rel_id")
-        title = dash.get("title", "").replace(" ", "_").replace("/", "_").lower()
-        filename = f"juju_{title}-{charm_name}-{rel_id}.json"
-        with open(Path(dest_path, filename), mode="w", encoding="utf-8") as f:
-            f.write(json.dumps(dash["content"]))
-            logger.debug("updated dashboard file %s", f.name)
+
+    shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
+    _add_dashboards(
+        dashboards=_get_dashboards(charm.model.relations["grafana-dashboards-consumer"]),
+        dest_path=dest_path,
+    )
 
     # GrafanaDashboardProvider is garbage collected, see the `_reconcile`` docstring for more details
     grafana_dashboards_provider = GrafanaDashboardProvider(
