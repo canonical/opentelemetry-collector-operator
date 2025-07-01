@@ -71,6 +71,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
+        forward_alert_rules = cast(bool, self.config.get("forward_alert_rules"))
 
         # Integrate with TLS relations
         receive_ca_certs_hash = integrations.receive_ca_cert(
@@ -102,7 +103,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             )
         ## COS Agent alerts
         integrations._aggregate_alerts(
-            alerts=cos_agent.metrics_alerts,
+            alerts=cos_agent.metrics_alerts if forward_alert_rules else {},
             src_path=LocalPath(METRICS_RULES_SRC_PATH),
             dest_path=LocalPath(METRICS_RULES_DEST_PATH),
         )
@@ -245,6 +246,8 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             self.snap("opentelemetry-collector").stop()
             self.unit.status = WaitingStatus("CSR sent; otelcol down while waiting for a cert")
             return
+        # Start the otelcol snap in case it was stopped while waiting for certificates
+        self.snap("opentelemetry-collector").start()
 
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
