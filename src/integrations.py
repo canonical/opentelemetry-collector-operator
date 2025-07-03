@@ -97,6 +97,7 @@ def receive_loki_logs(charm: CharmBase, tls: bool):
         port=Port.loki_http.value,
         scheme="https" if tls else "http",
     )
+    charm.__setattr__("loki_provider", loki_provider)
     shutil.copytree(
         charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
         charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
@@ -127,6 +128,7 @@ def send_loki_logs(charm: CharmBase) -> List[Dict]:
         alert_rules_path=LOKI_RULES_DEST_PATH,
         forward_alert_rules=forward_alert_rules,
     )
+    charm.__setattr__("loki_consumer", loki_consumer)
     # TODO: Luca: probably don't need this anymore
     loki_consumer.reload_alerts()
     return loki_consumer.loki_endpoints
@@ -144,6 +146,7 @@ def scrape_metrics(charm: CharmBase) -> List:
         its scrape targets.
     """
     metrics_consumer = MetricsEndpointConsumer(charm)
+    charm.__setattr__("metrics_consumer", metrics_consumer)
     forward_alert_rules = cast(bool, charm.config.get("forward_alert_rules"))
     charm_root = charm.charm_dir.absolute()
 
@@ -171,6 +174,7 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
         charm,
         alert_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
     )
+    charm.__setattr__("remote_write", remote_write)
     # TODO: add alerts from remote write
     # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
     # TODO: Luca: probably don't need this anymore
@@ -211,6 +215,7 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
         All receiver protocols that have been requested.
     """
     tracing_provider = TracingEndpointProvider(charm, relation_name="receive-traces")
+    charm.__setattr__("tracing_provider", tracing_provider)
     # Enable traces ingestion with TracingEndpointProvider, i.e. configure the receivers
     requested_tracing_protocols = set(tracing_provider.requested_protocols()).union(
         {
@@ -251,6 +256,7 @@ def send_traces(charm: CharmBase) -> Optional[str]:
             "otlp_grpc",  # for forwarding workload traces
         ],
     )
+    charm.__setattr__("tracing_requirer", tracing_requirer)
     if not tracing_requirer.is_ready():
         return None
     return tracing_requirer.get_endpoint("otlp_http")
@@ -324,12 +330,12 @@ def forward_dashboards(charm: CharmBase):
         dest_path=dest_path,
     )
 
-    # GrafanaDashboardProvider is garbage collected, see the `_reconcile`` docstring for more details
     grafana_dashboards_provider = GrafanaDashboardProvider(
         charm,
         relation_name="grafana-dashboards-provider",
         dashboards_path=dest_path.as_posix(),
     )
+    charm.__setattr__("grafana_dashboards_provider", grafana_dashboards_provider)
     # Scan the built-in dashboards and update relations with changes
     grafana_dashboards_provider.reload_dashboards()
 
@@ -355,6 +361,7 @@ def cloud_integrator(charm: CharmBase) -> CloudIntegratorData:
     # We're intentionally not getting the CA cert from Grafana Cloud Integrator;
     # we decided that we should only get certs from receive-ca-cert.
     cloud_integrator = GrafanaCloudConfigRequirer(charm, relation_name="cloud-config")
+    charm.__setattr__("cloud_integrator", cloud_integrator)
     username, password = (
         (cloud_integrator.credentials.username, cloud_integrator.credentials.password)
         if cloud_integrator.credentials
@@ -440,6 +447,7 @@ def receive_ca_cert(
     """
     # Obtain certs from relation data
     certificate_transfer = CertificateTransferRequires(charm, "receive-ca-cert")
+    charm.__setattr__("certificate_transfer", certificate_transfer)
     ca_certs = certificate_transfer.get_all_certificates()
 
     # Clean-up previously existing certs
