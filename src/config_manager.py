@@ -193,7 +193,7 @@ class ConfigManager:
                         "action": "upsert",
                         "key": "loki.attribute.labels",
                         # These labels are set in `_scrape_configs` of the `v1.loki_push_api` lib
-                        "value": "container, job, filename, juju_application, juju_charm, juju_model, juju_model_uuid, juju_unit",
+                        "value": "container, job, filename, juju_application, juju_charm, juju_model, juju_model_uuid, juju_unit, snap_name, path",
                     },
                 ]
             },

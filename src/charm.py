@@ -73,6 +73,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
+        topology = JujuTopology.from_charm(self)
         integrations.cleanup()
 
         # Integrate with TLS relations
@@ -147,7 +148,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
             config_manager.config.add_component(
                 component=Component.receiver,
-                name=f"filelog/{fstab_entry.owner}",  # TODO: maybe???
+                name=f"filelog/{fstab_entry.owner}-{fstab_entry.relative_target}",
                 config={
                     "include": [
                         f"{fstab_entry.target}/**"
@@ -155,15 +156,31 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
                         else "/snap/opentelemetry-collector/current/shared-logs/**"
                     ],
                     "start_at": "beginning",
-                    "operators": [],
-                    # operators:
-                    #   - type: drop
-                    #     expression: ".*file is a directory.*"
-                    #   - type: structured_metadata
-                    #     metadata:
-                    #       filename: filename
-                    #   - type: labeldrop
-                    #     labels: ["filename"]
+                    "include_file_name": True,
+                    "include_file_path": True,
+                    "attributes": {
+                        "job": f"{fstab_entry.owner}-{fstab_entry.relative_target}",
+                        "juju_application": endpoint_owners[fstab_entry.owner]["juju_application"],
+                        "juju_unit": endpoint_owners[fstab_entry.owner]["juju_unit"],
+                        "juju_charm": topology.charm_name,
+                        "juju_model": topology.model,
+                        "juju_model_uuid": topology.model_uuid,
+                        "snap_name": fstab_entry.owner,
+                    },
+                    "operators": [
+                        # Add file name to 'filename' label
+                        {
+                            "type": "copy",
+                            "from": 'attributes["log.file.path"]',
+                            "to": 'attributes["filename"]',
+                        },
+                        # Add file path to `path` label
+                        {
+                            "type": "add",
+                            "field": "attributes.path",
+                            "value": 'EXPR(let lashSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
+                        },
+                    ],
                 },
                 pipelines=["logs"],
             )
@@ -180,7 +197,6 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         config_manager.add_log_forwarding(loki_endpoints, insecure_skip_verify)
 
         # Metrics setup
-        topology = JujuTopology.from_charm(self)
         config_manager.add_self_scrape(
             identifier=topology.identifier,
             labels={
