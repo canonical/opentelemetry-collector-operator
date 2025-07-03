@@ -229,6 +229,8 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         tracing_otlp_http_endpoint = integrations.send_traces(self)
         if tracing_otlp_http_endpoint:
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
+        ## COS Agent tracing
+        cos_agent.update_tracing_receivers()
 
         # Dashboards setup
         ## COS Agent dashboards
