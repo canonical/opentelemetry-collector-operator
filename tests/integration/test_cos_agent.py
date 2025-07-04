@@ -31,13 +31,29 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
     juju.wait(jubilant.all_active, timeout=300)
 
 
-async def test_metrics(juju: jubilant.Juju):
+async def test_metrics_are_scraped(juju: jubilant.Juju):
     metrics_pattern = rf".+{{.*juju_application=zookeeper,.*juju_model={juju.model}.*}}"
     result = await is_pattern_in_logs(juju, metrics_pattern)
     return result
 
 
-async def test_logs(juju: jubilant.Juju):
+async def test_logs_are_scraped(juju: jubilant.Juju):
     logs_pattern = r".+log.file.name=zookeeper.log.+log.file.path=/snap/opentelemetry-collector/\d+/shared-logs/zookeeper"
     result = await is_pattern_in_logs(juju, logs_pattern)
     return result
+
+
+def test_alerts_are_aggregated(juju: jubilant.Juju):
+    alert_files = juju.ssh(
+        "otelcol/0",
+        command="ls /var/lib/juju/agents/unit-otelcol-0/charm/prometheus_alert_rules -type f",
+    )
+    assert "zookeeper" in alert_files
+
+
+def test_dashboards_are_aggregated(juju: jubilant.Juju):
+    dashboard_files = juju.ssh(
+        "otelcol/0",
+        command="ls /var/lib/juju/agents/unit-otelcol-0/charm/grafana_dashboards -type f",
+    )
+    assert "zookeeper" in dashboard_files
