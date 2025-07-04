@@ -8,10 +8,8 @@ import logging
 import os
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict
 
 import pytest
-import yaml
 from pytest_operator.plugin import OpsTest
 import jubilant
 

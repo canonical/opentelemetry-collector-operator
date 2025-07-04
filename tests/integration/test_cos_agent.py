@@ -5,7 +5,6 @@
 
 import pathlib
 import re
-from typing import Dict
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 import jubilant
