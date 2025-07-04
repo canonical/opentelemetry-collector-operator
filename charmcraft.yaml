@@ -161,6 +161,20 @@ config:
         requests to servers, e.g. the prometheus receiver scraping metrics endpoints.
       type: boolean
       default: false
+    path_exclude:
+      description: >
+        Glob for a set of log files present in `/var/log` that should be ignored by Grafana Agent.
+
+        For example, `/var/log/**/{app_one,app_two}.log` will result in the agent ignoring both 
+        `/var/log/app_one.log` and `/var/log/app_two.log`.
+
+        Note that the value you provide here is not interpreted as a path, but rather as a glob matcher.
+        Specifically, if you want to exclude logs in the `/var/log/test` folder, you should set the 
+        config to `/var/log/test/**`.
+
+        Ref (__path_exclude__): https://grafana.com/docs/loki/latest/send-data/promtail/scraping/
+      type: string
+      default: ""
     # Tracing config options
     always_enable_zipkin:
       description: >

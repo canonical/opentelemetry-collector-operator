@@ -5,7 +5,7 @@
 
 import logging
 import os
-from typing import cast
+from typing import Any, Dict, List, cast
 
 import ops
 import subprocess
@@ -41,6 +41,37 @@ from snap_fstab import SnapFstab
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
+
+
+# TODO: move this method outside of charm.py together with the cos-agent integrations
+def _filelog_receiver_config(
+    include: List[str], exclude: List[str], attributes: Dict[str, str]
+) -> Dict[str, Any]:
+    """Build the config for the filelog receiver."""
+    config = {
+        "include": include,
+        "start_at": "beginning",
+        "include_file_name": True,
+        "include_file_path": True,
+        "attributes": attributes,
+        "operators": [
+            # Add file name to 'filename' label
+            {
+                "type": "copy",
+                "from": 'attributes["log.file.path"]',
+                "to": 'attributes["filename"]',
+            },
+            # Add file path to `path` label
+            {
+                "type": "add",
+                "field": "attributes.path",
+                "value": 'EXPR(let lashSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
+            },
+        ],
+    }
+    if exclude:
+        config["exclude"] = exclude
+    return config
 
 
 def is_tls_ready() -> bool:
@@ -149,41 +180,44 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             config_manager.config.add_component(
                 component=Component.receiver,
                 name=f"filelog/{fstab_entry.owner}-{fstab_entry.relative_target}",
-                config={
-                    "include": [
+                config=_filelog_receiver_config(
+                    include=[
                         f"{fstab_entry.target}/**"
                         if fstab_entry
                         else "/snap/opentelemetry-collector/current/shared-logs/**"
                     ],
-                    "start_at": "beginning",
-                    "include_file_name": True,
-                    "include_file_path": True,
-                    "attributes": {
+                    exclude=[],
+                    attributes={
                         "job": f"{fstab_entry.owner}-{fstab_entry.relative_target}",
                         "juju_application": endpoint_owners[fstab_entry.owner]["juju_application"],
                         "juju_unit": endpoint_owners[fstab_entry.owner]["juju_unit"],
-                        "juju_charm": topology.charm_name,
+                        "juju_charm": topology.charm_name,  # type: ignore
                         "juju_model": topology.model,
                         "juju_model_uuid": topology.model_uuid,
                         "snap_name": fstab_entry.owner,
                     },
-                    "operators": [
-                        # Add file name to 'filename' label
-                        {
-                            "type": "copy",
-                            "from": 'attributes["log.file.path"]',
-                            "to": 'attributes["filename"]',
-                        },
-                        # Add file path to `path` label
-                        {
-                            "type": "add",
-                            "field": "attributes.path",
-                            "value": 'EXPR(let lashSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
-                        },
-                    ],
-                },
+                ),
                 pipelines=["logs"],
             )
+        ### Add /var/log scrape job
+        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        config_manager.config.add_component(
+            component=Component.receiver,
+            name="filelog/var-log",
+            config=_filelog_receiver_config(
+                include=["/var/log/**"],
+                exclude=var_log_exclusions,
+                attributes={
+                    "job": "opentelemetry-collector-var-log",
+                    "juju_application": topology.application,
+                    "juju_unit": topology.unit,  # type: ignore
+                    "juju_charm": topology.charm,  # type: ignore
+                    "juju_model": topology.model,
+                    "juju_model_uuid": topology.model_uuid,
+                    # NOTE: No snap_name attribute is necessary as these logs are not from a snap
+                },
+            ),
+        )
         integrations._add_alerts(
             alerts=cos_agent.logs_alerts,
             dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
