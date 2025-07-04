@@ -1,7 +1,6 @@
 from pathlib import Path
 from shutil import copytree
 from unittest.mock import MagicMock, patch
-from typing import Dict, Any
 
 import pytest
 from ops.testing import Context, Exec

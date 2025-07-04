@@ -6,7 +6,7 @@
 import json
 
 from cosl import LZMABase64
-from ops.testing import Container, Relation, State
+from ops.testing import Relation, State
 
 
 def encode_as_dashboard(dct: dict):
