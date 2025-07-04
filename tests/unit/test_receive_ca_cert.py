@@ -12,7 +12,7 @@ def test_no_recv_ca_cert_relations_present(ctx, recv_ca_folder_path):
 
     # WHEN any event is emitted
     with patch("integrations._add_alerts"):
-        out = ctx.run(ctx.on.update_status(), state)
+        ctx.run(ctx.on.update_status(), state)
 
     # THEN no recv_ca_cert-associated certs are present
     # container = out.get_container("otelcol")
@@ -46,7 +46,7 @@ def test_ca_forwarded_over_rel_data(ctx, recv_ca_folder_path):
 
     # WHEN any event is emitted
     with patch("integrations._add_alerts"):
-        out = ctx.run(ctx.on.update_status(), state)
+        ctx.run(ctx.on.update_status(), state)
 
     # THEN recv_ca_cert-associated certs are present
     # container = out.get_container("otelcol")
