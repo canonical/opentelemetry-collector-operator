@@ -15,9 +15,10 @@ TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 @retry(stop=stop_after_attempt(60), wait=wait_fixed(10))
 async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
-    otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=1000")
-    match = re.search(pattern, otelcol_logs)
-    return match is not None
+    otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
+    if not re.search(pattern, otelcol_logs):
+        raise Exception(f"Pattern {pattern} not found in the otelcol logs")
+    return True
 
 
 async def test_deploy(juju: jubilant.Juju, charm: str):

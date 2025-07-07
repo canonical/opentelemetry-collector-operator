@@ -178,7 +178,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         {
                             "type": "add",
                             "field": "attributes.path",
-                            "value": 'EXPR(let lashSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
+                            "value": 'EXPR(let lastSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
                         },
                     ],
                 },
