@@ -65,7 +65,7 @@ def _filelog_receiver_config(
             {
                 "type": "add",
                 "field": "attributes.path",
-                "value": 'EXPR(let lashSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
+                "value": 'EXPR(let lastSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
             },
         ],
     }
@@ -196,21 +196,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         "juju_model_uuid": topology.model_uuid,
                         "snap_name": fstab_entry.owner,
                     },
-                    "operators": [
-                        # Add file name to 'filename' label
-                        {
-                            "type": "copy",
-                            "from": 'attributes["log.file.path"]',
-                            "to": 'attributes["filename"]',
-                        },
-                        # Add file path to `path` label
-                        {
-                            "type": "add",
-                            "field": "attributes.path",
-                            "value": 'EXPR(let lastSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
-                        },
-                    ],
-                },
+                ),
                 pipelines=["logs"],
             )
         ### Add /var/log scrape job
