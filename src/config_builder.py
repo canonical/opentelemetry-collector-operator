@@ -245,7 +245,7 @@ class ConfigBuilder:
                     self._add_to_pipeline("debug", Component.exporter, [signal])
                     debug_exporter_required = True
         if debug_exporter_required:
-            self.add_component(Component.exporter, "debug", {"verbosity": "basic"})
+            self.add_component(Component.exporter, "debug", {"verbosity": "normal"})
 
     def _add_tls_to_all_receivers(
         self,

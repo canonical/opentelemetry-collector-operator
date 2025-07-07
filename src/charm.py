@@ -91,7 +91,7 @@ def hook() -> str:
     return os.environ["JUJU_HOOK_NAME"]
 
 
-class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
+class OpenTelemetryCollectorCharm(ops.CharmBase):
     """Charm the service."""
 
     def __init__(self, framework: ops.Framework):
@@ -196,7 +196,21 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
                         "juju_model_uuid": topology.model_uuid,
                         "snap_name": fstab_entry.owner,
                     },
-                ),
+                    "operators": [
+                        # Add file name to 'filename' label
+                        {
+                            "type": "copy",
+                            "from": 'attributes["log.file.path"]',
+                            "to": 'attributes["filename"]',
+                        },
+                        # Add file path to `path` label
+                        {
+                            "type": "add",
+                            "field": "attributes.path",
+                            "value": 'EXPR(let lastSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
+                        },
+                    ],
+                },
                 pipelines=["logs"],
             )
         ### Add /var/log scrape job
@@ -253,18 +267,15 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
         config_manager.add_traces_ingestion(requested_tracing_protocols)
-        # TODO: Luca: uncomment this as soon as we have tail sampling in the snap
         # Add default processors to traces
-        # config_manager.add_traces_processing(
-        #     sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
-        #     sampling_rate_workload=cast(bool, self.config.get("tracing_sampling_rate_workload")),
-        #     sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
-        # )
+        config_manager.add_traces_processing(
+            sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
+            sampling_rate_workload=cast(bool, self.config.get("tracing_sampling_rate_workload")),
+            sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
+        )
         tracing_otlp_http_endpoint = integrations.send_traces(self)
         if tracing_otlp_http_endpoint:
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
-        ## COS Agent tracing
-        cos_agent.update_tracing_receivers()
 
         # Dashboards setup
         ## COS Agent dashboards
@@ -325,7 +336,7 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
             if snap_revision != installed_revision:
                 logger.error(
                     f"Mismatching snap revisions for {snap_name}. "
-                    f"The charm requested rev{snap_revision}, but a different app installed"
+                    f"The charm requested rev{snap_revision}, but a different app installed "
                     f"rev{installed_revision}. When multiple collector units require different "
                     "snap revisions, the newest one will be installed. "
                     "Please refresh this charm to a revision that uses the same snap as your "
@@ -401,4 +412,4 @@ class OpentelemetryCollectorOperatorCharm(ops.CharmBase):
 
 
 if __name__ == "__main__":  # pragma: nocover
-    ops.main(OpentelemetryCollectorOperatorCharm)
+    ops.main(OpenTelemetryCollectorCharm)
