@@ -97,11 +97,12 @@ class SingletonSnapManager:
         self.unit_name = unit_name
         self._ensure_lock_dir_exists()
 
-    def _ensure_lock_dir_exists(self) -> None:
+    @classmethod
+    def _ensure_lock_dir_exists(cls) -> None:
         """Ensure the lock directory exists with correct permissions."""
         try:
-            os.makedirs(self.LOCK_DIR, exist_ok=True)
-            os.chown(self.LOCK_DIR, os.geteuid(), os.getegid())
+            os.makedirs(cls.LOCK_DIR, exist_ok=True)
+            os.chown(cls.LOCK_DIR, os.geteuid(), os.getegid())
         except OSError as e:
             if e.errno != errno.EEXIST:
                 raise
@@ -150,6 +151,7 @@ class SingletonSnapManager:
         Raises:
             OSError: If there's an error accessing the lock directory or files.
         """
+        cls._ensure_lock_dir_exists()
         revisions = set()
         for filename in os.listdir(cls.LOCK_DIR):
             registration_file = SnapRegistrationFile.from_filename(filename)
@@ -182,6 +184,7 @@ class SingletonSnapManager:
             OSError: If there's an error accessing the lock directory
         """
         units = set()
+        cls._ensure_lock_dir_exists()
 
         for filename in os.listdir(cls.LOCK_DIR):
             registration_file = SnapRegistrationFile.from_filename(filename)
