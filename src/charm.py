@@ -205,7 +205,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             component=Component.receiver,
             name="filelog/var-log",
             config=_filelog_receiver_config(
-                include=["/var/log/**/*.log"],
+                include=["/var/log/**"],
                 exclude=var_log_exclusions,
                 attributes={
                     "job": "opentelemetry-collector-var-log",
@@ -217,6 +217,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     # NOTE: No snap_name attribute is necessary as these logs are not from a snap
                 },
             ),
+            pipelines=["logs"],
         )
         integrations._add_alerts(
             alerts=cos_agent.logs_alerts,
