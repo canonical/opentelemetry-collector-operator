@@ -211,7 +211,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     "job": "opentelemetry-collector-var-log",
                     "juju_application": topology.application,
                     "juju_unit": topology.unit,  # type: ignore
-                    "juju_charm": topology.charm,  # type: ignore
+                    "juju_charm": topology.charm_name,
                     "juju_model": topology.model,
                     "juju_model_uuid": topology.model_uuid,
                     # NOTE: No snap_name attribute is necessary as these logs are not from a snap
