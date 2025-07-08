@@ -252,14 +252,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_remote_write(remote_write_endpoints)
 
         # Tracing setup
-        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
-        config_manager.add_traces_ingestion(requested_tracing_protocols)
-        # Add default processors to traces
-        config_manager.add_traces_processing(
-            sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
-            sampling_rate_workload=cast(bool, self.config.get("tracing_sampling_rate_workload")),
-            sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
-        )
+        if self._has_incoming_traces_relation:
+            requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
+            config_manager.add_traces_ingestion(requested_tracing_protocols)
+            # Add default processors to traces
+            config_manager.add_traces_processing(
+                sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
+                sampling_rate_workload=cast(
+                    bool, self.config.get("tracing_sampling_rate_workload")
+                ),
+                sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
+            )
         tracing_otlp_http_endpoint = integrations.send_traces(self)
         if tracing_otlp_http_endpoint:
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
@@ -388,6 +391,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_incoming_logs_relation(self) -> bool:
         return any(self.model.relations.get("receive-loki-logs", []))
+
+    @property
+    def _has_incoming_traces_relation(self) -> bool:
+        return any(self.model.relations.get("receive-traces", []))
 
     @property
     def _has_outgoing_metrics_relation(self) -> bool:
