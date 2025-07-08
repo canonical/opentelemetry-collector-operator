@@ -5,7 +5,7 @@
 
 import pathlib
 import re
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, wait_exponential
 
 import jubilant
 
@@ -13,7 +13,7 @@ import jubilant
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
-@retry(stop=stop_after_attempt(60), wait=wait_fixed(10))
+@retry(wait=wait_exponential(multiplier=1, min=4, max=10))
 async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
     otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
     if not re.search(pattern, otelcol_logs):
