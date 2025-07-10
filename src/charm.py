@@ -5,7 +5,7 @@
 
 import logging
 import os
-from typing import cast
+from typing import Any, Dict, List, cast
 
 import ops
 import subprocess
@@ -41,6 +41,37 @@ from snap_fstab import SnapFstab
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
+
+
+# TODO: move this method outside of charm.py together with the cos-agent integrations
+def _filelog_receiver_config(
+    include: List[str], exclude: List[str], attributes: Dict[str, str]
+) -> Dict[str, Any]:
+    """Build the config for the filelog receiver."""
+    config = {
+        "include": include,
+        "start_at": "beginning",
+        "include_file_name": True,
+        "include_file_path": True,
+        "attributes": attributes,
+        "operators": [
+            # Add file name to 'filename' label
+            {
+                "type": "copy",
+                "from": 'attributes["log.file.path"]',
+                "to": 'attributes["filename"]',
+            },
+            # Add file path to `path` label
+            {
+                "type": "add",
+                "field": "attributes.path",
+                "value": 'EXPR(let lastSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
+            },
+        ],
+    }
+    if exclude:
+        config["exclude"] = exclude
+    return config
 
 
 def is_tls_ready() -> bool:
@@ -149,41 +180,45 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.config.add_component(
                 component=Component.receiver,
                 name=f"filelog/{fstab_entry.owner}-{fstab_entry.relative_target}",
-                config={
-                    "include": [
+                config=_filelog_receiver_config(
+                    include=[
                         f"{fstab_entry.target}/**"
                         if fstab_entry
                         else "/snap/opentelemetry-collector/current/shared-logs/**"
                     ],
-                    "start_at": "beginning",
-                    "include_file_name": True,
-                    "include_file_path": True,
-                    "attributes": {
+                    exclude=[],
+                    attributes={
                         "job": f"{fstab_entry.owner}-{fstab_entry.relative_target}",
                         "juju_application": endpoint_owners[fstab_entry.owner]["juju_application"],
                         "juju_unit": endpoint_owners[fstab_entry.owner]["juju_unit"],
-                        "juju_charm": topology.charm_name,
+                        "juju_charm": topology.charm_name,  # type: ignore
                         "juju_model": topology.model,
                         "juju_model_uuid": topology.model_uuid,
                         "snap_name": fstab_entry.owner,
                     },
-                    "operators": [
-                        # Add file name to 'filename' label
-                        {
-                            "type": "copy",
-                            "from": 'attributes["log.file.path"]',
-                            "to": 'attributes["filename"]',
-                        },
-                        # Add file path to `path` label
-                        {
-                            "type": "add",
-                            "field": "attributes.path",
-                            "value": 'EXPR(let lastSlashIndex = lastIndexOf(attributes["log.file.path"], "/"); attributes["log.file.path"][:lastSlashIndex])',
-                        },
-                    ],
-                },
+                ),
                 pipelines=["logs"],
             )
+        ### Add /var/log scrape job
+        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        config_manager.config.add_component(
+            component=Component.receiver,
+            name="filelog/var-log",
+            config=_filelog_receiver_config(
+                include=["/var/log/**"],
+                exclude=var_log_exclusions,
+                attributes={
+                    "job": "opentelemetry-collector-var-log",
+                    "juju_application": topology.application,
+                    "juju_unit": topology.unit,  # type: ignore
+                    "juju_charm": topology.charm_name,
+                    "juju_model": topology.model,
+                    "juju_model_uuid": topology.model_uuid,
+                    # NOTE: No snap_name attribute is necessary as these logs are not from a snap
+                },
+            ),
+            pipelines=["logs"],
+        )
         integrations._add_alerts(
             alerts=cos_agent.logs_alerts,
             dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
@@ -217,14 +252,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_remote_write(remote_write_endpoints)
 
         # Tracing setup
-        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
-        config_manager.add_traces_ingestion(requested_tracing_protocols)
-        # Add default processors to traces
-        config_manager.add_traces_processing(
-            sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
-            sampling_rate_workload=cast(bool, self.config.get("tracing_sampling_rate_workload")),
-            sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
-        )
+        if self._has_incoming_traces_relation:
+            requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
+            config_manager.add_traces_ingestion(requested_tracing_protocols)
+            # Add default processors to traces
+            config_manager.add_traces_processing(
+                sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
+                sampling_rate_workload=cast(
+                    bool, self.config.get("tracing_sampling_rate_workload")
+                ),
+                sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
+            )
         tracing_otlp_http_endpoint = integrations.send_traces(self)
         if tracing_otlp_http_endpoint:
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
@@ -353,6 +391,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_incoming_logs_relation(self) -> bool:
         return any(self.model.relations.get("receive-loki-logs", []))
+
+    @property
+    def _has_incoming_traces_relation(self) -> bool:
+        return any(self.model.relations.get("receive-traces", []))
 
     @property
     def _has_outgoing_metrics_relation(self) -> bool:

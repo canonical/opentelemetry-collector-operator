@@ -21,9 +21,18 @@ async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
     return True
 
 
+@retry(wait=wait_exponential(multiplier=1, min=4, max=10))
+async def is_pattern_not_in_logs(juju: jubilant.Juju, pattern: str):
+    otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
+    if re.search(pattern, otelcol_logs):
+        raise Exception(f"Pattern {pattern} found in the otelcol logs")
+    return True
+
+
 async def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
-    juju.deploy(charm, app="otelcol")
+    ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
+    juju.deploy(charm, app="otelcol", config={"path_exclude": "/var/log/cloud-init-output.log"})
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "zookeeper:cos-agent")
@@ -32,29 +41,16 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
     juju.wait(jubilant.all_active, timeout=300)
 
 
-async def test_metrics_are_scraped(juju: jubilant.Juju):
-    metrics_pattern = rf".+{{.*juju_application=zookeeper,.*juju_model={juju.model}.*}}"
-    result = await is_pattern_in_logs(juju, metrics_pattern)
-    assert result
+async def test_var_log_is_scraped(juju: jubilant.Juju):
+    var_log_pattern = r".+log.file.path=/var/log"
+    is_var_log_scraped = await is_pattern_in_logs(juju, var_log_pattern)
+    assert is_var_log_scraped
 
 
-async def test_logs_are_scraped(juju: jubilant.Juju):
-    zookeeper_logs_pattern = r".+log.file.name=zookeeper.log.+log.file.path=/snap/opentelemetry-collector/\d+/shared-logs/zookeeper"
-    result = await is_pattern_in_logs(juju, zookeeper_logs_pattern)
-    assert result
-
-
-def test_alerts_are_aggregated(juju: jubilant.Juju):
-    alert_files = juju.ssh(
-        "otelcol/0",
-        command="find /var/lib/juju/agents/unit-otelcol-0/charm/prometheus_alert_rules -type f",
-    )
-    assert "zookeeper" in alert_files
-
-
-def test_dashboards_are_aggregated(juju: jubilant.Juju):
-    dashboard_files = juju.ssh(
-        "otelcol/0",
-        command="find /var/lib/juju/agents/unit-otelcol-0/charm/grafana_dashboards -type f",
-    )
-    assert "zookeeper" in dashboard_files
+async def test_path_exclude(juju: jubilant.Juju):
+    included_log_pattern = r".+log.file.name=cloud-init.log"
+    excluded_log_pattern = r".+log.file.name=cloud-init-output.log"
+    is_included = await is_pattern_in_logs(juju, included_log_pattern)
+    assert is_included
+    is_excluded = await is_pattern_not_in_logs(juju, excluded_log_pattern)
+    assert is_excluded
