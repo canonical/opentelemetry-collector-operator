@@ -109,7 +109,7 @@ class SingletonSnapManager:
             if e.errno != errno.EEXIST:
                 raise
 
-    def register(self, snap_name: str, snap_revision: int, config: str = "") -> None:
+    def register(self, snap_name: str, snap_revision: int) -> None:
         """Register current unit as using the specified snap and revision.
 
         Args:
@@ -125,7 +125,7 @@ class SingletonSnapManager:
             snap_revision=snap_revision,
         )
         with open(self.LOCK_DIR.joinpath(registration_file.filename), "w") as f:
-            f.write(config)
+            f.write("")
 
     def unregister(self, snap_name: str, snap_revision: int) -> None:
         """Unregister current unit from using the specified snap.
