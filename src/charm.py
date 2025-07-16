@@ -302,7 +302,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # TODO: Conditionally open ports based on the otelcol config file rather than opening all ports
         # Append port 9100 for Node Exporter # TODO: is this needed?
-        self.unit.set_ports(*[port.value for port in Port])
+        if self.unit.is_leader():
+            self.unit.set_ports(*[port.value for port in Port])
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart

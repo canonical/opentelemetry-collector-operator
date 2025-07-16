@@ -158,13 +158,7 @@ class SingletonSnapManager:
         for filename in os.listdir(cls.LOCK_DIR):
             registration_file = SnapRegistrationFile.from_filename(filename)
             if registration_file.snap_name == snap_name:
-                path = cls.LOCK_DIR.joinpath(filename)
-                try:
-                    with open(path, "r") as f:
-                        revision = f.read().strip()
-                        revisions.add(int(revision))
-                except OSError:
-                    continue
+                revisions.add(registration_file.snap_revision)
         return revisions
 
     @classmethod
@@ -234,8 +228,12 @@ class SingletonConfigManager:
         """Merge all the configs into one, and return it as a string."""
         merged_config = {}
         for filename in os.listdir(SingletonSnapManager.LOCK_DIR):
+            registration_file = SnapRegistrationFile.from_filename(filename)
+            if registration_file.snap_name != "opentelemetry-collector":
+                continue
+            path = SingletonSnapManager.LOCK_DIR.joinpath(filename)
             # TODO: read the config and accumulate it in merged_config
-            with open(filename, "r") as f:
+            with open(path, "r") as f:
                 config = yaml.safe_load(f)
             merged_config = config  # TODO: figure out a good merge logic
 
