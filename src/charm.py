@@ -233,7 +233,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 pipelines=["logs"],
             )
         ### Add /var/log scrape job
-        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        var_log_exclusions: List[str] = cast(str, self.config.get("path_exclude")).split(",")
+        var_log_exclusions.append("/var/log/syslog")
         config_manager.config.add_component(
             component=Component.receiver,
             name="filelog/var-log",
@@ -247,6 +248,26 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     "juju_charm": topology.charm_name,
                     "juju_model": topology.model,
                     "juju_model_uuid": topology.model_uuid,
+                    "instance": socket.getfqdn(),
+                    # NOTE: No snap_name attribute is necessary as these logs are not from a snap
+                },
+            ),
+            pipelines=["logs"],
+        )
+        config_manager.config.add_component(
+            component=Component.receiver,
+            name="filelog/var-log-syslog",
+            config=_filelog_receiver_config(
+                include=["/var/log/syslog"],
+                exclude=[],
+                attributes={
+                    "job": "opentelemetry-collector-var-log",
+                    "juju_application": topology.application,
+                    "juju_unit": topology.unit,  # type: ignore
+                    "juju_charm": topology.charm_name,
+                    "juju_model": topology.model,
+                    "juju_model_uuid": topology.model_uuid,
+                    "instance": socket.getfqdn(),
                     # NOTE: No snap_name attribute is necessary as these logs are not from a snap
                 },
             ),
