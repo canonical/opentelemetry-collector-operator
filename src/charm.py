@@ -369,6 +369,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
                 return
 
+        # Mandatory relation pairs
+        missing_relations = integrations.get_missing_mandatory_relations(self)
+        if missing_relations:
+            self.unit.status = BlockedStatus(missing_relations)
+            return
+
         self.unit.status = ActiveStatus()
 
     def _install(self) -> None:
