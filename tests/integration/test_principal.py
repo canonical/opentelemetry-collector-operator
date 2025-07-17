@@ -54,3 +54,9 @@ async def test_path_exclude(juju: jubilant.Juju):
     assert is_included
     is_excluded = await is_pattern_not_in_logs(juju, excluded_log_pattern)
     assert is_excluded
+
+
+async def test_node_metrics(juju: jubilant.Juju):
+    node_metric = r"node_scrape_collector_success"
+    is_included = await is_pattern_in_logs(juju, node_metric)
+    assert is_included

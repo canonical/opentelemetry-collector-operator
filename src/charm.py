@@ -8,6 +8,7 @@ import os
 from typing import Any, Dict, List, cast
 
 import ops
+import socket
 import subprocess
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
@@ -140,6 +141,38 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 unit=next(iter(relation.units)),  # subordinate relations only have one unit
             )
             cos_agent._on_relation_data_changed(changed_event)
+        ## Node exporter metrics
+        config_manager.config.add_component(
+            Component.receiver,
+            name="prometheus/node-exporter",
+            config={
+                "config": {
+                    "scrape_configs": [
+                        {
+                            # This job name is overwritten with "otelcol" when remote-writing
+                            "job_name": f"juju_{topology.identifier}_node-exporter",
+                            "scrape_interval": "60s",
+                            "static_configs": [
+                                {
+                                    "targets": [
+                                        "0.0.0.0:9100"  # TODO: extract this node-exporter port somewhere
+                                    ],
+                                    "labels": {
+                                        "instance": socket.getfqdn(),
+                                        "juju_charm": topology.charm_name,
+                                        "juju_model": topology.model,
+                                        "juju_model_uuid": topology.model_uuid,
+                                        "juju_application": topology.application,
+                                        "juju_unit": topology.unit,
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                }
+            },
+            pipelines=["metrics"],
+        )
         ## COS Agent metrics
         if cos_agent.metrics_jobs:
             config_manager.config.add_component(
