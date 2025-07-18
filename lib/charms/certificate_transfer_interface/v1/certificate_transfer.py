@@ -124,7 +124,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 10
 
 logger = logging.getLogger(__name__)
 
@@ -303,8 +303,8 @@ class _Certificate(pydantic.BaseModel):
     )
 
 
-class ProviderApplicationDataV0(DatabagModel):
-    """Provider App databag v0 model."""
+class ProviderUnitDataV0(DatabagModel):
+    """Provider Unit databag v0 model."""
 
     certificates: List[_Certificate] = []
 
@@ -451,20 +451,20 @@ class CertificateTransferProvides(Object):
                     relation.id,
                 )
 
-            databag = relation.data[self.model.app]
+            databag = relation.data[self.model.unit]
             certificates = [_Certificate(ca=cert, certificate=cert, chain=[cert]) for cert in data]
-            ProviderApplicationDataV0(certificates=certificates).dump(databag, True)
+            ProviderUnitDataV0(certificates=certificates).dump(databag, True)
 
     def _get_relation_data(self, relation: Relation) -> Set[str]:
         """Get the given relation data."""
-        databag = relation.data[self.model.app]
         try:
-            return ProviderApplicationData().load(databag).certificates
+            if relation.data.get(relation.app, {}).get("version", "0") == "1":
+                databag = relation.data[self.model.app]
+                return ProviderApplicationData().load(databag).certificates
+            else:
+                databag = relation.data[self.model.unit]
+                return {cert.ca for cert in ProviderUnitDataV0().load(databag).certificates}
         except DataValidationError as e:
-            try:
-                return {cert.ca for cert in ProviderApplicationDataV0().load(databag).certificates}
-            except DataValidationError:
-                pass
             logger.error(
                 (
                     "Error parsing relation databag: %s. ",
@@ -623,14 +623,14 @@ class CertificateTransferRequires(Object):
 
     def _get_relation_data(self, relation: Relation) -> Set[str]:
         """Get the given relation data."""
-        databag = relation.data[relation.app]
         try:
-            return ProviderApplicationData().load(databag).certificates
+            databag = relation.data[relation.app]
+            certificates = ProviderApplicationData().load(databag).certificates
+            if not certificates and relation.units:
+                databag = relation.data.get(relation.units.pop(), {})
+                return {cert.ca for cert in ProviderUnitDataV0().load(databag).certificates}
+            return certificates
         except DataValidationError as e:
-            try:
-                return {cert.ca for cert in ProviderApplicationDataV0().load(databag).certificates}
-            except DataValidationError:
-                pass
             logger.error(
                 (
                     "Error parsing relation databag: %s. ",
