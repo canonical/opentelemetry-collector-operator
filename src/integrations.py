@@ -512,6 +512,17 @@ def get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
                 {"grafana-dashboards-provider"},  # or
                 {"cloud-config"},
             ],
+            "cos-agent": [  # must be paired with:
+                {"grafana-cloud-config"},  # or
+                {"send-remote-write"},  # or
+                {"logging-consumer"},  # or
+                {"grafana-dashboards-provider"},
+            ],
+            "juju-info": [  # must be paired with:
+                {"grafana-cloud-config"},  # or
+                {"send-remote-write"},  # or
+                {"logging-consumer"},
+            ],
         }
     )
     active_relations = {name for name, relation in charm.model.relations.items() if relation}
