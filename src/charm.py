@@ -29,7 +29,7 @@ from constants import (
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
-from singleton_snap import SingletonSnapManager
+from singleton_snap import SingletonConfigManager, SingletonSnapManager
 from snap_management import (
     SnapInstallError,
     SnapMap,
@@ -324,13 +324,19 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_custom_processors(custom_processors)
 
         # Push the config and Push the config and deploy/update
+        manager = SingletonConfigManager(
+            self.unit.name,
+            snap_revision=SnapMap.get_revision("opentelemetry-collector"),
+        )
+        manager.register(config_manager.config.build())
         config_path = LocalPath(CONFIG_PATH)
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(config_manager.config.build())
+        config_path.write_text(SingletonConfigManager.merged_config())
 
         # TODO: Conditionally open ports based on the otelcol config file rather than opening all ports
         # Append port 9100 for Node Exporter # TODO: is this needed?
-        self.unit.set_ports(*[port.value for port in Port])
+        if self.unit.is_leader():
+            self.unit.set_ports(*[port.value for port in Port])
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
