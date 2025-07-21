@@ -52,8 +52,9 @@ async def charm(ops_test: OpsTest) -> str:
         return str(charm_file)
 
     charm = await ops_test.build_charm(".")
+    charm = str(charm).replace("24.04", "22.04")
     assert charm
-    return str(charm)
+    return charm
 
 
 @pytest.fixture(scope="module")
