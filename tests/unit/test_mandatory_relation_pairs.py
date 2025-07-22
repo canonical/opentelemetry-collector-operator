@@ -1,9 +1,9 @@
-from ops.testing import Relation, State
+from ops.testing import Relation, State, SubordinateRelation
 from scenario import ActiveStatus, BlockedStatus
 
 
 def test_missing_relation_pair_status(ctx):
-    source_relation = Relation("cos-agent")
+    source_relation = SubordinateRelation("cos-agent")
     # GIVEN the charm has no relations
     state = State(
         leader=True,
@@ -18,7 +18,7 @@ def test_missing_relation_pair_status(ctx):
 
 
 def test_valid_relation_pair_status(ctx):
-    source_relation = Relation("cos-agent")
+    source_relation = SubordinateRelation("cos-agent")
     sink_relation = Relation("send-remote-write")
     # GIVEN the charm has a source and no sink relation
     state = State(
