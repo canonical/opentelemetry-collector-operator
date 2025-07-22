@@ -495,27 +495,16 @@ def get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """
     relation_pairs = MandatoryRelationPairs(
         pairs={
-            "metrics-endpoint": [  # must be paired with:
-                {"send-remote-write"},  # or
-                {"cloud-config"},
-            ],
-            "receive-loki-logs": [  # must be paired with:
-                {"send-loki-logs"},  # or
-                {"cloud-config"},
-            ],
-            "receive-traces": [  # must be paired with:
-                {"send-traces"},  # or
-                {"cloud-config"},
-            ],
-            "grafana-dashboards-consumer": [  # must be paired with:
-                {"grafana-dashboards-provider"},  # or
-                {"cloud-config"},
-            ],
             "cos-agent": [  # must be paired with:
                 {"cloud-config"},  # or
                 {"send-remote-write"},  # or
                 {"send-loki-logs"},  # or
                 {"grafana-dashboards-provider"},
+            ],
+            "juju-info": [  # must be paired with:
+                {"cloud-config"},  # or
+                {"send-remote-write"},  # or
+                {"send-loki-logs"},
             ],
         }
     )

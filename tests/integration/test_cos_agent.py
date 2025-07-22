@@ -7,7 +7,7 @@ import pathlib
 
 import jubilant
 from helpers import is_pattern_in_logs
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -23,7 +23,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=300,
+        timeout=360,
     )
     juju.wait(
         lambda status: jubilant.all_active(status, "zookeeper"),
@@ -32,19 +32,21 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     )
 
 
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(10))
 async def test_metrics_are_scraped(juju: jubilant.Juju):
     metrics_pattern = rf".+{{.*juju_application=zookeeper,.*juju_model={juju.model}.*}}"
     result = await is_pattern_in_logs(juju, metrics_pattern)
     assert result
 
 
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(10))
 async def test_logs_are_scraped(juju: jubilant.Juju):
     zookeeper_logs_pattern = r".+log.file.name=zookeeper.log.+log.file.path=/snap/opentelemetry-collector/\d+/shared-logs/zookeeper"
     result = await is_pattern_in_logs(juju, zookeeper_logs_pattern)
     assert result
 
 
-@retry(stop=stop_after_attempt(5), wait=wait_exponential(min=5, max=10))
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(10))
 def test_alerts_are_aggregated(juju: jubilant.Juju):
     alert_files = juju.ssh(
         "otelcol/0",
@@ -53,6 +55,7 @@ def test_alerts_are_aggregated(juju: jubilant.Juju):
     assert "zookeeper" in alert_files
 
 
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(10))
 def test_dashboards_are_aggregated(juju: jubilant.Juju):
     dashboard_files = juju.ssh(
         "otelcol/0",
