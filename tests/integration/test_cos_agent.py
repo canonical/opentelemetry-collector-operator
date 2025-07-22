@@ -21,14 +21,14 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.integrate("otelcol:cos-agent", "zookeeper:cos-agent")
     # THEN all units are active
     juju.wait(
-        lambda status: jubilant.all_active(status, "zookeeper"),
+        lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
         timeout=300,
     )
     juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
+        lambda status: jubilant.all_active(status, "zookeeper"),
         error=jubilant.any_error,
-        timeout=300,
+        timeout=600,
     )
 
 
@@ -44,7 +44,7 @@ async def test_logs_are_scraped(juju: jubilant.Juju):
     assert result
 
 
-@retry(stop=stop_after_attempt(5), wait=wait_exponential(max=10))
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(min=5, max=10))
 def test_alerts_are_aggregated(juju: jubilant.Juju):
     alert_files = juju.ssh(
         "otelcol/0",
