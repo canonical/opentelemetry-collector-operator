@@ -47,13 +47,19 @@ async def charm(ops_test: OpsTest) -> str:
     our CI will currently set the variable to the highest-base one.
     """
     if charm_file := os.environ.get("CHARM_PATH"):
-        # Make sure we're using '22.04' in tests, because that's Zookeeper's base
-        charm_file = charm_file.replace("24.04", "22.04")
-        return str(charm_file)
+        return charm_file
 
     charm = await ops_test.build_charm(".")
     assert charm
     return str(charm)
+
+
+@pytest.fixture(scope="module")
+@timed_memoizer
+async def charm_22_04(charm) -> str:
+    """Charm (platform = ubuntu@22.04) used for integration testing."""
+    # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
+    return charm.replace("24.04", "22.04")
 
 
 @pytest.fixture(scope="module")

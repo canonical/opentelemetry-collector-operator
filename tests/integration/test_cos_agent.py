@@ -21,9 +21,9 @@ async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
     return True
 
 
-async def test_deploy(juju: jubilant.Juju, charm: str):
+async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
-    juju.deploy(charm, app="otelcol")
+    juju.deploy(charm_22_04, app="otelcol")
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "zookeeper:cos-agent")

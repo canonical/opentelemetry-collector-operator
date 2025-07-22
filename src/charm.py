@@ -371,6 +371,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         self.unit.status = ActiveStatus()
 
+        # Mandatory relation pairs
+        missing_relations = integrations.get_missing_mandatory_relations(self)
+        if missing_relations:
+            self.unit.status = BlockedStatus(missing_relations)
+
     def _install(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
 

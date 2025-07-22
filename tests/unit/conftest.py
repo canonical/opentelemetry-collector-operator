@@ -97,6 +97,13 @@ def mock_singleton_snap_manager():
 
 
 @pytest.fixture(autouse=True)
+def mock_snap_map():
+    """Mock SnapMap methods."""
+    with patch("snap_management.SnapMap.get_revision", return_value=2):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def mock_cos_agent_update_tracing():
     """Mock the COS Agent's update_tracing_receivers method to prevent it from accessing the tracing attribute."""
     with patch(

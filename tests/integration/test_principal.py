@@ -29,10 +29,10 @@ async def is_pattern_not_in_logs(juju: jubilant.Juju, pattern: str):
     return True
 
 
-async def test_deploy(juju: jubilant.Juju, charm: str):
+async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
-    juju.deploy(charm, app="otelcol", config={"path_exclude": "/var/log/cloud-init-output.log"})
+    juju.deploy(charm_22_04, app="otelcol", config={"path_exclude": "/var/log/cloud-init-output.log"})
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "zookeeper:cos-agent")
