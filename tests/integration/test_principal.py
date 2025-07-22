@@ -47,7 +47,7 @@ async def test_path_exclude(juju: jubilant.Juju):
     assert is_included
     is_included = await is_pattern_in_logs(
         juju, excluded_log_pattern
-    )  # invert the boolean so we do not need is_pattern_not_in_logs
+    )
     assert not is_included
 
 
