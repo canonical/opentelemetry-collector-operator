@@ -4,12 +4,31 @@
 """Feature: COS Agent integration works as expected."""
 
 import pathlib
+import re
 
 import jubilant
-from helpers import is_pattern_in_logs
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
+
+
+# FIXME: Reduce retry count once fixed
+# https://github.com/canonical/opentelemetry-collector-operator/issues/32
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
+async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
+    otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
+    if not re.search(pattern, otelcol_logs):
+        raise Exception(f"Pattern {pattern} not found in the otelcol logs")
+    return True
+
+
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
+async def is_pattern_not_in_logs(juju: jubilant.Juju, pattern: str):
+    otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
+    if re.search(pattern, otelcol_logs):
+        raise Exception(f"Pattern {pattern} found in the otelcol logs")
+    return True
 
 
 async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
@@ -45,10 +64,8 @@ async def test_path_exclude(juju: jubilant.Juju):
     excluded_log_pattern = r".+log.file.name=cloud-init-output.log"
     is_included = await is_pattern_in_logs(juju, included_log_pattern)
     assert is_included
-    is_included = await is_pattern_in_logs(
-        juju, excluded_log_pattern
-    )
-    assert not is_included
+    is_excluded = await is_pattern_not_in_logs(juju, excluded_log_pattern)
+    assert is_excluded
 
 
 async def test_node_metrics(juju: jubilant.Juju):

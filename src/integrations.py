@@ -38,7 +38,7 @@ from charms.tls_certificates_interface.v4.tls_certificates import (
     Mode,
     TLSCertificatesRequiresV4,
 )
-from cosl import LZMABase64, MandatoryRelationPairs
+from cosl import LZMABase64
 from ops import CharmBase, tracing
 from ops.model import Relation
 
@@ -480,34 +480,3 @@ def receive_ca_cert(
 
     # A hot-reload doesn't pick up new system certs - need to restart the service
     return sha256(yaml.safe_dump(ca_certs))
-
-
-def get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
-    """Check whether mandatory relations are in place.
-
-    The charm can use this information to set BlockedStatus.
-    Without any matching outgoing relation, the collector could incur data loss.
-    Incoming relations are evaluated with AND, while outgoing relations with OR.
-
-    Returns:
-        A string containing the missing relations in string format, or None if
-        all the mandatory relation pairs are present.
-    """
-    relation_pairs = MandatoryRelationPairs(
-        pairs={
-            "cos-agent": [  # must be paired with:
-                {"cloud-config"},  # or
-                {"send-remote-write"},  # or
-                {"send-loki-logs"},  # or
-                {"grafana-dashboards-provider"},
-            ],
-            "juju-info": [  # must be paired with:
-                {"cloud-config"},  # or
-                {"send-remote-write"},  # or
-                {"send-loki-logs"},
-            ],
-        }
-    )
-    active_relations = {name for name, relation in charm.model.relations.items() if relation}
-    missing_str = relation_pairs.get_missing_as_str(*active_relations)
-    return missing_str or None

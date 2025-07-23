@@ -157,12 +157,8 @@ class SingletonSnapManager:
             registration_file = SnapRegistrationFile.from_filename(filename)
             if registration_file.snap_name == snap_name:
                 path = cls.LOCK_DIR.joinpath(filename)
-                try:
-                    with open(path, "r") as f:
-                        revision = f.read().strip()
-                        revisions.add(int(revision))
-                except OSError:
-                    continue
+                if os.path.exists(path):
+                    revisions.add(registration_file.snap_revision)
         return revisions
 
     @classmethod

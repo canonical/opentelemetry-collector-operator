@@ -4,12 +4,22 @@
 """Feature: COS Agent integration works as expected."""
 
 import pathlib
-
+import re
 import jubilant
-from helpers import is_pattern_in_logs
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
+
+
+# FIXME: Reduce retry count once fixed
+# https://github.com/canonical/opentelemetry-collector-operator/issues/32
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
+async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
+    otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
+    if not re.search(pattern, otelcol_logs):
+        raise Exception(f"Pattern {pattern} not found in the otelcol logs")
+    return True
 
 
 async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
@@ -43,17 +53,21 @@ async def test_logs_are_scraped(juju: jubilant.Juju):
     assert result
 
 
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 def test_alerts_are_aggregated(juju: jubilant.Juju):
     alert_files = juju.ssh(
         "otelcol/0",
         command="find /var/lib/juju/agents/unit-otelcol-0/charm/prometheus_alert_rules -type f",
     )
+    # pdb.set_trace()
     assert "zookeeper" in alert_files
 
 
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 def test_dashboards_are_aggregated(juju: jubilant.Juju):
     dashboard_files = juju.ssh(
         "otelcol/0",
         command="find /var/lib/juju/agents/unit-otelcol-0/charm/grafana_dashboards -type f",
     )
+    # pdb.set_trace()
     assert "zookeeper" in dashboard_files
