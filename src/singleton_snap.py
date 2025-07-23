@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Set
 
+import yaml
+
 
 @dataclass
 class SnapRegistrationFile:
@@ -123,7 +125,7 @@ class SingletonSnapManager:
             snap_revision=snap_revision,
         )
         with open(self.LOCK_DIR.joinpath(registration_file.filename), "w") as f:
-            f.write(str(snap_revision))
+            f.write("")
 
     def unregister(self, snap_name: str, snap_revision: int) -> None:
         """Unregister current unit from using the specified snap.
@@ -156,13 +158,7 @@ class SingletonSnapManager:
         for filename in os.listdir(cls.LOCK_DIR):
             registration_file = SnapRegistrationFile.from_filename(filename)
             if registration_file.snap_name == snap_name:
-                path = cls.LOCK_DIR.joinpath(filename)
-                try:
-                    with open(path, "r") as f:
-                        revision = f.read().strip()
-                        revisions.add(int(revision))
-                except OSError:
-                    continue
+                revisions.add(registration_file.snap_revision)
         return revisions
 
     @classmethod
@@ -196,3 +192,49 @@ class SingletonSnapManager:
     def is_used_by_other_units(self, snap_name: str) -> bool:
         """Check if the specified snap is being used by other units."""
         return any(unit != self.unit_name for unit in self.get_units(snap_name))
+
+
+class SingletonConfigManager:
+    """Manage multiple instances of otelcol configs and merges them."""
+
+    def __init__(self, unit_name: str, snap_revision: int):
+        """Initialize the manager with a normalized unit name.
+
+        Args:
+            unit_name: Identifier for the current unit
+            snap_revision: Snap revision of otelcol.
+        """
+        self.unit_name = unit_name
+        self.snap_revision = snap_revision
+        SingletonSnapManager._ensure_lock_dir_exists()
+
+    def register(self, config: str) -> None:
+        """Register current unit as using the specified snap and revision.
+
+        Args:
+            config: String version of the otelcol config.
+        """
+        snap_name = "opentelemetry-collector"
+        registration_file = SnapRegistrationFile(
+            unit_name=self.unit_name,
+            snap_name=snap_name,
+            snap_revision=self.snap_revision,
+        )
+        with open(SingletonSnapManager.LOCK_DIR.joinpath(registration_file.filename), "w") as f:
+            f.write(config)
+
+    @classmethod
+    def merged_config(cls) -> str:
+        """Merge all the configs into one, and return it as a string."""
+        merged_config = {}
+        for filename in os.listdir(SingletonSnapManager.LOCK_DIR):
+            registration_file = SnapRegistrationFile.from_filename(filename)
+            if registration_file.snap_name != "opentelemetry-collector":
+                continue
+            path = SingletonSnapManager.LOCK_DIR.joinpath(filename)
+            # TODO: read the config and accumulate it in merged_config
+            with open(path, "r") as f:
+                config = yaml.safe_load(f)
+            merged_config = config  # TODO: figure out a good merge logic
+
+        return yaml.safe_dump(merged_config)
