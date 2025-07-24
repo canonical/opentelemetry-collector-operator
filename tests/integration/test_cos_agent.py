@@ -5,15 +5,16 @@
 
 import pathlib
 import re
-from tenacity import retry, wait_exponential
-
 import jubilant
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
-@retry(wait=wait_exponential(multiplier=1, min=4, max=10))
+# FIXME: Reduce retry count once fixed
+# https://github.com/canonical/opentelemetry-collector-operator/issues/32
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
     otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
     if not re.search(pattern, otelcol_logs):
@@ -21,15 +22,23 @@ async def is_pattern_in_logs(juju: jubilant.Juju, pattern: str):
     return True
 
 
-async def test_deploy(juju: jubilant.Juju, charm: str):
+async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
-    juju.deploy(charm, app="otelcol")
+    juju.deploy(charm_22_04, app="otelcol")
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "zookeeper:cos-agent")
     # THEN all units are active
-    # FIXME: after we add blocked status on missing relations (mandatory pairs), change this
-    juju.wait(jubilant.all_active, timeout=300)
+    juju.wait(
+        lambda status: jubilant.all_blocked(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=360,
+    )
+    juju.wait(
+        lambda status: jubilant.all_active(status, "zookeeper"),
+        error=jubilant.any_error,
+        timeout=600,
+    )
 
 
 async def test_metrics_are_scraped(juju: jubilant.Juju):
@@ -44,17 +53,21 @@ async def test_logs_are_scraped(juju: jubilant.Juju):
     assert result
 
 
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 def test_alerts_are_aggregated(juju: jubilant.Juju):
     alert_files = juju.ssh(
         "otelcol/0",
         command="find /var/lib/juju/agents/unit-otelcol-0/charm/prometheus_alert_rules -type f",
     )
+    # pdb.set_trace()
     assert "zookeeper" in alert_files
 
 
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 def test_dashboards_are_aggregated(juju: jubilant.Juju):
     dashboard_files = juju.ssh(
         "otelcol/0",
         command="find /var/lib/juju/agents/unit-otelcol-0/charm/grafana_dashboards -type f",
     )
+    # pdb.set_trace()
     assert "zookeeper" in dashboard_files

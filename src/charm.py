@@ -5,16 +5,16 @@
 
 import logging
 import os
-from typing import Any, Dict, List, cast
-
-import ops
 import socket
 import subprocess
+from typing import Any, Dict, List, Optional, cast
+
+import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
-from cosl import JujuTopology
-from ops import BlockedStatus, RelationChangedEvent
+from cosl import JujuTopology, MandatoryRelationPairs
+from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 
 import integrations
@@ -30,6 +30,7 @@ from constants import (
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager
+from snap_fstab import SnapFstab
 from snap_management import (
     SnapInstallError,
     SnapMap,
@@ -37,7 +38,6 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
-from snap_fstab import SnapFstab
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -90,6 +90,37 @@ def refresh_certs():
 def hook() -> str:
     """Return Juju hook name."""
     return os.environ["JUJU_HOOK_NAME"]
+
+
+def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
+    """Check whether mandatory relations are in place.
+
+    The charm can use this information to set BlockedStatus.
+    Without any matching outgoing relation, the collector could incur data loss.
+    Incoming relations are evaluated with AND, while outgoing relations with OR.
+
+    Returns:
+        A string containing the missing relations in string format, or None if
+        all the mandatory relation pairs are present.
+    """
+    relation_pairs = MandatoryRelationPairs(
+        pairs={
+            "cos-agent": [  # must be paired with:
+                {"cloud-config"},  # or
+                {"send-remote-write"},  # or
+                {"send-loki-logs"},  # or
+                {"grafana-dashboards-provider"},
+            ],
+            "juju-info": [  # must be paired with:
+                {"cloud-config"},  # or
+                {"send-remote-write"},  # or
+                {"send-loki-logs"},
+            ],
+        }
+    )
+    active_relations = {name for name, relation in charm.model.relations.items() if relation}
+    missing_str = relation_pairs.get_missing_as_str(*active_relations)
+    return missing_str or None
 
 
 class OpenTelemetryCollectorCharm(ops.CharmBase):
@@ -370,6 +401,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 return
 
         self.unit.status = ActiveStatus()
+
+        # Mandatory relation pairs
+        if missing_relations := _get_missing_mandatory_relations(self):
+            self.unit.status = BlockedStatus(missing_relations)
 
     def _install(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
