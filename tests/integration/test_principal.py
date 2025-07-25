@@ -39,7 +39,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     )
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
-    juju.integrate("otelcol:cos-agent", "zookeeper:cos-agent")
+    juju.integrate("otelcol:juju-info", "zookeeper:juju-info")
     # THEN all units are active
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
