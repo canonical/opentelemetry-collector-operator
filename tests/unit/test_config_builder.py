@@ -258,3 +258,49 @@ def test_debug_exporter_no_tls_config():
     config._add_exporter_insecure_skip_verify(True)
     # THEN tls::insecure_skip_verify is not set for debug exporters
     assert all("tls" not in exp.keys() for exp in config._config["exporters"].values())
+
+
+def test_global_scrape_timeout_and_interval():
+    # GIVEN a config with multiple prometheus receivers
+    config = ConfigBuilder()
+    config.add_component(Component.receiver, name="prometheus", config={"config": {}})
+    config.add_component(
+        Component.receiver, name="prometheus/empty-cfgs", config={"config": {"scrape_configs": []}}
+    )
+    config.add_component(
+        Component.receiver,
+        name="prometheus/missing-timeout",
+        config={"config": {"scrape_configs": [{"scrape_interval": "1s"}]}},
+    )
+    config.add_component(
+        Component.receiver,
+        name="prometheus/missing-interval",
+        config={"config": {"scrape_configs": [{"scrape_timeout": "1s"}]}},
+    )
+    config.add_component(
+        Component.receiver,
+        name="prometheus/one-cfg",
+        config={"config": {"scrape_configs": [{"scrape_interval": "1s", "scrape_timeout": "1s"}]}},
+    )
+    config.add_component(
+        Component.receiver,
+        name="prometheus/multiple-cfgs",
+        config={
+            "config": {
+                "scrape_configs": [
+                    {"scrape_interval": "1s", "scrape_timeout": "1s"},
+                    {"scrape_interval": "1s", "scrape_timeout": "1s"},
+                ]
+            }
+        },
+    )
+    # WHEN the global scrape interval and timeout is set
+    config._set_prometheus_receiver_global_timeout_and_interval("1m", "10s")
+    # THEN all prometheus receivers are updated
+    for receiver in config._config["receivers"].values():
+        if receiver["config"]:
+            for scrape_cfg in receiver["config"]["scrape_configs"]:
+                if "scrape_interval" in scrape_cfg:
+                    assert scrape_cfg["scrape_interval"] == "1m"
+                if "scrape_timeout" in scrape_cfg:
+                    assert scrape_cfg["scrape_timeout"] == "10s"

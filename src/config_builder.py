@@ -85,13 +85,20 @@ class ConfigBuilder:
     configuration that can be consumed by the Collector.
     """
 
-    def __init__(self, receiver_tls: bool = False, exporter_skip_verify: bool = False):
+    def __init__(
+        self,
+        receiver_tls: bool = False,
+        exporter_skip_verify: bool = False,
+        receiver_prom_scrape_interval: str = "60s",
+        receiver_prom_scrape_timeout: str = "10s",
+    ):
         """Generate an empty OpenTelemetry collector config.
 
         Args:
             receiver_tls: whether to inject TLS config in all receivers on build
             exporter_skip_verify: value for `insecure_skip_verify` in all exporters
-
+            receiver_prom_scrape_interval: value for `scrape_interval` in all prometheus receivers
+            receiver_prom_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
         """
         self._config = {
             "extensions": {},
@@ -107,6 +114,8 @@ class ConfigBuilder:
         }
         self._receiver_tls = receiver_tls
         self._exporter_skip_verify = exporter_skip_verify
+        self._scrape_interval = receiver_prom_scrape_interval
+        self._scrape_timeout = receiver_prom_scrape_timeout
 
     def build(self) -> str:
         """Build the final configuration and return it as a YAML string.
@@ -122,6 +131,10 @@ class ConfigBuilder:
         self._add_missing_debug_exporters()
         if self._receiver_tls:
             self._add_tls_to_all_receivers()
+        self._set_prometheus_receiver_global_timeout_and_interval(
+            self._scrape_interval,
+            self._scrape_timeout,
+        )
         self._add_exporter_insecure_skip_verify(self._exporter_skip_verify)
         return yaml.safe_dump(self._config)
 
@@ -282,3 +295,15 @@ class ConfigBuilder:
             self._config["exporters"][exporter].setdefault("tls", {}).setdefault(
                 "insecure_skip_verify", insecure_skip_verify
             )
+
+    def _set_prometheus_receiver_global_timeout_and_interval(self, interval: str, timeout: str):
+        """Overwrite the `scrape_interval` for all scrape_configs in every prometheus receiver."""
+        for receiver in self._config.get("receivers", {}):
+            if receiver.split("/")[0] == "prometheus":
+                config = self._config["receivers"][receiver]["config"]
+                scrape_cfgs = config["scrape_configs"] if "scrape_configs" in config else []
+                for scrape_cfg in scrape_cfgs:
+                    if "scrape_interval" in scrape_cfg:
+                        scrape_cfg["scrape_interval"] = interval
+                    if "scrape_timeout" in scrape_cfg:
+                        scrape_cfg["scrape_timeout"] = timeout
