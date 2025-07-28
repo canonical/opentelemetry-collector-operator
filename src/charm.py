@@ -21,6 +21,7 @@ import integrations
 from config_builder import Component, Port
 from config_manager import ConfigManager
 from constants import (
+    CONFIG_FOLDER,
     CONFIG_PATH,
     DASHBOARDS_DEST_PATH,
     LOKI_RULES_DEST_PATH,
@@ -29,7 +30,7 @@ from constants import (
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
-from singleton_snap import SingletonSnapManager
+from singleton_snap import SingletonSnapManager, SnapRegistrationFile
 from snap_fstab import SnapFstab
 from snap_management import (
     SnapInstallError,
@@ -137,6 +138,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
+        # FIXME: This cleanup likely breaks multiple co-located principals sending alerts.
+        # Instead of removing all the aggregated folders, only delete the alerts associated
+        # to the current unit
         integrations.cleanup()
 
         # Integrate with TLS relations
@@ -208,9 +212,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if cos_agent.metrics_jobs:
             config_manager.config.add_component(
                 Component.receiver,
-                name="prometheus/cos-agent",
+                name=f"prometheus/cos-agent-{self.unit.name}",
                 config={"config": {"scrape_configs": cos_agent.metrics_jobs}},
-                pipelines=["metrics"],
+                pipelines=[f"metrics/{self.unit.name}"],
             )
         integrations._add_alerts(
             alerts=cos_agent.metrics_alerts,
@@ -261,7 +265,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         "snap_name": fstab_entry.owner,
                     },
                 ),
-                pipelines=["logs"],
+                pipelines=[f"logs/{self.unit.name}"],
             )
         ### Add /var/log scrape job
         var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
@@ -355,13 +359,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_custom_processors(custom_processors)
 
         # Push the config and Push the config and deploy/update
-        config_path = LocalPath(CONFIG_PATH)
+        config_filename = f"{SnapRegistrationFile._normalize_name(self.unit.name)}.yaml"
+        config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_manager.config.build())
 
         # TODO: Conditionally open ports based on the otelcol config file rather than opening all ports
         # Append port 9100 for Node Exporter # TODO: is this needed?
-        self.unit.set_ports(*[port.value for port in Port])
+        if self.unit.is_leader():
+            self.unit.set_ports(*[port.value for port in Port])
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
