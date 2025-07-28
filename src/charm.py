@@ -22,7 +22,6 @@ from config_builder import Component, Port
 from config_manager import ConfigManager
 from constants import (
     CONFIG_FOLDER,
-    CONFIG_PATH,
     DASHBOARDS_DEST_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
