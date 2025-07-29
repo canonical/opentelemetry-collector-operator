@@ -8,7 +8,7 @@ from config_manager import ConfigManager
 
 def test_add_prometheus_scrape():
     # GIVEN an empty config
-    config_manager = ConfigManager(insecure_skip_verify=True)
+    config_manager = ConfigManager("", "", insecure_skip_verify=True)
 
     # WHEN a scrape job is added to the config
     first_job = [

@@ -87,8 +87,8 @@ class ConfigBuilder:
 
     def __init__(
         self,
-        global_scrape_interval: str = "60s",
-        global_scrape_timeout: str = "10s",
+        global_scrape_interval: str,
+        global_scrape_timeout: str,
         receiver_tls: bool = False,
         exporter_skip_verify: bool = False,
     ):
