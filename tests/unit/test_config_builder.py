@@ -279,11 +279,6 @@ def test_global_scrape_timeout_and_interval():
     )
     config.add_component(
         Component.receiver,
-        name="prometheus/one-cfg",
-        config={"config": {"scrape_configs": [{"scrape_interval": "1s", "scrape_timeout": "1s"}]}},
-    )
-    config.add_component(
-        Component.receiver,
         name="prometheus/multiple-cfgs",
         config={
             "config": {
@@ -300,7 +295,5 @@ def test_global_scrape_timeout_and_interval():
     for receiver in config._config["receivers"].values():
         if receiver["config"]:
             for scrape_cfg in receiver["config"]["scrape_configs"]:
-                if "scrape_interval" in scrape_cfg:
-                    assert scrape_cfg["scrape_interval"] == "1m"
-                if "scrape_timeout" in scrape_cfg:
-                    assert scrape_cfg["scrape_timeout"] == "10s"
+                assert scrape_cfg["scrape_interval"] == "1m"
+                assert scrape_cfg["scrape_timeout"] == "10s"

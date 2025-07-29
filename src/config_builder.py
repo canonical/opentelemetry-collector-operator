@@ -297,13 +297,11 @@ class ConfigBuilder:
             )
 
     def _set_prometheus_receiver_global_timeout_and_interval(self, interval: str, timeout: str):
-        """Overwrite the `scrape_interval` for all scrape_configs in every prometheus receiver."""
-        for receiver in self._config.get("receivers", {}):
-            if receiver.split("/")[0] == "prometheus":
-                config = self._config["receivers"][receiver]["config"]
-                scrape_cfgs = config["scrape_configs"] if "scrape_configs" in config else []
-                for scrape_cfg in scrape_cfgs:
-                    if "scrape_interval" in scrape_cfg:
-                        scrape_cfg["scrape_interval"] = interval
-                    if "scrape_timeout" in scrape_cfg:
-                        scrape_cfg["scrape_timeout"] = timeout
+        """Set the `scrape_interval` and `scrape_timeout` for all scrape_configs in every prometheus receiver."""
+        receivers = self._config.get("receivers", {})
+        for name, receiver in receivers.items():
+            if name.split("/")[0] == "prometheus":
+                scrape_configs = receiver.get("config", {}).get("scrape_configs", [])
+                for scrape_cfg in scrape_configs:
+                    scrape_cfg["scrape_interval"] = interval
+                    scrape_cfg["scrape_timeout"] = timeout
