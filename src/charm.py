@@ -5,6 +5,7 @@
 
 import logging
 import os
+import re
 import socket
 import subprocess
 from typing import Any, Dict, List, Optional, cast
@@ -152,7 +153,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
 
         # Create the config manager
+        global_configs = {"global_scrape_interval": str(self.config.get("global_scrape_interval")), "global_scrape_timeout": str(self.config.get("global_scrape_timeout"))}
+        for name, global_config in global_configs.items():
+            pattern = r'^\d+[ywdhms]$'
+            match = re.fullmatch(pattern, global_config)
+            if not match:
+                self.unit.status = BlockedStatus(f"The {name} config requires format: '\\d+[ywdhms]'.")
+                return
+
         config_manager = ConfigManager(
+            global_scrape_interval=global_configs["global_scrape_interval"],
+            global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
             insecure_skip_verify=cast(bool, self.config.get("tls_insecure_skip_verify")),
         )

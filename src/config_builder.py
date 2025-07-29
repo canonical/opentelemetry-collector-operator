@@ -87,18 +87,18 @@ class ConfigBuilder:
 
     def __init__(
         self,
+        global_scrape_interval: str = "60s",
+        global_scrape_timeout: str = "10s",
         receiver_tls: bool = False,
         exporter_skip_verify: bool = False,
-        receiver_prom_scrape_interval: str = "60s",
-        receiver_prom_scrape_timeout: str = "10s",
     ):
         """Generate an empty OpenTelemetry collector config.
 
         Args:
+            global_scrape_interval: value for `scrape_interval` in all prometheus receivers
+            global_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
             receiver_tls: whether to inject TLS config in all receivers on build
             exporter_skip_verify: value for `insecure_skip_verify` in all exporters
-            receiver_prom_scrape_interval: value for `scrape_interval` in all prometheus receivers
-            receiver_prom_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
         """
         self._config = {
             "extensions": {},
@@ -114,8 +114,8 @@ class ConfigBuilder:
         }
         self._receiver_tls = receiver_tls
         self._exporter_skip_verify = exporter_skip_verify
-        self._scrape_interval = receiver_prom_scrape_interval
-        self._scrape_timeout = receiver_prom_scrape_timeout
+        self._scrape_interval = global_scrape_interval
+        self._scrape_timeout = global_scrape_timeout
 
     def build(self) -> str:
         """Build the final configuration and return it as a YAML string.
