@@ -152,7 +152,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             private_key_path=LocalPath(SERVER_CERT_PRIVATE_KEY_PATH),
         )
 
-        # Create the config manager
+        # Global scrape configs
         global_configs = {"global_scrape_interval": str(self.config.get("global_scrape_interval")), "global_scrape_timeout": str(self.config.get("global_scrape_timeout"))}
         for name, global_config in global_configs.items():
             pattern = r'^\d+[ywdhms]$'
@@ -161,6 +161,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"The {name} config requires format: '\\d+[ywdhms]'.")
                 return
 
+        # Create the config manager
         config_manager = ConfigManager(
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
