@@ -25,10 +25,12 @@ from constants import (
     DASHBOARDS_DEST_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
+    NODE_EXPORTER_AVAILABLE_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
+from node_exporter import validate_node_exporter_collectors, NodeExporterCollectorError
 from singleton_snap import SingletonSnapManager
 from snap_fstab import SnapFstab
 from snap_management import (
@@ -129,7 +131,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
         if hook() == "install":  # FIXME: install is not enough, we also need upgrade
-            self._install()
+            self._install_snaps()
         if hook() == "stop":
             self._stop()
         self._reconcile()
@@ -402,11 +404,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         self.unit.status = ActiveStatus()
 
+        try:
+            self._configure_node_exporter_collectors()
+        except NodeExporterCollectorError as e:
+            self.unit.status = BlockedStatus(str(e))
+
         # Mandatory relation pairs
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
-    def _install(self) -> None:
+    def _install_snaps(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
 
         for snap_name in SnapMap.snaps():
@@ -448,6 +455,18 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
             # TODO: Luca if the snap is used by other units, we should probably `ensure`
             # that the max_revision is installed instead.
+
+    def _configure_node_exporter_collectors(self):
+        """Configure the node-exporter snap."""
+        enable_collectors = str(self.config.get("node_exporter_enabled_collectors", "")).split()
+        disable_collectors = str(self.config.get("node_exporter_disabled_collectors", "")).split()
+
+        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(enable_collectors))
+        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(disable_collectors))
+
+        snap = self.snap("node-exporter")
+        snap.set({"collectors": " ".join(enable_collectors)})
+        snap.set({"no-collectors": " ".join(disable_collectors)})
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
