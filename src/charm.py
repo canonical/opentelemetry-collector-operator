@@ -153,7 +153,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
 
         # Global scrape configs
-        global_configs = {"global_scrape_interval": str(self.config.get("global_scrape_interval")), "global_scrape_timeout": str(self.config.get("global_scrape_timeout"))}
+        global_configs = {
+            "global_scrape_interval": cast(str, self.config.get("global_scrape_interval")),
+            "global_scrape_timeout": cast(str, self.config.get("global_scrape_timeout")),
+        }
         for name, global_config in global_configs.items():
             pattern = r'^\d+[ywdhms]$'
             match = re.fullmatch(pattern, global_config)
