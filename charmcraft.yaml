@@ -137,7 +137,7 @@ config:
         A global opentelemetry-collector "processors" config in YAML format, without the
         "processors:" top-level key. For example, to represent a "processors" section
         such as:
-        
+
             processors:
               batch:
               memory_limiter:
@@ -223,6 +223,18 @@ config:
         to this range by OpenTelemetry Collector.
       type: float
       default: 100.0
+    global_scrape_timeout:
+      description: >
+        How long to wait before timing out a scrape from a target.
+        Supported units: y, w, d, h, m, s.
+      type: string
+      default: "10s"
+    global_scrape_interval:
+      description: >
+        How frequently should instances be scraped.
+        Supported units: y, w, d, h, m, s.
+      type: string
+      default: "1m"
 
 actions:
   reconcile:
