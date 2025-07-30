@@ -449,14 +449,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def _stop(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
-        logger.warning(f"---Snaps: {SnapMap.snaps()}")
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
-            logger.warning(f"---Revision: {(snap_name, snap_revision)}")
-            manager.unregister(snap_name, snap_revision)  # FIXME The manager tries to remove node-exporter, but it was already removed. Maybe try to add logic to remove IFF it exists
-            # FIXME Maybe a check against state and disk for sync errors?
-            logger.warning(f"---Manager: {manager.get_units(snap_name)}")
-            logger.warning(f"---Other Units: {manager.is_used_by_other_units(snap_name)}")
+            manager.unregister(snap_name, snap_revision)
             if not manager.is_used_by_other_units(snap_name):
                 # Remove the snap
                 self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
