@@ -283,6 +283,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             )
         ### Add /var/log scrape job
         var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        critical_exclusions= [
+            # Log backups
+            "/var/log/**/*.gz",
+            "/var/log/**/*.xz",
+            "/var/log/**/*.[0-9]",
+
+            # binary logs
+            "/var/log/**/*.journal",
+            "/var/log/wtmp",
+        ]
+        var_log_exclusions.extend(critical_exclusions)
         config_manager.config.add_component(
             component=Component.receiver,
             name="filelog/var-log",
