@@ -189,36 +189,6 @@ class SingletonSnapManager:
 
         return units
 
-    @classmethod
-    def get_snaps(cls) -> Set[str]:
-        """
-        TODO
-        
-        Get all units currently registered for a snap (atomic with directory lock).
-
-        This method is primarily useful for debugging purposes. In most scenarios, you
-        do not need to call this directly. Instead, use
-        :meth:`SingletonSnapManager.is_used_by_other_units` to detect if there are other
-        units registered with a snap.
-
-        Args:
-            snap_name: Name of the snap to get units for
-
-        Returns:
-            Set of unit names associated with the snap
-
-        Raises:
-            OSError: If there's an error accessing the lock directory
-        """
-        snaps = set()
-        cls._ensure_lock_dir_exists()
-
-        for filename in os.listdir(cls.LOCK_DIR):
-            registration_file = SnapRegistrationFile.from_filename(filename)
-            snaps.add(registration_file.snap_name)
-
-        return snaps
-
     def is_used_by_other_units(self, snap_name: str) -> bool:
         """Check if the specified snap is being used by other units."""
         return any(unit != self.unit_name for unit in self.get_units(snap_name))

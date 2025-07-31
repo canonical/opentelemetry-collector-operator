@@ -1158,7 +1158,7 @@ class COSAgentRequirer(Object):
             if not relation.units:
                 continue
             unit = next(iter(relation.units))
-            if not (raw := relation.data.get(unit, {}).get(CosAgentProviderUnitData.KEY, {})):
+            if not (raw := relation.data[unit].get(CosAgentProviderUnitData.KEY)):
                 continue
             if not (provider_data := self._validated_provider_data(raw)):
                 continue

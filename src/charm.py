@@ -7,6 +7,7 @@ import logging
 import os
 import socket
 import subprocess
+import shutil
 from typing import Any, Dict, List, Optional, cast
 
 import ops
@@ -130,20 +131,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         super().__init__(framework)
         if hook() == "install":  # FIXME: install is not enough, we also need upgrade
             self._install()
-        logger.warning(f"---Hook: {hook()}")
-        if hook() == "stop":
-            self._stop()
 
-        self._reconcile()
+        reconcile_required = True
+        if hook() in ["stop", "remove"]:
+            reconcile_required = self._stop()
+
+        if reconcile_required:
+            self._reconcile()
 
     def _reconcile(self):
-        if hook() in ["stop", "remove"]:
-            # FIXME We can either just not reconcile because we are going into subordinate - no-principal mode
-            # The reconcile expects the snap to exist and be in subordinate - principal mode
-            # Question: Can we assume this ^ or do we need to update all the methods to not use SnapMap.snaps() and instead use the SnapManager to determine the snaps and execute based on this?
-            # TODO I do not see the stop hook in the juju debug-logs? How do we ever run self._stop()?
-            return
-
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
         integrations.cleanup()
@@ -382,12 +378,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             [config_manager.config.hash, receive_ca_certs_hash, server_cert_hash]
         )
         if current_hash != old_hash:
-            # TODO Check `sudo journalctl -u snapd.service`
-            # >  /lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' in section 'Service', ignoring.
-            manager = SingletonSnapManager(self.unit.name)
-            logger.warning(f"---Hashes Snaps: {manager.get_snaps()}")
-            for snap_name in manager.get_snaps():
-                self.snap(snap_name).restart()  # FIXME We attempt to restart, but the snap already is gone from _stop() before _reconcile
+            for snap_name in SnapMap.snaps():
+                self.snap(snap_name).restart()
 
         # Set status
         if self._has_server_cert_relation and not is_tls_ready():
@@ -447,20 +439,41 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             #     f.flush()
             pass
 
-    def _stop(self) -> None:
+    def _stop(self) -> bool:
+        """Coordinate snap and config file removal.
+
+        If the snap is solely used by this unit, then skip reconciling the charm since it depends
+        on snap operations.
+        """
         manager = SingletonSnapManager(self.unit.name)
+        reconcile_required = True
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
-            manager.unregister(snap_name, snap_revision)
-            if not manager.is_used_by_other_units(snap_name):
-                # Remove the snap
-                self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
-                try:
-                    self.snap(snap_name).ensure(state=snap.SnapState.Absent)
-                except (snap.SnapError, SnapSpecError) as e:
-                    raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
-            # TODO: Luca if the snap is used by other units, we should probably `ensure`
-            # that the max_revision is installed instead.
+            # TODO The utest shows that if we unregister without register it should work without this guard???
+            if manager.get_units(snap_name):
+                manager.unregister(snap_name, snap_revision)
+                if not manager.is_used_by_other_units(snap_name):
+                    # Remove the snap
+                    self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
+                    try:
+                        self.snap(snap_name).ensure(state=snap.SnapState.Absent)
+                    except (snap.SnapError, SnapSpecError) as e:
+                        raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
+                    # Remove the config file
+                    if snap_name == "opentelemetry-collector":
+                        config_path = LocalPath(CONFIG_PATH)
+                        shutil.rmtree(config_path.parent)
+                        logger.info(f"Removed the opentelemetry-collector config file: {config_path}")
+                    reconcile_required = False
+                else:
+                    logger.warning(f"Manager units for {snap_name}: {manager.is_used_by_other_units(snap_name)}")
+
+                # TODO: Luca if the snap is used by other units, we should probably `ensure`
+                # that the max_revision is installed instead.
+            else:
+                reconcile_required = False
+
+        return reconcile_required
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
