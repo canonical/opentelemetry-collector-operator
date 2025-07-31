@@ -8,7 +8,7 @@ import os
 import re
 import socket
 import subprocess
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
 from charmlibs.pathops import LocalPath
@@ -41,6 +41,7 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -471,17 +472,22 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             # TODO: Luca if the snap is used by other units, we should probably `ensure`
             # that the max_revision is installed instead.
 
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _configure_node_exporter_collectors(self):
         """Configure the node-exporter snap."""
-        enable_collectors = str(self.config.get("node_exporter_enabled_collectors", "")).split()
-        disable_collectors = str(self.config.get("node_exporter_disabled_collectors", "")).split()
+        enable_collectors = str(self.config.get("node_exporter_enabled_collectors", ""))
+        disable_collectors = str(self.config.get("node_exporter_disabled_collectors", ""))
 
-        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(enable_collectors))
-        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(disable_collectors))
+        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(enable_collectors.split()))
+        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(disable_collectors.split()))
 
-        snap = self.snap("node-exporter")
-        snap.set({"collectors": " ".join(enable_collectors)})
-        snap.set({"no-collectors": " ".join(disable_collectors)})
+        ne_snap = self.snap("node-exporter")
+        configs: Mapping[str, snap.JSONAble] = {
+            "collectors": enable_collectors,
+            "no-collectors": disable_collectors
+        }
+        # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
+        ne_snap.set(configs)  # type: ignore
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
