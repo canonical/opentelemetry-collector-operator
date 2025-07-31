@@ -449,7 +449,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         reconcile_required = True
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
-            # TODO The utest shows that if we unregister without register it should work without this guard???
             if manager.get_units(snap_name):
                 manager.unregister(snap_name, snap_revision)
                 if not manager.is_used_by_other_units(snap_name):
@@ -465,8 +464,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         shutil.rmtree(config_path.parent)
                         logger.info(f"Removed the opentelemetry-collector config file: {config_path}")
                     reconcile_required = False
-                else:
-                    logger.warning(f"Manager units for {snap_name}: {manager.is_used_by_other_units(snap_name)}")
 
                 # TODO: Luca if the snap is used by other units, we should probably `ensure`
                 # that the max_revision is installed instead.

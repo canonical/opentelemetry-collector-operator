@@ -113,7 +113,6 @@ def install_snap(
     """
     # Check whether we have a spec in the SnapMap
     try:
-        # TODO Why do we have this wrapped in a try except? We dont even have arch in the get_revision method?
         revision = SnapMap.get_revision(snap_name, classic=classic)
     except KeyError as e:
         raise SnapSpecError(
