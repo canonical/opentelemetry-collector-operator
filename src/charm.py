@@ -8,6 +8,7 @@ import os
 import re
 import socket
 import subprocess
+import shutil
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -134,9 +135,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         super().__init__(framework)
         if hook() == "install":  # FIXME: install is not enough, we also need upgrade
             self._install_snaps()
-        if hook() == "stop":
-            self._stop()
-        self._reconcile()
+
+        reconcile_required = True
+        if hook() in ["stop", "remove"]:
+            reconcile_required = self._stop()
+
+        if reconcile_required:
+            self._reconcile()
 
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
@@ -457,20 +462,38 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             #     f.flush()
             pass
 
-    def _stop(self) -> None:
+    def _stop(self) -> bool:
+        """Coordinate snap and config file removal.
+
+        If the snap is solely used by this unit, then skip reconciling the charm since it depends
+        on snap operations.
+        """
         manager = SingletonSnapManager(self.unit.name)
+        reconcile_required = True
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
-            manager.unregister(snap_name, snap_revision)
-            if not manager.is_used_by_other_units(snap_name):
-                # Remove the snap
-                self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
-                try:
-                    self.snap(snap_name).ensure(state=snap.SnapState.Absent)
-                except (snap.SnapError, SnapSpecError) as e:
-                    raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
-            # TODO: Luca if the snap is used by other units, we should probably `ensure`
-            # that the max_revision is installed instead.
+            if manager.get_units(snap_name):
+                manager.unregister(snap_name, snap_revision)
+                if not manager.is_used_by_other_units(snap_name):
+                    # Remove the snap
+                    self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
+                    try:
+                        self.snap(snap_name).ensure(state=snap.SnapState.Absent)
+                    except (snap.SnapError, SnapSpecError) as e:
+                        raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
+                    # Remove the config file
+                    if snap_name == "opentelemetry-collector":
+                        config_path = LocalPath(CONFIG_PATH)
+                        shutil.rmtree(config_path.parent)
+                        logger.info(f"Removed the opentelemetry-collector config file: {config_path}")
+                    reconcile_required = False
+
+                # TODO: Luca if the snap is used by other units, we should probably `ensure`
+                # that the max_revision is installed instead.
+            else:
+                reconcile_required = False
+
+        return reconcile_required
 
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _configure_node_exporter_collectors(self):

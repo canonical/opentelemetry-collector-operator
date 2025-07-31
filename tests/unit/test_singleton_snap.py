@@ -53,8 +53,8 @@ def test_unregister_without_register():
     # GIVEN a SingletonSnapManager
     manager = SingletonSnapManager(unit_name)
     # WHEN it tries to unregister a non-registered snap
-    # THEN it raises an Exception
-    with pytest.raises(Exception):
+    # THEN it raises a FileNotFoundError
+    with pytest.raises(FileNotFoundError):
         manager.unregister(snap_name, snap_revision=1)
 
 
