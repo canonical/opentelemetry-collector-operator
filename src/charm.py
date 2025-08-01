@@ -27,12 +27,12 @@ from constants import (
     DASHBOARDS_DEST_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
-    NODE_EXPORTER_AVAILABLE_COLLECTORS,
+    NODE_EXPORTER_DISABLED_COLLECTORS,
+    NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
-from node_exporter import validate_node_exporter_collectors, NodeExporterCollectorError
 from singleton_snap import SingletonSnapManager, SnapRegistrationFile
 from snap_fstab import SnapFstab
 from snap_management import (
@@ -432,12 +432,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
                 return
 
+        self._configure_node_exporter_collectors()
         self.unit.status = ActiveStatus()
-
-        try:
-            self._configure_node_exporter_collectors()
-        except NodeExporterCollectorError as e:
-            self.unit.status = BlockedStatus(str(e))
 
         # Mandatory relation pairs
         if missing_relations := _get_missing_mandatory_relations(self):
@@ -508,16 +504,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _configure_node_exporter_collectors(self):
         """Configure the node-exporter snap."""
-        enable_collectors = str(self.config.get("node_exporter_enabled_collectors", ""))
-        disable_collectors = str(self.config.get("node_exporter_disabled_collectors", ""))
-
-        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(enable_collectors.split()))
-        validate_node_exporter_collectors(NODE_EXPORTER_AVAILABLE_COLLECTORS, set(disable_collectors.split()))
-
         ne_snap = self.snap("node-exporter")
         configs: Mapping[str, snap.JSONAble] = {
-            "collectors": enable_collectors,
-            "no-collectors": disable_collectors
+            "collectors": " ".join(list(NODE_EXPORTER_ENABLED_COLLECTORS)),
+            "no-collectors": " ".join(list(NODE_EXPORTER_DISABLED_COLLECTORS)),
         }
         # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
         ne_snap.set(configs)  # type: ignore

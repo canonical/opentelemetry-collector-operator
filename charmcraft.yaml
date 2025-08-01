@@ -197,18 +197,6 @@ config:
         even if there is no integration currently requesting it.
       type: boolean
       default: false
-    node_exporter_disabled_collectors:
-      description: |
-        Quoted string with space-separated values to disable node-exporter's collectors. For example:
-        "mdadm netstat"
-      type: string
-      default: ""
-    node_exporter_enabled_collectors:
-      description: |
-        Quoted string with space-separated values to enable node-exporter's collectors. For example:
-        "drm logind systemd mountstats processes sysctl"
-      type: string
-      default: "drm logind systemd mountstats processes sysctl"
     tracing_sampling_rate_charm:
       description: >
         This property defines the percentage of charm traces that are sent to the tracing backend.
