@@ -501,16 +501,20 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         return reconcile_required
 
-    @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _configure_node_exporter_collectors(self):
-        """Configure the node-exporter snap."""
-        ne_snap = self.snap("node-exporter")
-        configs: Mapping[str, snap.JSONAble] = {
+        """Configure the node-exporter snap collectors."""
+        configs = {
             "collectors": " ".join(list(NODE_EXPORTER_ENABLED_COLLECTORS)),
             "no-collectors": " ".join(list(NODE_EXPORTER_DISABLED_COLLECTORS)),
         }
-        # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
-        ne_snap.set(configs)  # type: ignore
+        ne_snap = self.snap("node-exporter")
+        self._set_snap_configs_with_retry(ne_snap, configs)
+
+    # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
+    def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
+        snap.set(configs)  # type: ignore
+
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
