@@ -123,7 +123,7 @@ class SingletonSnapManager:
             snap_revision=snap_revision,
         )
         with open(self.LOCK_DIR.joinpath(registration_file.filename), "w") as f:
-            f.write(str(snap_revision))
+            f.write("")
 
     def unregister(self, snap_name: str, snap_revision: int) -> None:
         """Unregister current unit from using the specified snap.
