@@ -161,10 +161,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             "global_scrape_timeout": cast(str, self.config.get("global_scrape_timeout")),
         }
         for name, global_config in global_configs.items():
-            pattern = r'^\d+[ywdhms]$'
+            pattern = r"^\d+[ywdhms]$"
             match = re.fullmatch(pattern, global_config)
             if not match:
-                self.unit.status = BlockedStatus(f"The {name} config requires format: '\\d+[ywdhms]'.")
+                self.unit.status = BlockedStatus(
+                    f"The {name} config requires format: '\\d+[ywdhms]'."
+                )
                 return
 
         # Create the config manager
@@ -378,7 +380,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_manager.config.build())
 
-        # TODO: Conditionally open ports based on the otelcol config file rather than opening all ports
         # Append port 9100 for Node Exporter # TODO: is this needed?
         if self.unit.is_leader():
             self.unit.set_ports(*[port.value for port in Port])
