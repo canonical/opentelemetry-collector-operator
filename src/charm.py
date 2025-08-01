@@ -23,7 +23,7 @@ import integrations
 from config_builder import Component, Port
 from config_manager import ConfigManager
 from constants import (
-    CONFIG_PATH,
+    CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
@@ -33,7 +33,7 @@ from constants import (
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from node_exporter import validate_node_exporter_collectors, NodeExporterCollectorError
-from singleton_snap import SingletonSnapManager
+from singleton_snap import SingletonSnapManager, SnapRegistrationFile
 from snap_fstab import SnapFstab
 from snap_management import (
     SnapInstallError,
@@ -146,7 +146,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
-        integrations.cleanup()
+        # NOTE: Only the leader aggregates alerts, to prevent duplication. COS Agent alerts
+        # come from peer data, so the leader can access all of them, regardless where multiple
+        # principals are located.
+        if self.unit.is_leader():
+            integrations.cleanup()
 
         # Integrate with TLS relations
         receive_ca_certs_hash = integrations.receive_ca_cert(
@@ -166,10 +170,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             "global_scrape_timeout": cast(str, self.config.get("global_scrape_timeout")),
         }
         for name, global_config in global_configs.items():
-            pattern = r'^\d+[ywdhms]$'
+            pattern = r"^\d+[ywdhms]$"
             match = re.fullmatch(pattern, global_config)
             if not match:
-                self.unit.status = BlockedStatus(f"The {name} config requires format: '\\d+[ywdhms]'.")
+                self.unit.status = BlockedStatus(
+                    f"The {name} config requires format: '\\d+[ywdhms]'."
+                )
                 return
 
         # Create the config manager
@@ -231,14 +237,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if cos_agent.metrics_jobs:
             config_manager.config.add_component(
                 Component.receiver,
-                name="prometheus/cos-agent",
+                name=f"prometheus/cos-agent-{self.unit.name}",
                 config={"config": {"scrape_configs": cos_agent.metrics_jobs}},
-                pipelines=["metrics"],
+                pipelines=[f"metrics/{self.unit.name}"],
             )
-        integrations._add_alerts(
-            alerts=cos_agent.metrics_alerts,
-            dest_path=self.charm_dir.absolute().joinpath(METRICS_RULES_DEST_PATH),
-        )
+        if self.unit.is_leader():
+            integrations._add_alerts(
+                alerts=cos_agent.metrics_alerts,
+                dest_path=self.charm_dir.absolute().joinpath(METRICS_RULES_DEST_PATH),
+            )
         ## COS Agent logs
         ### Connect logging snap endpoints
         for plug in cos_agent.snap_log_endpoints:
@@ -284,7 +291,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         "snap_name": fstab_entry.owner,
                     },
                 ),
-                pipelines=["logs"],
+                pipelines=[f"logs/{self.unit.name}"],
             )
         ### Add /var/log scrape job
         var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
@@ -306,10 +313,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ),
             pipelines=["logs"],
         )
-        integrations._add_alerts(
-            alerts=cos_agent.logs_alerts,
-            dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
-        )
+        if self.unit.is_leader():
+            integrations._add_alerts(
+                alerts=cos_agent.logs_alerts,
+                dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
+            )
 
         # Logs setup
         integrations.receive_loki_logs(self, tls=is_tls_ready())
@@ -378,13 +386,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_custom_processors(custom_processors)
 
         # Push the config and Push the config and deploy/update
-        config_path = LocalPath(CONFIG_PATH)
+        config_filename = f"{SnapRegistrationFile._normalize_name(self.unit.name)}.yaml"
+        config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_manager.config.build())
 
-        # TODO: Conditionally open ports based on the otelcol config file rather than opening all ports
         # Append port 9100 for Node Exporter # TODO: is this needed?
-        self.unit.set_ports(*[port.value for port in Port])
+        if self.unit.is_leader():
+            self.unit.set_ports(*[port.value for port in Port])
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
@@ -483,9 +492,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
                     # Remove the config file
                     if snap_name == "opentelemetry-collector":
-                        config_path = LocalPath(CONFIG_PATH)
-                        shutil.rmtree(config_path.parent)
-                        logger.info(f"Removed the opentelemetry-collector config file: {config_path}")
+                        shutil.rmtree(LocalPath(CONFIG_FOLDER))
+                        logger.info(
+                            f"Removed the opentelemetry-collector config folder: {CONFIG_FOLDER}"
+                        )
                     reconcile_required = False
 
                 # TODO: Luca if the snap is used by other units, we should probably `ensure`

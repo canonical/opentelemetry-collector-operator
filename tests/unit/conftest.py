@@ -58,9 +58,9 @@ def mock_lock_dir(tmp_path):
 
 
 @pytest.fixture(autouse=True)
-def config_path(tmp_path):
-    config_file = tmp_path / "config.yaml"
-    with patch("charm.CONFIG_PATH", config_file):
+def config_folder(tmp_path):
+    config_file = tmp_path / "config.d"
+    with patch("charm.CONFIG_FOLDER", config_file):
         yield config_file
 
 
