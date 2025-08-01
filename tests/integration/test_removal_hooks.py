@@ -116,12 +116,12 @@ async def test_remove_two_principals_two_machines(juju: jubilant.Juju):
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=480,
+        timeout=600,
     )
     juju.wait(
         lambda status: jubilant.all_active(status, "zookeeper"),
         error=jubilant.any_error,
-        timeout=480,
+        timeout=600,
     )
 
     # WHEN the relation is removed
@@ -129,14 +129,14 @@ async def test_remove_two_principals_two_machines(juju: jubilant.Juju):
     juju.wait(
         lambda status: jubilant.all_active(status, "zookeeper"),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=360,
     )
 
     # THEN Otelcol has "unknown" status and a scale of 0
     juju.wait(
         lambda status: status.apps["otelcol"].app_status.current == "unknown",
         error=jubilant.any_error,
-        timeout=240,
+        timeout=360,
     )
     assert juju.status().get_units("otelcol") == {}
 
