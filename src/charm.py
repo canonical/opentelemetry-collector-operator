@@ -484,10 +484,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
                     # Remove the config file
                     if snap_name == "opentelemetry-collector":
-                        config_path = LocalPath(CONFIG_PATH)
-                        shutil.rmtree(config_path.parent)
+                        shutil.rmtree(LocalPath(CONFIG_FOLDER))
                         logger.info(
-                            f"Removed the opentelemetry-collector config file: {config_path}"
+                            f"Removed the opentelemetry-collector config folder: {CONFIG_FOLDER}"
                         )
                     reconcile_required = False
 

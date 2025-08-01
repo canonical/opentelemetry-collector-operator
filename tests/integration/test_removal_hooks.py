@@ -6,7 +6,7 @@
 import pathlib
 
 import jubilant
-from constants import CONFIG_PATH
+from constants import CONFIG_FOLDER
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -55,7 +55,7 @@ async def test_remove_one_principal_one_machine(juju: jubilant.Juju):
 
     # AND there is no otelcol config file on disk
     otelcol_config = juju.ssh(
-        "zookeeper/0", command=f'test -e {CONFIG_PATH} || echo "does not exist"'
+        "zookeeper/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
     assert otelcol_config.strip() == "does not exist"
 
@@ -135,10 +135,10 @@ async def test_remove_two_principals_two_machines(juju: jubilant.Juju):
 
     # AND there are no otelcol config files on disk
     otelcol_config_0 = juju.ssh(
-        "zookeeper/0", command=f'test -e {CONFIG_PATH} || echo "does not exist"'
+        "zookeeper/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
     otelcol_config_1 = juju.ssh(
-        "zookeeper/1", command=f'test -e {CONFIG_PATH} || echo "does not exist"'
+        "zookeeper/1", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
     assert otelcol_config_0.strip() == "does not exist"
     assert otelcol_config_1.strip() == "does not exist"
