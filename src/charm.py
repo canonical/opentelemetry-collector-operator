@@ -143,10 +143,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
-        # FIXME: This cleanup likely breaks multiple co-located principals sending alerts.
-        # Instead of removing all the aggregated folders, only delete the alerts associated
-        # to the current unit
-        integrations.cleanup()
+        # NOTE: Only the leader aggregates alerts, to prevent duplication. COS Agent alerts
+        # come from peer data, so the leader can access all of them, regardless where multiple
+        # principals are located.
+        if self.unit.is_leader():
+            integrations.cleanup()
 
         # Integrate with TLS relations
         receive_ca_certs_hash = integrations.receive_ca_cert(
@@ -237,10 +238,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 config={"config": {"scrape_configs": cos_agent.metrics_jobs}},
                 pipelines=[f"metrics/{self.unit.name}"],
             )
-        integrations._add_alerts(
-            alerts=cos_agent.metrics_alerts,
-            dest_path=self.charm_dir.absolute().joinpath(METRICS_RULES_DEST_PATH),
-        )
+        if self.unit.is_leader():
+            integrations._add_alerts(
+                alerts=cos_agent.metrics_alerts,
+                dest_path=self.charm_dir.absolute().joinpath(METRICS_RULES_DEST_PATH),
+            )
         ## COS Agent logs
         ### Connect logging snap endpoints
         for plug in cos_agent.snap_log_endpoints:
@@ -308,10 +310,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ),
             pipelines=["logs"],
         )
-        integrations._add_alerts(
-            alerts=cos_agent.logs_alerts,
-            dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
-        )
+        if self.unit.is_leader():
+            integrations._add_alerts(
+                alerts=cos_agent.logs_alerts,
+                dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
+            )
 
         # Logs setup
         integrations.receive_loki_logs(self, tls=is_tls_ready())
@@ -483,7 +486,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     if snap_name == "opentelemetry-collector":
                         config_path = LocalPath(CONFIG_PATH)
                         shutil.rmtree(config_path.parent)
-                        logger.info(f"Removed the opentelemetry-collector config file: {config_path}")
+                        logger.info(
+                            f"Removed the opentelemetry-collector config file: {config_path}"
+                        )
                     reconcile_required = False
 
                 # TODO: Luca if the snap is used by other units, we should probably `ensure`
