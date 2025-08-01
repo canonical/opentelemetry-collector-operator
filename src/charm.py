@@ -20,7 +20,7 @@ from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 
 import integrations
-from config_builder import Component, Port
+from config_builder import Component
 from config_manager import ConfigManager
 from constants import (
     CONFIG_FOLDER,
