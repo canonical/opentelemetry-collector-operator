@@ -20,7 +20,7 @@ from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 
 import integrations
-from config_builder import Component, Port
+from config_builder import Component
 from config_manager import ConfigManager
 from constants import (
     CONFIG_FOLDER,
@@ -392,8 +392,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         config_path.write_text(config_manager.config.build())
 
         # Append port 9100 for Node Exporter # TODO: is this needed?
-        if self.unit.is_leader():
-            self.unit.set_ports(*[port.value for port in Port])
+        # if self.unit.is_leader():
+        #     self.unit.set_ports(*[port.value for port in Port])
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
