@@ -30,6 +30,11 @@ async def is_pattern_not_in_logs(juju: jubilant.Juju, pattern: str):
         raise Exception(f"Pattern {pattern} found in the otelcol logs")
     return True
 
+async def is_node_exporter_running_with_collectors(juju: jubilant.Juju, pattern: str):
+    output_ps = juju.ssh("otelcol/0", command="ps ax | grep node-exporter | egrep -v 'grep|snapfuse'")
+    if not re.search(pattern, output_ps):
+        raise Exception(f"Pattern {pattern} not found in the node-exporter process output")
+    return True
 
 async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
@@ -71,4 +76,9 @@ async def test_path_exclude(juju: jubilant.Juju):
 async def test_node_metrics(juju: jubilant.Juju):
     node_metric = r"node_scrape_collector_success"
     is_included = await is_pattern_in_logs(juju, node_metric)
+    assert is_included
+
+async def test_node_exporter_collectors(juju: jubilant.Juju):
+    node_exporter_collectors = r"collector.drm"
+    is_included = await is_node_exporter_running_with_collectors(juju, node_exporter_collectors)
     assert is_included

@@ -1,6 +1,6 @@
 """Charm constants, for better testability."""
 
-from typing import Final
+from typing import Final, Set
 
 RECV_CA_CERT_FOLDER_PATH: Final[str] = "/usr/local/share/ca-certificates/juju_receive-ca-cert"
 SERVER_CERT_PATH: Final[str] = (
@@ -15,3 +15,7 @@ LOKI_RULES_SRC_PATH: Final[str] = "src/loki_alert_rules"
 LOKI_RULES_DEST_PATH: Final[str] = "loki_alert_rules"
 DASHBOARDS_SRC_PATH: Final[str] = "src/grafana_dashboards"
 DASHBOARDS_DEST_PATH: Final[str] = "grafana_dashboards"
+
+# Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
+NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
+NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {"drm", "logind", "systemd", "mountstats", "processes", "sysctl"}

@@ -9,7 +9,7 @@ import re
 import socket
 import subprocess
 import shutil
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
 from charmlibs.pathops import LocalPath
@@ -27,6 +27,8 @@ from constants import (
     DASHBOARDS_DEST_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
+    NODE_EXPORTER_DISABLED_COLLECTORS,
+    NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
@@ -40,6 +42,7 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -131,7 +134,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
         if hook() == "install":  # FIXME: install is not enough, we also need upgrade
-            self._install()
+            self._install_snaps()
 
         reconcile_required = True
         if hook() in ["stop", "remove"]:
@@ -429,13 +432,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
                 return
 
+        self._configure_node_exporter_collectors()
         self.unit.status = ActiveStatus()
 
         # Mandatory relation pairs
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
-    def _install(self) -> None:
+    def _install_snaps(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
 
         for snap_name in SnapMap.snaps():
@@ -496,6 +500,21 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 reconcile_required = False
 
         return reconcile_required
+
+    def _configure_node_exporter_collectors(self):
+        """Configure the node-exporter snap collectors."""
+        configs = {
+            "collectors": " ".join(list(NODE_EXPORTER_ENABLED_COLLECTORS)),
+            "no-collectors": " ".join(list(NODE_EXPORTER_DISABLED_COLLECTORS)),
+        }
+        ne_snap = self.snap("node-exporter")
+        self._set_snap_configs_with_retry(ne_snap, configs)
+
+    # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
+    def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
+        snap.set(configs)  # type: ignore
+
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
