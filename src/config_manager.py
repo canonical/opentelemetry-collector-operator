@@ -210,49 +210,6 @@ class ConfigManager:
             pipelines=["logs"],
         )
 
-    def add_profile_ingestion(self):
-        """Configure ingesting profiles."""
-        self.config.add_component(
-            Component.receiver,
-            "otlp",
-            {
-                "protocols": {
-                    "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
-                    "grpc": {"endpoint": f"0.0.0.0:{Port.otlp_grpc.value}"},
-                },
-            },
-            pipelines=["profiles"],
-        )
-
-    def add_profile_forwarding(self, endpoints: List[str], tls:bool=False):
-        """Configure forwarding profiles to a profiling backend (Pyroscope)."""
-        # if we don't do this, and there is no relation on receive-profiles, otelcol will complain
-        # that there are no receivers configured for this exporter.
-        self.add_profile_ingestion()
-
-        for idx, endpoint in enumerate(endpoints):
-            self.config.add_component(
-                Component.exporter,
-                # first component of this ID is the exporter type
-                f"otlp/profiling/{idx}",
-                {
-                    "endpoint": endpoint,
-                    # we likely need `insecure` as well as `insecure_skip_verify` because the endpoint
-                    # we're receiving from pyroscope is a grpc one and has no scheme prefix, and probably
-                    # the client defaults to https and fails to handshake unless we set `insecure=False`.
-                    # FIXME: anyway for now pyroscope does not support TLS ingestion,
-                    #  so we hardcode `insecure=True`.
-                    #  once TLS support is implemented, we can uncomment the line below.
-                    #  cfr: https://github.com/canonical/pyroscope-operators/pull/117
-                    "tls": {
-                        "insecure": True,
-                        # "insecure": not tls,
-                        "insecure_skip_verify": self._insecure_skip_verify
-                        },
-                },
-                pipelines=["profiles"],
-            )
-
     def add_self_scrape(self, identifier: str, labels: Dict) -> None:
         """Configure the collector to scrape its own metrics.
 

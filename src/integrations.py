@@ -26,10 +26,6 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
-from charms.pyroscope_coordinator_k8s.v0.profiling import (
-    ProfilingEndpointRequirer,
-    ProfilingEndpointProvider,
-)
 from charms.tempo_coordinator_k8s.v0.tracing import (
     ReceiverProtocol,
     TracingEndpointProvider,
@@ -242,32 +238,6 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
             )
         )
     return requested_tracing_protocols
-
-def receive_profiles(charm: CharmBase, tls:bool) -> None:
-    """Integrate with other charms over the receive-profiles relation endpoint."""
-    if not charm.unit.is_leader():
-        # profile ingestion goes per app
-        return
-    fqdn = socket.getfqdn()
-    http_endpoint = f"http{'s' if tls else ''}://{fqdn}:{Port.otlp_http.value}"
-    grpc_endpoint = f"{fqdn}:{Port.otlp_grpc.value}"
-    # this charm lib exposes a holistic API, so we don't need to bind the instance
-    ProfilingEndpointProvider(
-        charm.model.relations['receive-profiles'],
-        app=charm.app
-        ).publish_endpoint(
-        grpc_endpoint=grpc_endpoint,
-        http_endpoint=http_endpoint
-    )
-
-def send_profiles(charm: CharmBase) -> List[str]:
-    """Integrate with other charms via the send-profiles relation endpoint.
-
-    Returns:
-        All profiling endpoints that we are receiving over `profiling` integrations.
-    """
-    profiling_requirer = ProfilingEndpointRequirer(charm.model.relations['send-profiles'])
-    return [ep.otlp_grpc for ep in profiling_requirer.get_endpoints()]
 
 
 def send_traces(charm: CharmBase) -> Optional[str]:
