@@ -42,7 +42,8 @@ async def test_unit_is_reachable_from_outside(juju: jubilant.Juju):
     # GIVEN a subordinate otelcol unit
     unit_address = juju.status().get_units("otelcol")["otelcol/0"].public_address
     # THEN the workload is reachable from the unit IP address
-    assert "Server available" in sh.curl(f"http://{unit_address}:{Port.health.value}")
+    health = sh.curl(f"http://{unit_address}:{Port.health.value}")  # type: ignore
+    assert "Server available" in health
 
 
 async def test_remove_one_principal_one_machine(juju: jubilant.Juju):
