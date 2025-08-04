@@ -20,7 +20,7 @@ from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 
 import integrations
-from config_builder import Component, Port
+from config_builder import Component
 from config_manager import ConfigManager
 from constants import (
     CONFIG_FOLDER,
@@ -129,7 +129,11 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
 
 
 class OpenTelemetryCollectorCharm(ops.CharmBase):
-    """Charm the service."""
+    """Charm the service.
+
+    In machine charms we do not need to run self.unit.set_ports because the units are reachable via
+    the machine IP address.
+    """
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
@@ -390,10 +394,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_manager.config.build())
-
-        # Append port 9100 for Node Exporter # TODO: is this needed?
-        if self.unit.is_leader():
-            self.unit.set_ports(*[port.value for port in Port])
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart

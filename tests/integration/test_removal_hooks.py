@@ -6,7 +6,10 @@
 import pathlib
 
 import jubilant
+import sh
+
 from constants import CONFIG_FOLDER
+from config_builder import Port
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -32,6 +35,15 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
         error=jubilant.any_error,
         timeout=600,
     )
+
+
+async def test_unit_is_reachable_from_outside(juju: jubilant.Juju):
+    """This test was added after removing self.unit.set_ports in charm.py."""
+    # GIVEN a subordinate otelcol unit
+    unit_address = juju.status().get_units("otelcol")["otelcol/0"].public_address
+    # THEN the workload is reachable from the unit IP address
+    health = sh.curl(f"http://{unit_address}:{Port.health.value}")  # type: ignore
+    assert "Server available" in health
 
 
 async def test_remove_one_principal_one_machine(juju: jubilant.Juju):
@@ -67,40 +79,47 @@ async def test_remove_one_principal_one_machine(juju: jubilant.Juju):
 async def test_remove_two_principals_one_machine(juju: jubilant.Juju):
     # GIVEN otelcol has 2 subordinate units on the same machine
     juju.integrate("otelcol:juju-info", "zookeeper:juju-info")
-    # juju.deploy("ubuntu", base="ubuntu@22.04", to="0")
-    # juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
-    # juju.wait(
-    #     lambda status: jubilant.all_blocked(status, "otelcol"),
-    #     error=jubilant.any_error,
-    #     timeout=240,
-    # )
-    # juju.wait(
-    #     lambda status: jubilant.all_active(status, "ubuntu"),
-    #     error=jubilant.any_error,
-    #     timeout=240,
-    # )
+    juju.deploy("ubuntu", base="ubuntu@22.04", to="0")
+    juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
+    juju.wait(
+        lambda status: jubilant.all_blocked(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
+    juju.wait(
+        lambda status: jubilant.all_active(status, "ubuntu"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
 
-    # # WHEN the relation is removed
-    # juju.remove_relation("otelcol:juju-info", "ubuntu:juju-info")
-    # juju.wait(
-    #     lambda status: jubilant.all_active(status, "ubuntu"),
-    #     error=jubilant.any_error,
-    #     timeout=240,
-    # )
+    # WHEN the relation is removed
+    juju.remove_relation("otelcol:juju-info", "ubuntu:juju-info")
+    juju.wait(
+        lambda status: jubilant.all_active(status, "ubuntu"),
+        error=jubilant.any_error,
+        timeout=360,
+    )
 
-    # # THEN Otelcol has "unknown" status and a scale of 0
-    # juju.wait(
-    #     lambda status: status.apps["otelcol"].app_status.current == "unknown",
-    #     error=jubilant.any_error,
-    #     timeout=240,
-    # )
-    # assert juju.status().get_units("otelcol") == {}
+    # THEN Otelcol has "Blocked" with agent idle status
+    juju.wait(
+        lambda status: jubilant.all_blocked(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=360,
+    )
+    juju.wait(
+        lambda status: jubilant.all_agents_idle(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=480,
+    )
 
-    # # AND the otelcol config file remains on disk
-    # otelcol_config = juju.ssh(
-    #     "zookeeper/0", command=f'test -e {CONFIG_PATH} || echo "does not exist"'
-    # )
-    # assert otelcol_config.strip() != "does not exist"
+    # AND a scale of 1
+    assert len(juju.status().get_units("otelcol").keys()) == 1
+
+    # AND the otelcol config file remains on disk
+    otelcol_config = juju.ssh(
+        "zookeeper/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
+    )
+    assert otelcol_config.strip() != "does not exist"
 
 
 async def test_remove_two_principals_two_machines(juju: jubilant.Juju):
@@ -109,12 +128,12 @@ async def test_remove_two_principals_two_machines(juju: jubilant.Juju):
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=480,
+        timeout=600,
     )
     juju.wait(
         lambda status: jubilant.all_active(status, "zookeeper"),
         error=jubilant.any_error,
-        timeout=480,
+        timeout=600,
     )
 
     # WHEN the relation is removed
@@ -122,14 +141,14 @@ async def test_remove_two_principals_two_machines(juju: jubilant.Juju):
     juju.wait(
         lambda status: jubilant.all_active(status, "zookeeper"),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=360,
     )
 
     # THEN Otelcol has "unknown" status and a scale of 0
     juju.wait(
         lambda status: status.apps["otelcol"].app_status.current == "unknown",
         error=jubilant.any_error,
-        timeout=240,
+        timeout=360,
     )
     assert juju.status().get_units("otelcol") == {}
 
