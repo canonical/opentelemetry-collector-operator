@@ -6,7 +6,10 @@
 import pathlib
 
 import jubilant
+import sh
+
 from constants import CONFIG_FOLDER
+from config_builder import Port
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -32,6 +35,14 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
         error=jubilant.any_error,
         timeout=600,
     )
+
+
+async def test_unit_is_reachable_from_outside(juju: jubilant.Juju):
+    """This test was added after removing self.unit.set_ports in charm.py."""
+    # GIVEN a subordinate otelcol unit
+    unit_address = juju.status().get_units("otelcol")["otelcol/0"].public_address
+    # THEN the workload is reachable from the unit IP address
+    assert "Server available" in sh.curl(f"http://{unit_address}:{Port.health.value}")
 
 
 async def test_remove_one_principal_one_machine(juju: jubilant.Juju):
