@@ -319,6 +319,20 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
             )
 
+        # Profiling setup
+        feature_gates = None
+        if self._has_incoming_profiles:
+            config_manager.add_profile_ingestion()
+            integrations.receive_profiles(self, tls=is_tls_ready())
+        if profiling_endpoints := integrations.send_profiles(self):
+            config_manager.add_profile_forwarding(
+                profiling_endpoints,
+                tls=is_tls_ready()
+            )
+        if self._has_incoming_profiles or integrations.send_profiles(self):
+            feature_gates = "service.profilesSupport"
+            # FIXME: give this to the snap https://github.com/canonical/opentelemetry-collector-snap/issues/34
+
         # Logs setup
         integrations.receive_loki_logs(self, tls=is_tls_ready())
         loki_endpoints = integrations.send_loki_logs(self)
@@ -531,6 +545,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_incoming_traces_relation(self) -> bool:
         return any(self.model.relations.get("receive-traces", []))
+
+    @property
+    def _has_incoming_profiles(self) -> bool:
+        return any(self.model.relations.get("receive-profiles", []))
 
     @property
     def _has_outgoing_metrics_relation(self) -> bool:
