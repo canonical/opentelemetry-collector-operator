@@ -8,7 +8,6 @@ from charms.tls_certificates_interface.v4.tls_certificates import (
     TLSCertificatesRequiresV4,
     Certificate,
 )
-from src.constants import SERVICE_NAME
 from tests.unit.helpers import get_otelcol_file
 
 
@@ -79,7 +78,7 @@ def test_receive_profiles_integration(sock_mock, ctx, insecure_skip_verify, unit
 def test_profiling_integration_tls(ctx, unit_name, config_folder, insecure_skip_verify, tls_mock):
     """Scenario: a profiling relation joined and sent us a grpc endpoint."""
     # GIVEN otelcol deployed with self-signed-certs
-    container = Container(name="otelcol", can_connect=True, execs=execs)
+    container = Container(name="otelcol", can_connect=True)
 
     ssc = Relation(
         endpoint="receive-server-cert",

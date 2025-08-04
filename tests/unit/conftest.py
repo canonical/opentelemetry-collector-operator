@@ -3,7 +3,7 @@ from shutil import copytree
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ops.testing import Context, Exec
+from ops.testing import Context
 
 from charm import OpenTelemetryCollectorCharm
 
