@@ -407,6 +407,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if current_hash != old_hash:
             for snap_name in SnapMap.snaps():
                 self.snap(snap_name).restart()
+        hash_file.write_text(current_hash)
 
         # Set status
         if self._has_server_cert_relation and not is_tls_ready():
