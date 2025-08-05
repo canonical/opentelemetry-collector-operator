@@ -13,7 +13,7 @@ def encode_as_dashboard(dct: dict):
     return LZMABase64.compress(json.dumps(dct))
 
 
-def test_dashboard_propagation(ctx, execs):
+def test_dashboard_propagation(ctx):
     """Scenario: Dashboards are forwarded when a dashboard provider is related."""
     # GIVEN multiple remote charms with dashboards
     content_in = {
