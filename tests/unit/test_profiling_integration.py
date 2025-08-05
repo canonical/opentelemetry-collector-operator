@@ -96,7 +96,7 @@ def test_profiling_integration_tls(ctx, unit_name, config_folder, insecure_skip_
     )
     state_in = State(relations=[profiling, ssc], containers=[container],
                      config={"tls_insecure_skip_verify": insecure_skip_verify})
-    state_out = ctx.run(ctx.on.update_status(), state=state_in)
+    ctx.run(ctx.on.update_status(), state=state_in)
 
     # THEN  the profiling pipeline contains an exporter to the expected url
     cfg = get_otelcol_file(unit_name, config_folder)
