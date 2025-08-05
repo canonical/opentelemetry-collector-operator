@@ -331,6 +331,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             )
         if self._has_incoming_profiles or integrations.send_profiles(self):
             feature_gates = "service.profilesSupport"
+            logger.info(f"enabling feature gates: {feature_gates}")
             # FIXME: give this to the snap https://github.com/canonical/opentelemetry-collector-snap/issues/34
 
         # Logs setup
@@ -428,6 +429,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self.snap("opentelemetry-collector").stop()
             self.unit.status = WaitingStatus("CSR sent; otelcol down while waiting for a cert")
             return
+
+        if feature_gates:
+            self.snap("opentelemetry-collector").set({"feature-gates": feature_gates})
+
         # Start the otelcol snap in case it was stopped while waiting for certificates
         self.snap("opentelemetry-collector").start()
 
