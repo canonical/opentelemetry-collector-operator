@@ -10,7 +10,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 # FIXME: Reduce retry count once fixed
 # https://github.com/canonical/opentelemetry-collector-operator/issues/32
 
-@retry(stop=stop_after_attempt(10), wait=wait_fixed(5))
+@retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 async def is_pattern_in_snap_logs(juju: jubilant.Juju, grep_filters: list):
     cmd = "sudo snap logs opentelemetry-collector -n=all" + " | " + " | ".join([f"grep {p}" for p in grep_filters])
     otelcol_logs = juju.ssh("otelcol/0", command=cmd)
