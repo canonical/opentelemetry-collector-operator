@@ -65,8 +65,13 @@ async def charm(ops_test: OpsTest) -> str:
     original_text = '"level": "WARN"'
     modified_text = '"level": "INFO"'
     change_text_in_file(CONFIG_BUILDER_PATH, original_text, modified_text)
-    if charm_file := os.environ.get("CHARM_PATH"):
-        return charm_file
+
+    # FIXME: Avoid passing the charm file path as an environment variable,
+    #        so every time a test is executed a new charm is packed with the modification
+    #        in the internal telemetry level. This comment should be removed when then itest
+    #        are improved to not use internal telemetry to verify if otelcol is receiving logs and metrics
+    # if charm_file := os.environ.get("CHARM_PATH"):
+    #     return charm_file
 
     charm = await ops_test.build_charm(".")
     charm = str(charm).replace("24.04", "22.04")
