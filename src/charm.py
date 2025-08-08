@@ -299,7 +299,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             component=Component.receiver,
             name="filelog/var-log",
             config=_filelog_receiver_config(
-                include=["/var/log/**/*.log"],
+                include=["/var/log/**/*log"],
                 exclude=var_log_exclusions,
                 attributes={
                     "job": "opentelemetry-collector-var-log",
@@ -313,24 +313,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ),
             pipelines=["logs"],
         )
-        config_manager.config.add_component(
-            component=Component.receiver,
-            name="filelog/syslog",
-            config=_filelog_receiver_config(
-                include=["/var/log/syslog"],
-                exclude=var_log_exclusions,
-                attributes={
-                    "job": "opentelemetry-collector-syslog",
-                    "juju_application": topology.application,
-                    "juju_unit": topology.unit,  # type: ignore
-                    "juju_charm": topology.charm_name,
-                    "juju_model": topology.model,
-                    "juju_model_uuid": topology.model_uuid,
-                    # NOTE: No snap_name attribute is necessary as these logs are not from a snap
-                },
-            ),
-            pipelines=["logs"],
-        )
+
         if self.unit.is_leader():
             integrations._add_alerts(
                 alerts=cos_agent.logs_alerts,
