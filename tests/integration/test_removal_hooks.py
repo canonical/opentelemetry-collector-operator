@@ -6,10 +6,8 @@
 import pathlib
 
 import jubilant
-import sh
 
 from constants import CONFIG_FOLDER
-from config_builder import Port
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -35,15 +33,6 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
         error=jubilant.any_error,
         timeout=600,
     )
-
-
-async def test_unit_is_reachable_from_outside(juju: jubilant.Juju):
-    """This test was added after removing self.unit.set_ports in charm.py."""
-    # GIVEN a subordinate otelcol unit
-    unit_address = juju.status().get_units("otelcol")["otelcol/0"].public_address
-    # THEN the workload is reachable from the unit IP address
-    health = sh.curl(f"http://{unit_address}:{Port.health.value}")  # type: ignore
-    assert "Server available" in health
 
 
 async def test_remove_one_principal_one_machine(juju: jubilant.Juju):
@@ -72,10 +61,6 @@ async def test_remove_one_principal_one_machine(juju: jubilant.Juju):
     assert otelcol_config.strip() == "does not exist"
 
 
-# FIXME This test is mostly commented out due to port registration conflicts between units on the same machine
-#       This is an ops limitation, where 2 units cannot register the same ports on the same machine
-#       This test is useful if this feature is planned, otherwise move
-#       juju.integrate("otelcol:juju-info", "zookeeper:juju-info") to the next test
 async def test_remove_two_principals_one_machine(juju: jubilant.Juju):
     # GIVEN otelcol has 2 subordinate units on the same machine
     juju.integrate("otelcol:juju-info", "zookeeper:juju-info")

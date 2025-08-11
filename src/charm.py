@@ -6,9 +6,9 @@
 import logging
 import os
 import re
+import shutil
 import socket
 import subprocess
-import shutil
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -18,6 +18,7 @@ from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 import integrations
 from config_builder import Component
@@ -42,7 +43,6 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -129,11 +129,7 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
 
 
 class OpenTelemetryCollectorCharm(ops.CharmBase):
-    """Charm the service.
-
-    In machine charms we do not need to run self.unit.set_ports because the units are reachable via
-    the machine IP address.
-    """
+    """Charm the service."""
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
@@ -514,7 +510,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
         snap.set(configs)  # type: ignore
-
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
