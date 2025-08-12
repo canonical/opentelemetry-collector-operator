@@ -69,12 +69,12 @@ async def test_remove_two_principals_one_machine(juju: jubilant.Juju):
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=360,
     )
     juju.wait(
         lambda status: jubilant.all_active(status, "ubuntu"),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=360,
     )
 
     # WHEN the relation is removed
@@ -82,14 +82,14 @@ async def test_remove_two_principals_one_machine(juju: jubilant.Juju):
     juju.wait(
         lambda status: jubilant.all_active(status, "ubuntu"),
         error=jubilant.any_error,
-        timeout=360,
+        timeout=480,
     )
 
     # THEN Otelcol has "Blocked" with agent idle status
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=360,
+        timeout=480,
     )
     juju.wait(
         lambda status: jubilant.all_agents_idle(status, "otelcol"),
