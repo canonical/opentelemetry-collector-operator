@@ -232,6 +232,11 @@ config:
         to this range by OpenTelemetry Collector.
       type: float
       default: 100.0
+    extra_alert_labels:
+      description: >
+        Comma separated key-value pairs of labels to be added to all alerts.
+        This could be useful for differentiating between staging and production environments.
+      type: string
     global_scrape_timeout:
       description: >
         How long to wait before timing out a scrape from a target.
