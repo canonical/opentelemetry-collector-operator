@@ -184,6 +184,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
             insecure_skip_verify=cast(bool, self.config.get("tls_insecure_skip_verify")),
+            queue_size=cast(int, self.config.get("queue_size")),
+            max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
         )
 
         # COS Agent setup
