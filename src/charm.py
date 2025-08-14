@@ -331,7 +331,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             )
         if self._has_incoming_profiles or integrations.send_profiles(self):
             feature_gates = "service.profilesSupport"
-            logger.info(f"enabling feature gates: {feature_gates}")
             # FIXME: give this to the snap https://github.com/canonical/opentelemetry-collector-snap/issues/34
 
         # Logs setup

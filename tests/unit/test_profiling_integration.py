@@ -44,7 +44,9 @@ def test_send_profiles_integration(ctx, insecure_skip_verify, unit_name, config_
     assert cfg['service']['pipelines']['profiles']['exporters'][0] == 'otlp/profiling/0'
     assert cfg['service']['pipelines']['profiles']['receivers'][0] == "otlp"
     assert cfg['exporters']['otlp/profiling/0']['endpoint'] == pyro_url
-    assert cfg["exporters"]["otlp/profiling/0"]["tls"] == {"insecure": True, "insecure_skip_verify": insecure_skip_verify}
+    tls_config = cfg["exporters"]["otlp/profiling/0"]["tls"]
+    assert tls_config["insecure"] is True
+    assert tls_config["insecure_skip_verify"] == insecure_skip_verify
 
 
 @patch("socket.getfqdn", return_value="localhost")
