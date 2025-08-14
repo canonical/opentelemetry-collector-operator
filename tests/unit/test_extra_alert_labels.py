@@ -64,9 +64,9 @@ def test_extra_alerts_config(ctx):
 
     for group in alert_rules["groups"]:
         for rule in group["rules"]:
+            assert rule["labels"]["environment"] == "PRODUCTION"
+            assert rule["labels"]["zone"] == "Mars"
             if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
-                assert rule["labels"]["environment"] == "PRODUCTION"
-                assert rule["labels"]["zone"] == "Mars"
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
