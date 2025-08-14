@@ -127,6 +127,9 @@ def send_loki_logs(charm: CharmBase) -> List[Dict]:
         relation_name="send-loki-logs",
         alert_rules_path=LOKI_RULES_DEST_PATH,
         forward_alert_rules=forward_alert_rules,
+        extra_alert_labels=key_value_pair_string_to_dict(
+            cast(str, charm.model.config.get("extra_alert_labels", ""))
+        ),
     )
     charm.__setattr__("loki_consumer", loki_consumer)
     # TODO: Luca: probably don't need this anymore
