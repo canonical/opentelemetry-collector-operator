@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, cast, get_args
 
 import yaml
-import copy
 from charmlibs.pathops import PathProtocol
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
