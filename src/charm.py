@@ -11,6 +11,7 @@ import socket
 import subprocess
 from typing import Any, Dict, List, Mapping, Optional, cast
 
+from cosl.reconciler import observe_all, ALL_EVENTS
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
@@ -133,15 +134,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "install":  # FIXME: install is not enough, we also need upgrade
-            self._install_snaps()
 
-        reconcile_required = True
-        if hook() in ["stop", "remove"]:
-            reconcile_required = self._stop()
-
-        if reconcile_required:
-            self._reconcile()
+        observe_all(self, (ops.InstallEvent, ), self._install_snaps)
+        observe_all(self, (self.on.stop, self.on.remove), self._stop)
+        observe_all(self, ALL_EVENTS.difference({self.on.stop, self.on.remove}), self._reconcile)
 
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
@@ -466,7 +462,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             #     f.flush()
             pass
 
-    def _stop(self) -> bool:
+    def _stop(self):
         """Coordinate snap and config file removal.
 
         If the snap is solely used by this unit, then skip reconciling the charm since it depends
@@ -498,7 +494,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             else:
                 reconcile_required = False
 
-        return reconcile_required
+        if reconcile_required:
+            self._reconcile()
 
     def _configure_node_exporter_collectors(self):
         """Configure the node-exporter snap collectors."""
