@@ -37,7 +37,7 @@ zinc_alerts = {
 def test_extra_alerts_config(ctx):
     # GIVEN a new key-value pair of extra alerts labels, for instance:
     # juju config otelcol extra_alerts_labels="environment: PRODUCTION, zone=Mars"
-    config1: ConfigDict = {
+    config: ConfigDict = {
         "extra_alert_labels": "environment: PRODUCTION, zone=Mars",
     }
 
@@ -52,7 +52,7 @@ def test_extra_alerts_config(ctx):
             metrics_endpoint_relation,
             remote_write_relation,
         ],
-        config=config1,  # type: ignore
+        config=config,  # type: ignore
     )
     out_0 = ctx.run(ctx.on.relation_changed(relation=metrics_endpoint_relation), state)
     out_1 = ctx.run(
@@ -64,34 +64,31 @@ def test_extra_alerts_config(ctx):
 
     for group in alert_rules["groups"]:
         for rule in group["rules"]:
-            if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
-                assert rule["labels"]["environment"] == "PRODUCTION"
-                assert rule["labels"]["zone"] == "Mars"
+            assert rule["labels"]["environment"] == "PRODUCTION"
+            assert rule["labels"]["zone"] == "Mars"
+            if "opentelemetry_collector_alertgroup_alerts" in group["name"]:
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
                 assert rule["labels"]["juju_model_uuid"] == "74a5690b-89c9-44dd-984b-f69f26a6b751"
 
     # GIVEN the config option for extra alert labels is unset
-    config2: ConfigDict = {"extra_alert_labels": ""}
-
-    # THEN the only labels present in the alert are the JujuTopology labels
     next_state = State(
         leader=True,
         relations=out_1.relations,
         containers=out_1.containers,
-        config=config2,
     )
     out_2 = ctx.run(ctx.on.config_changed(), next_state)
     alert_rules_mod = json.loads(
         out_2.get_relation(remote_write_relation.id).local_app_data["alert_rules"]
     )
 
+    # THEN the only labels present in the alert are the JujuTopology labels
     for group in alert_rules_mod["groups"]:
         for rule in group["rules"]:
-            if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
-                assert "environment" not in rule["labels"].keys()
-                assert "zone" not in rule["labels"].keys()
+            assert "environment" not in rule["labels"].keys()
+            assert "zone" not in rule["labels"].keys()
+            if "opentelemetry_collector_alertgroup_alerts" in group["name"]:
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
@@ -101,7 +98,7 @@ def test_extra_alerts_config(ctx):
 def test_extra_loki_alerts_config(ctx):
     # GIVEN a new key-value pair of extra alerts labels, for instance:
     # juju config otelcol extra_alerts_labels="environment: PRODUCTION, zone=Mars"
-    config1: ConfigDict = {
+    config: ConfigDict = {
         "extra_alert_labels": "environment: PRODUCTION, zone=Mars",
     }
 
@@ -116,7 +113,7 @@ def test_extra_loki_alerts_config(ctx):
             receive_loki_logs_relation,
             send_loki_logs_relation,
         ],
-        config=config1,  # type: ignore
+        config=config,  # type: ignore
     )
     out_0 = ctx.run(ctx.on.relation_changed(relation=receive_loki_logs_relation), state)
     out_1 = ctx.run(
@@ -130,32 +127,29 @@ def test_extra_loki_alerts_config(ctx):
         for rule in group["rules"]:
             assert rule["labels"]["environment"] == "PRODUCTION"
             assert rule["labels"]["zone"] == "Mars"
-            if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
+            if "opentelemetry_collector_alertgroup_alerts" in group["name"]:
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
                 assert rule["labels"]["juju_model_uuid"] == "74a5690b-89c9-44dd-984b-f69f26a6b751"
 
     # GIVEN the config option for extra alert labels is unset
-    config2: ConfigDict = {"extra_alert_labels": ""}
-
-    # THEN the only labels present in the alert are the JujuTopology labels
     next_state = State(
         leader=True,
         relations=out_1.relations,
         containers=out_1.containers,
-        config=config2,
     )
     out_2 = ctx.run(ctx.on.config_changed(), next_state)
     alert_rules_mod = json.loads(
         out_2.get_relation(send_loki_logs_relation.id).local_app_data["alert_rules"]
     )
 
+    # THEN the only labels present in the alert are the JujuTopology labels
     for group in alert_rules_mod["groups"]:
         for rule in group["rules"]:
+            assert "environment" not in rule["labels"].keys()
+            assert "zone" not in rule["labels"].keys()
             if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
-                assert "environment" not in rule["labels"].keys()
-                assert "zone" not in rule["labels"].keys()
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
