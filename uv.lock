@@ -1,6 +1,6 @@
 version = 1
-revision = 3
-requires-python = "==3.10.*"
+revision = 2
+requires-python = ">=3.10.0, <3.11"
 
 [[package]]
 name = "annotated-types"
@@ -207,7 +207,7 @@ wheels = [
 [[package]]
 name = "cosl"
 version = "1.1.0"
-source = { git = "https://github.com/canonical/cos-lib?rev=feat%2Freconciler#384d09ab3640c0b44aaf2af9a10dd31b6fba0ede" }
+source = { git = "https://github.com/canonical/cos-lib?rev=feat%2Freconciler#f7fcc74e25ceaaf4b769c4c8acfb5d6bb132b663" }
 dependencies = [
     { name = "ops" },
     { name = "pydantic" },

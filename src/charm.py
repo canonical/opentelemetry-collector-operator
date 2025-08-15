@@ -11,7 +11,7 @@ import socket
 import subprocess
 from typing import Any, Dict, List, Mapping, Optional, cast
 
-from cosl.reconciler import observe_all, ALL_EVENTS
+from cosl.reconciler import observe_events, all_events
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
@@ -135,9 +135,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
 
-        observe_all(self, (ops.InstallEvent, ), self._install_snaps)
-        observe_all(self, (ops.StopEvent, ops.RemoveEvent), self._stop)
-        observe_all(self, ALL_EVENTS.difference({self.on.stop, self.on.remove}), self._reconcile)
+        observe_events(self, (ops.InstallEvent, ), self._install_snaps)
+        observe_events(self, (ops.StopEvent, ops.RemoveEvent), self._stop)
+        observe_events(self, all_events.difference({self.on.stop, self.on.remove}), self._reconcile)
 
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
