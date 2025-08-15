@@ -197,6 +197,17 @@ config:
         even if there is no integration currently requesting it.
       type: boolean
       default: false
+    max_elapsed_time_min:
+      type: int
+      default: 5
+      description: |
+        Maximum time in minutes to wait for the storage backend. After this time, data loss will occur.
+    queue_size:
+      type: int
+      default: 1000
+      description: |
+        Maximum number of incoming batches of metrics, logs, traces the queue can accept.
+        Ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/exporterhelper/README.md#configuration
     tracing_sampling_rate_charm:
       description: >
         This property defines the percentage of charm traces that are sent to the tracing backend.
@@ -221,6 +232,11 @@ config:
         to this range by OpenTelemetry Collector.
       type: float
       default: 100.0
+    extra_alert_labels:
+      description: >
+        Comma separated key-value pairs of labels to be added to all alerts.
+        This could be useful for differentiating between staging and production environments.
+      type: string
     global_scrape_timeout:
       description: >
         How long to wait before timing out a scrape from a target.

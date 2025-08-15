@@ -6,6 +6,82 @@
 from config_manager import ConfigManager
 
 
+def test_add_log_forwarding():
+    # GIVEN an empty config
+    config_manager = ConfigManager("", "", insecure_skip_verify=True)
+
+    # WHEN a loki exporter is added to the config
+    expected_loki_forwarding_cfg = {
+        "default_labels_enabled": {
+            "exporter": False,
+            "job": True,
+        },
+        "endpoint": "http://192.168.1.244/cos-loki-0/loki/api/v1/push",
+        "retry_on_failure": {
+            "max_elapsed_time": "5m",
+        },
+        "sending_queue": {
+            "enabled": True,
+            "queue_size": 1000,
+            "storage": "file_storage"
+        },
+        "tls": {
+            "insecure_skip_verify": False,
+        }
+    }
+    config_manager.add_log_forwarding(
+        endpoints=[{"url": "http://192.168.1.244/cos-loki-0/loki/api/v1/push"}],
+        insecure_skip_verify=False
+    )
+    # THEN it exists in the loki exporter config
+    config = dict(sorted(config_manager.config._config["exporters"]["loki/0"].items()))
+    expected_config = dict(sorted(expected_loki_forwarding_cfg.items()))
+    assert config == expected_config
+
+def test_add_traces_forwarding():
+    # GIVEN an empty config
+    config_manager = ConfigManager("", "", insecure_skip_verify=True)
+
+    # WHEN a traces exporter is added to the config
+    expected_traces_forwarding_cfg = {
+        "endpoint": "http://192.168.1.244:4318",
+        "retry_on_failure": {
+            "max_elapsed_time": "5m",
+        },
+        "sending_queue": {
+            "enabled": True,
+            "queue_size": 1000,
+            "storage": "file_storage"
+        },
+    }
+    config_manager.add_traces_forwarding(
+        endpoint="http://192.168.1.244:4318",
+    )
+    # THEN it exists in the traces exporter config
+    config = dict(sorted(config_manager.config._config["exporters"]["otlphttp/tempo"].items()))
+    expected_config = dict(sorted(expected_traces_forwarding_cfg.items()))
+    assert config == expected_config
+
+def test_add_remote_write():
+    # GIVEN an empty config
+    config_manager = ConfigManager("", "", insecure_skip_verify=True)
+
+    # WHEN a remote write exporter is added to the config
+    expected_remote_write_cfg = {
+        "endpoint": "http://192.168.1.244/cos-prometheus-0/api/v1/write",
+        "tls": {
+            "insecure_skip_verify": True,
+        }
+    }
+    config_manager.add_remote_write(
+        endpoints=[{"url": "http://192.168.1.244/cos-prometheus-0/api/v1/write"}],
+    )
+    # THEN it exists in the remote write exporter config
+    config = dict(sorted(config_manager.config._config["exporters"]["prometheusremotewrite/0"].items()))
+    expected_config = dict(sorted(expected_remote_write_cfg.items()))
+    assert config == expected_config
+
+
 def test_add_prometheus_scrape():
     # GIVEN an empty config
     config_manager = ConfigManager("", "", insecure_skip_verify=True)

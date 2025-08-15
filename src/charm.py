@@ -6,9 +6,9 @@
 import logging
 import os
 import re
+import shutil
 import socket
 import subprocess
-import shutil
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -18,9 +18,10 @@ from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 import integrations
-from config_builder import Component, Port
+from config_builder import Component
 from config_manager import ConfigManager
 from constants import (
     CONFIG_FOLDER,
@@ -42,7 +43,6 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -184,6 +184,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
             insecure_skip_verify=cast(bool, self.config.get("tls_insecure_skip_verify")),
+            queue_size=cast(int, self.config.get("queue_size")),
+            max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
         )
 
         # COS Agent setup
@@ -299,7 +301,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             component=Component.receiver,
             name="filelog/var-log",
             config=_filelog_receiver_config(
-                include=["/var/log/**"],
+                include=["/var/log/**/*log"],
                 exclude=var_log_exclusions,
                 attributes={
                     "job": "opentelemetry-collector-var-log",
@@ -313,6 +315,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ),
             pipelines=["logs"],
         )
+
         if self.unit.is_leader():
             integrations._add_alerts(
                 alerts=cos_agent.logs_alerts,
@@ -390,10 +393,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_manager.config.build())
-
-        # Append port 9100 for Node Exporter # TODO: is this needed?
-        if self.unit.is_leader():
-            self.unit.set_ports(*[port.value for port in Port])
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
@@ -515,7 +514,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
         snap.set(configs)  # type: ignore
-
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
