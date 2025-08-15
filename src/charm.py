@@ -136,7 +136,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         super().__init__(framework)
 
         observe_all(self, (ops.InstallEvent, ), self._install_snaps)
-        observe_all(self, (self.on.stop, self.on.remove), self._stop)
+        observe_all(self, (ops.StopEvent, ops.RemoveEvent), self._stop)
         observe_all(self, ALL_EVENTS.difference({self.on.stop, self.on.remove}), self._reconcile)
 
     def _reconcile(self):

@@ -3,7 +3,7 @@
 [project]
 name = "opentelemetry-collector"
 version = "0.0"
-requires-python = "~=3.8"
+requires-python = "~=3.10.0"
 
 dependencies = [
   "ops[tracing]>=3.1",
@@ -70,3 +70,6 @@ addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
 [tool.codespell]
 skip = ".git,.tox,build,venv*"
 ignore-words-list = "assertIn"
+
+[tool.uv.sources]
+cosl = { git = "https://github.com/canonical/cos-lib", rev = "feat/reconciler" }
