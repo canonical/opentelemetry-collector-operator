@@ -327,7 +327,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if profiling_endpoints := integrations.send_profiles(self):
             config_manager.add_profile_forwarding(
                 profiling_endpoints,
-                tls=is_tls_ready()
             )
         if self._has_incoming_profiles or integrations.send_profiles(self):
             feature_gates = "service.profilesSupport"
