@@ -8,6 +8,7 @@ import logging
 import os
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from pytest_operator.plugin import OpsTest
@@ -16,6 +17,21 @@ import jubilant
 logger = logging.getLogger(__name__)
 
 store = defaultdict(str)
+
+CONFIG_BUILDER_PATH = Path(__file__).parent.parent.parent / "src" / "config_builder.py"
+
+
+def change_text_in_file(path: Path, original_text: str, replacement_text: str):
+    with open(path, "r") as f:
+        content = f.read()
+
+    if original_text not in content:
+        raise ValueError(f"'{original_text}' not found in '{path}'")
+
+    modified_content = content.replace(original_text, replacement_text, 1)
+
+    with open(path, "w") as f:
+        f.write(modified_content)
 
 
 def timed_memoizer(func):
@@ -46,11 +62,20 @@ async def charm(ops_test: OpsTest) -> str:
     When multiple charm files (i.e., for different bases) are produced by a `charmcraft pack`,
     our CI will currently set the variable to the highest-base one.
     """
-    if charm_file := os.environ.get("CHARM_PATH"):
-        return charm_file
+    original_text = '"level": "WARN"'
+    modified_text = '"level": "INFO"'
+    change_text_in_file(CONFIG_BUILDER_PATH, original_text, modified_text)
+
+    # FIXME: Avoid passing the charm file path as an environment variable,
+    #        so every time a test is executed a new charm is packed with the modification
+    #        in the internal telemetry level. This comment should be removed when then itest
+    #        are improved to not use internal telemetry to verify if otelcol is receiving logs and metrics
+    # if charm_file := os.environ.get("CHARM_PATH"):
+    #     return charm_file
 
     charm = await ops_test.build_charm(".")
     charm = str(charm).replace("24.04", "22.04")
+    change_text_in_file(CONFIG_BUILDER_PATH, modified_text, original_text)
     assert charm
     return charm
 

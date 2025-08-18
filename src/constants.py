@@ -16,6 +16,9 @@ LOKI_RULES_DEST_PATH: Final[str] = "loki_alert_rules"
 DASHBOARDS_SRC_PATH: Final[str] = "src/grafana_dashboards"
 DASHBOARDS_DEST_PATH: Final[str] = "grafana_dashboards"
 
+# SNAP_COMMON dir: https://snapcraft.io/docs/data-locations#p-94053-system-data
+FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
+
 # Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
 NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
 NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {"drm", "logind", "systemd", "mountstats", "processes", "sysctl"}

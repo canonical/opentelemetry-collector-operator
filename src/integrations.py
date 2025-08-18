@@ -140,6 +140,47 @@ def send_loki_logs(charm: CharmBase) -> List[Dict]:
     return loki_consumer.loki_endpoints
 
 
+def key_value_pair_string_to_dict(key_value_pair: str) -> dict:
+    """Transform a comma-separated key-value pairs into a dict."""
+    result = {}
+
+    for pair in key_value_pair.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+
+        if ":" in pair:
+            sep = ":"
+        elif "=" in pair:
+            sep = "="
+        else:
+            logger.error("Invalid pair without separator ':' or '=': '%s'", pair)
+            continue
+
+        key, value = map(str.strip, pair.split(sep, 1))
+
+        if not key:
+            logger.error("Empty key in pair: '%s'", pair)
+            continue
+        if not value:
+            logger.error("Empty value in pair: '%s'", pair)
+            continue
+
+        result[key] = value
+
+    return result
+
+
+def metrics_rules(metrics_consumer: MetricsEndpointConsumer, charm: CharmBase) -> Dict[str, Any]:
+    """Return a list of metrics rules."""
+    if not charm.config.get("forward_alert_rules"):
+        return {}
+
+    alert_rules = metrics_consumer.alerts
+
+    return alert_rules
+
+
 def scrape_metrics(charm: CharmBase) -> List:
     """Integrate with other charms via the metrics-endpoint relation endpoint.
 
@@ -162,7 +203,9 @@ def scrape_metrics(charm: CharmBase) -> List:
         dirs_exist_ok=True,
     )
     _add_alerts(
-        alerts=metrics_consumer.alerts if forward_alert_rules else {},
+        alerts=metrics_rules(metrics_consumer=metrics_consumer, charm=charm)
+        if forward_alert_rules
+        else {},
         dest_path=charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")),
     )
     return metrics_consumer.jobs()
@@ -179,6 +222,9 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
     remote_write = PrometheusRemoteWriteConsumer(
         charm,
         alert_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
+        extra_alert_labels=key_value_pair_string_to_dict(
+            cast(str, charm.model.config.get("extra_alert_labels", ""))
+        ),
     )
     charm.__setattr__("remote_write", remote_write)
     # TODO: add alerts from remote write
