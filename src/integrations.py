@@ -301,7 +301,9 @@ def send_traces(charm: CharmBase) -> Optional[str]:
             "otlp_grpc",  # for forwarding workload traces
         ],
     )
-    charm.__setattr__("tracing_requirer", tracing_requirer)
+    # NOTE: the name must be 'tracing' because the COS Agent library hardcodes it
+    # https://github.com/canonical/grafana-agent-operator/blob/7363627f4e83b03ef179506a95b5fb411523b041/lib/charms/grafana_agent/v0/cos_agent.py#L1062
+    charm.__setattr__("tracing", tracing_requirer)
     if not tracing_requirer.is_ready():
         return None
     return tracing_requirer.get_endpoint("otlp_http")
