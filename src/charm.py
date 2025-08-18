@@ -200,8 +200,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 ),
                 sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
             )
-        tracing_otlp_http_endpoint = integrations.send_traces(self)
-        if tracing_otlp_http_endpoint:
+        if tracing_otlp_http_endpoint := integrations.send_traces(self)
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
         integrations.send_charm_traces(self)
 
