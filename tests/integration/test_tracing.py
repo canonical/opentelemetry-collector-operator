@@ -52,6 +52,12 @@ def test_alerts_are_aggregated(juju: jubilant.Juju):
     assert "postgresql" in alert_files
 
 
+async def test_traces_are_scraped(juju: jubilant.Juju):
+    grep_filters = ["service.name=postgresql-charm"]
+    result = await is_pattern_in_snap_logs(juju, grep_filters)
+    assert result
+
+
 # @retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 # def test_dashboards_are_aggregated(juju: jubilant.Juju):
 #     dashboard_files = juju.ssh(
