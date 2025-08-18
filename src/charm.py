@@ -135,6 +135,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
 
+        # FIXME: install is not enough, we also need upgrade
         observe_events(self, (ops.InstallEvent, ), self._install_snaps)
         observe_events(self, (ops.StopEvent, ops.RemoveEvent), self._stop)
         observe_events(self, all_events.difference({self.on.stop, self.on.remove}), self._reconcile)
