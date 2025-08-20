@@ -323,6 +323,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             )
 
         # Profiling setup
+        # cfr. https://github.com/open-telemetry/opentelemetry-collector/tree/main/featuregate
         feature_gates = None
         # TODO: it would be more efficient to always enable all feature gates we might potentially need,
         #  instead of conditionally enabling them depending on relations/config. That would save us a restart!
