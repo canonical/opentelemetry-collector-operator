@@ -194,15 +194,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_traces_ingestion(requested_tracing_protocols)
             # Add default processors to traces
             config_manager.add_traces_processing(
-                sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
+                sampling_rate_charm=cast(float, self.config.get("tracing_sampling_rate_charm")),
                 sampling_rate_workload=cast(
-                    bool, self.config.get("tracing_sampling_rate_workload")
+                    float, self.config.get("tracing_sampling_rate_workload")
                 ),
-                sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
+                sampling_rate_error=cast(float, self.config.get("tracing_sampling_rate_error")),
             )
-        if tracing_otlp_http_endpoint := integrations.send_traces(self)
+        if tracing_otlp_http_endpoint := integrations.send_traces(self):
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
-        integrations.send_charm_traces(self)
+            integrations.send_charm_traces(self)
 
         # COS Agent setup
         cos_agent = COSAgentRequirer(self)
