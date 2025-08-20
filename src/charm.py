@@ -324,6 +324,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # Profiling setup
         feature_gates = None
+        # TODO: it would be more efficient to always enable all feature gates we might potentially need,
+        #  instead of conditionally enabling them depending on relations/config. That would save us a restart!
+        #  However, opt-in feature gates are opt-in because they might be unstable and might be removed in the future,
+        #  so it feels more safe to only enable them as necessary. We should carefully consider whether we're
+        #  making the right choice in this tradeoff.
         if self._has_incoming_profiles:
             config_manager.add_profile_ingestion()
             integrations.receive_profiles(self, tls=is_tls_ready())
@@ -331,9 +336,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_profile_forwarding(
                 profiling_endpoints,
             )
-        if self._has_incoming_profiles or integrations.send_profiles(self):
+        if self._has_incoming_profiles or profiling_endpoints:
             feature_gates = "service.profilesSupport"
-            # FIXME: give this to the snap https://github.com/canonical/opentelemetry-collector-snap/issues/34
 
         # Logs setup
         integrations.receive_loki_logs(self, tls=is_tls_ready())

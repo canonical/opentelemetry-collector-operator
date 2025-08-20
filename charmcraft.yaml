@@ -131,7 +131,7 @@ requires:
   send-profiles:
     interface: profiling
     optional: true
-    description: Forward profiles to other charms.
+    description: Send any received profiling data to other charms.
 
 peers:
   peers:

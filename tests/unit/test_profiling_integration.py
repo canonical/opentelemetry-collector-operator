@@ -20,6 +20,17 @@ def tls_mock(cert_obj, private_key):
     ), patch.object(Certificate, "from_string", return_value=cert_obj):
         yield
 
+def test_profiling_pipeline_disabled_by_default(ctx, unit_name, config_folder):
+    """Scenario: we don't have a profiling relation."""
+    # GIVEN otelcol deployed in isolation
+    state_in = State()
+    ctx.run(ctx.on.update_status(), state=state_in)
+
+    # THEN the there is no `profiling` pipeline
+    cfg = get_otelcol_file(unit_name, config_folder)
+    assert 'profiles' not in cfg['service']['pipelines']
+    assert not any('profiling' in exporter_name for exporter_name in cfg['exporters'])
+
 
 @pytest.mark.parametrize("insecure_skip_verify", (True, False))
 @pytest.mark.parametrize("insecure", (True, False))
@@ -73,8 +84,6 @@ def test_receive_profiles_integration(sock_mock, ctx, insecure_skip_verify, unit
     assert receive_profiles_app_data['otlp_grpc_endpoint_url']
 
 
-# @pytest.mark.xfail(reason="pyroscope does not support TLS ingestion yet")
-# # cfr. FIXME in config_manager.ConfigManager.add_profiling
 @pytest.mark.parametrize("insecure_skip_verify", (True, False))
 @pytest.mark.parametrize("insecure", (True, False))
 @pytest.mark.usefixtures("server_cert_paths", "recv_ca_folder_path", "tls_mock")
