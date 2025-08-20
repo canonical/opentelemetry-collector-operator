@@ -2,7 +2,7 @@ import json
 from unittest.mock import patch
 
 import pytest
-from ops.testing import Container, Relation, State
+from ops.testing import Relation, State
 
 from charms.tls_certificates_interface.v4.tls_certificates import (
     TLSCertificatesRequiresV4,
@@ -73,18 +73,27 @@ def test_receive_profiles_integration(sock_mock, ctx, insecure_skip_verify, unit
     assert receive_profiles_app_data['otlp_grpc_endpoint_url']
 
 
-@pytest.mark.xfail(reason="pyroscope does not support TLS ingestion yet")
-# cfr. FIXME in config_manager.ConfigManager.add_profiling
+# @pytest.mark.xfail(reason="pyroscope does not support TLS ingestion yet")
+# # cfr. FIXME in config_manager.ConfigManager.add_profiling
 @pytest.mark.parametrize("insecure_skip_verify", (True, False))
 @pytest.mark.parametrize("insecure", (True, False))
-def test_profiling_integration_tls(ctx, unit_name, insecure, config_folder, insecure_skip_verify, tls_mock):
+@pytest.mark.usefixtures("server_cert_paths", "recv_ca_folder_path", "tls_mock")
+def test_profiling_integration_tls(ctx, unit_name, insecure, config_folder, insecure_skip_verify):
     """Scenario: a profiling relation joined and sent us a grpc endpoint."""
     # GIVEN otelcol deployed with self-signed-certs
-    container = Container(name="otelcol", can_connect=True)
+    # Relation 1
+    cert1a = "-----BEGIN CERTIFICATE-----\n ... cert1a ... \n-----END CERTIFICATE-----"
+    cert1b = "-----BEGIN CERTIFICATE-----\n ... cert1b ... \n-----END CERTIFICATE-----"
 
-    ssc = Relation(
+    # Relation 2
+    cert2a = "-----BEGIN CERTIFICATE-----\n ... cert2a ... \n-----END CERTIFICATE-----"
+    cert2b = "-----BEGIN CERTIFICATE-----\n ... cert2b ... \n-----END CERTIFICATE-----"
+    server_cert_rel = Relation(
         endpoint="receive-server-cert",
-        interface="tls-certificate",
+        remote_app_data={"certificates": json.dumps([cert1a, cert1b])}
+    )
+    ca_cert_rel = Relation(
+        "receive-ca-cert", remote_app_data={"certificates": json.dumps([cert2a, cert2b])}
     )
 
     pyro_url = "my.fqdn.cluster.local:12345"
@@ -92,16 +101,20 @@ def test_profiling_integration_tls(ctx, unit_name, insecure, config_folder, inse
     profiling = Relation(
         endpoint="send-profiles",
         remote_app_data={
-            "otel _grpc_endpoint_url": json.dumps(pyro_url),
+            "otlp_grpc_endpoint_url": json.dumps(pyro_url),
             "insecure": json.dumps(insecure),
         }
     )
-    state_in = State(relations=[profiling, ssc], containers=[container],
+    state_in = State(relations=[profiling, server_cert_rel, ca_cert_rel],
                      config={"tls_insecure_skip_verify": insecure_skip_verify})
-    ctx.run(ctx.on.update_status(), state=state_in)
+
+    with patch("charm.refresh_certs", lambda: True):
+        ctx.run(ctx.on.update_status(), state=state_in)
 
     # THEN  the profiling pipeline contains an exporter to the expected url
     cfg = get_otelcol_file(unit_name, config_folder)
     assert cfg['service']['pipelines']['profiles']['exporters'][0] == 'otlp/profiling/0'
     assert cfg['exporters']['otlp/profiling/0']['endpoint'] == pyro_url
-    assert cfg["exporters"]["otlp/profiling/0"]["tls"] == {"insecure": False, "insecure_skip_verify": insecure_skip_verify}
+    tls_config = cfg["exporters"]["otlp/profiling/0"]["tls"]
+    assert tls_config["insecure"] is insecure
+    assert tls_config["insecure_skip_verify"] == insecure_skip_verify

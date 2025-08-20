@@ -82,6 +82,14 @@ def recv_ca_folder_path(tmp_path):
         yield ca_dir
 
 
+@pytest.fixture
+def server_cert_paths(tmp_path):
+    """Mock the received CA certificates directory path and ensure it exists."""
+    with patch("charm.SERVER_CERT_PATH", tmp_path / "juju_server-cert") as server_cert:
+        with patch("charm.SERVER_CERT_PRIVATE_KEY_PATH", tmp_path/"juju_privkey") as privkey:
+            yield server_cert, privkey
+
+
 @pytest.fixture(autouse=True)
 def mock_snap_operations():
     """Mock snap installation and service management operations."""
