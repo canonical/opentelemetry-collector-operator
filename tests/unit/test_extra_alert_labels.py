@@ -16,7 +16,7 @@ zinc_alerts = {
                     "name": "alertgroup",
                     "rules": [
                         {
-                            "alert": "missing",
+                            "alert": "Missing",
                             "expr": "up == 0",
                             "for": "0m",
                             "labels": {
@@ -66,7 +66,7 @@ def test_extra_alerts_config(ctx):
         for rule in group["rules"]:
             assert rule["labels"]["environment"] == "PRODUCTION"
             assert rule["labels"]["zone"] == "Mars"
-            if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
+            if "opentelemetry_collector_alertgroup_alerts" in group["name"]:
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
@@ -89,9 +89,9 @@ def test_extra_alerts_config(ctx):
 
     for group in alert_rules_mod["groups"]:
         for rule in group["rules"]:
-            if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
-                assert "environment" not in rule["labels"].keys()
-                assert "zone" not in rule["labels"].keys()
+            assert "environment" not in rule["labels"].keys()
+            assert "zone" not in rule["labels"].keys()
+            if "opentelemetry_collector_alertgroup_alerts" in group["name"]:
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
@@ -130,7 +130,7 @@ def test_extra_loki_alerts_config(ctx):
         for rule in group["rules"]:
             assert rule["labels"]["environment"] == "PRODUCTION"
             assert rule["labels"]["zone"] == "Mars"
-            if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
+            if "opentelemetry_collector_alertgroup_alerts" in group["name"]:
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
@@ -153,9 +153,9 @@ def test_extra_loki_alerts_config(ctx):
 
     for group in alert_rules_mod["groups"]:
         for rule in group["rules"]:
-            if "opentelemetry_collector_k8s_alertgroup_alerts" in group["name"]:
-                assert "environment" not in rule["labels"].keys()
-                assert "zone" not in rule["labels"].keys()
+            assert "environment" not in rule["labels"].keys()
+            assert "zone" not in rule["labels"].keys()
+            if "opentelemetry_collector_alertgroup_alerts" in group["name"]:
                 assert rule["labels"]["juju_application"] == "zinc"
                 assert rule["labels"]["juju_charm"] == "zinc-k8s"
                 assert rule["labels"]["juju_model"] == "my_model"
