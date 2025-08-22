@@ -87,6 +87,7 @@ class ConfigBuilder:
 
     def __init__(
         self,
+        unit_name: str,
         global_scrape_interval: str,
         global_scrape_timeout: str,
         receiver_tls: bool = False,
@@ -95,6 +96,7 @@ class ConfigBuilder:
         """Generate an empty OpenTelemetry collector config.
 
         Args:
+            unit_name: the name of the unit
             global_scrape_interval: value for `scrape_interval` in all prometheus receivers
             global_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
             receiver_tls: whether to inject TLS config in all receivers on build
@@ -112,6 +114,7 @@ class ConfigBuilder:
                 "telemetry": {},
             },
         }
+        self._unit_name = unit_name
         self._receiver_tls = receiver_tls
         self._exporter_skip_verify = exporter_skip_verify
         self._scrape_interval = global_scrape_interval
@@ -157,7 +160,14 @@ class ConfigBuilder:
                     "grpc": {"endpoint": f"0.0.0.0:{Port.otlp_grpc.value}"},
                 },
             },
-            pipelines=["logs", "metrics", "traces"],
+            pipelines=[
+                    "metrics",
+                    f"metrics/{self._unit_name}",
+                    "logs",
+                    f"logs/{self._unit_name}",
+                    "traces",
+                    f"traces/{self._unit_name}",
+                ],
         )
         # TODO https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
         # Add TLS config to extensions
@@ -251,11 +261,11 @@ class ConfigBuilder:
         exporters.
         """
         debug_exporter_required = False
-        for signal in self._config["service"]["pipelines"].keys():
-            pipeline = self._config["service"]["pipelines"].get(signal, {})
+        for name in self._config["service"]["pipelines"].keys():
+            pipeline = self._config["service"]["pipelines"].get(name, {})
             if pipeline:
                 if pipeline.get("receivers", []) and not pipeline.get("exporters", []):
-                    self._add_to_pipeline("debug", Component.exporter, [signal])
+                    self._add_to_pipeline("debug", Component.exporter, [name])
                     debug_exporter_required = True
         if debug_exporter_required:
             self.add_component(Component.exporter, "debug", {"verbosity": "normal"})

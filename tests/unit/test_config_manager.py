@@ -8,7 +8,7 @@ from config_manager import ConfigManager
 
 def test_add_log_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("", "", "", insecure_skip_verify=True)
 
     # WHEN a loki exporter is added to the config
     expected_loki_forwarding_cfg = {
@@ -34,13 +34,13 @@ def test_add_log_forwarding():
         insecure_skip_verify=False
     )
     # THEN it exists in the loki exporter config
-    config = dict(sorted(config_manager.config._config["exporters"]["loki/0"].items()))
+    config = dict(sorted(config_manager.config._config["exporters"]["loki/send-loki-logs/0"].items()))
     expected_config = dict(sorted(expected_loki_forwarding_cfg.items()))
     assert config == expected_config
 
 def test_add_traces_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("", "", "", insecure_skip_verify=True)
 
     # WHEN a traces exporter is added to the config
     expected_traces_forwarding_cfg = {
@@ -58,13 +58,13 @@ def test_add_traces_forwarding():
         endpoint="http://192.168.1.244:4318",
     )
     # THEN it exists in the traces exporter config
-    config = dict(sorted(config_manager.config._config["exporters"]["otlphttp/tempo"].items()))
+    config = dict(sorted(config_manager.config._config["exporters"]["otlphttp/send-traces"].items()))
     expected_config = dict(sorted(expected_traces_forwarding_cfg.items()))
     assert config == expected_config
 
 def test_add_remote_write():
     # GIVEN an empty config
-    config_manager = ConfigManager("", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("", "", "", insecure_skip_verify=True)
 
     # WHEN a remote write exporter is added to the config
     expected_remote_write_cfg = {
@@ -77,14 +77,14 @@ def test_add_remote_write():
         endpoints=[{"url": "http://192.168.1.244/cos-prometheus-0/api/v1/write"}],
     )
     # THEN it exists in the remote write exporter config
-    config = dict(sorted(config_manager.config._config["exporters"]["prometheusremotewrite/0"].items()))
+    config = dict(sorted(config_manager.config._config["exporters"]["prometheusremotewrite/send-remote-write/0"].items()))
     expected_config = dict(sorted(expected_remote_write_cfg.items()))
     assert config == expected_config
 
 
 def test_add_prometheus_scrape():
     # GIVEN an empty config
-    config_manager = ConfigManager("", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("", "", "", insecure_skip_verify=True)
 
     # WHEN a scrape job is added to the config
     first_job = [

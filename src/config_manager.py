@@ -105,6 +105,7 @@ class ConfigManager:
 
     def __init__(
         self,
+        unit_name: str,
         global_scrape_interval: str,
         global_scrape_timeout: str,
         receiver_tls: bool = False,
@@ -117,6 +118,7 @@ class ConfigManager:
         The base configuration is our opinionated default.
 
         Args:
+            unit_name: the name of the unit
             global_scrape_interval: set a global scrape interval for all prometheus receivers on build
             global_scrape_timeout: set a global scrape timeout for all prometheus receivers on build
             receiver_tls: whether to inject TLS config in all receivers on build
@@ -124,10 +126,12 @@ class ConfigManager:
             queue_size: size of the sending queue for exporters
             max_elapsed_time_min: maximum elapsed time for retrying failed requests in minutes
         """
+        self._unit_name = unit_name
         self._insecure_skip_verify = insecure_skip_verify
         self._queue_size = queue_size
         self._max_elapsed_time_min = max_elapsed_time_min
         self.config = ConfigBuilder(
+            unit_name=self._unit_name,
             global_scrape_interval=global_scrape_interval,
             global_scrape_timeout=global_scrape_timeout,
             receiver_tls=receiver_tls,
@@ -176,7 +180,7 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.receiver,
-            "loki",
+            "loki/send-loki-logs",
             {
                 "protocols": {
                     "http": {
@@ -207,19 +211,19 @@ class ConfigManager:
         for idx, endpoint in enumerate(endpoints):
             self.config.add_component(
                 Component.exporter,
-                f"loki/{idx}",
+                f"loki/send-loki-logs/{idx}",
                 {
                     "endpoint": endpoint["url"],
                     "default_labels_enabled": {"exporter": False, "job": True},
                     "tls": {"insecure_skip_verify": insecure_skip_verify},
                     **self.sending_queue_config,
                 },
-                pipelines=["logs"],
+                pipelines=["logs", f"logs/{self._unit_name}"],
             )
         # TODO: Luca: this was gated by having outgoing logs. Do we need that?
         self.config.add_component(
             Component.processor,
-            "resource",
+            "resource/send-loki-logs",
             {
                 "attributes": [
                     {
@@ -233,7 +237,7 @@ class ConfigManager:
         )
         self.config.add_component(
             Component.processor,
-            "attributes",
+            "attributes/send-loki-logs",
             {
                 "actions": [
                     {
@@ -263,7 +267,7 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.receiver,
-            "prometheus",
+            f"prometheus/self-monitoring/{self._unit_name}",
             {
                 "config": {
                     "scrape_configs": [
@@ -281,7 +285,7 @@ class ConfigManager:
                     ]
                 }
             },
-            pipelines=["metrics"],
+            pipelines=[f"metrics/{self._unit_name}"],
         )
 
     def add_prometheus_scrape_jobs(self, jobs: List[Dict]):
@@ -318,13 +322,13 @@ class ConfigManager:
         for idx, endpoint in enumerate(endpoints):
             self.config.add_component(
                 Component.exporter,
-                f"prometheusremotewrite/{idx}",
+                f"prometheusremotewrite/send-remote-write/{idx}",
                 {
                     "endpoint": endpoint["url"],
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     **self.prometheus_remotewrite_wal_config,
                 },
-                pipelines=["metrics"],
+                pipelines=["metrics", f"metrics/{self._unit_name}"],
             )
 
         # TODO Receive alert rules via remote write
@@ -356,9 +360,9 @@ class ConfigManager:
 
         if "zipkin" in requested_tracing_protocols:
             self.config.add_component(
-                component=Component.receiver,
-                name="zipkin",
-                config={"endpoint": f"0.0.0.0:{Port.zipkin.value}"},
+                Component.receiver,
+                "zipkin/receive-traces",
+                {"endpoint": f"0.0.0.0:{Port.zipkin.value}"},
                 pipelines=["traces"],
             )
         if (
@@ -375,9 +379,9 @@ class ConfigManager:
                     {"thrift_http": {"endpoint": f"0.0.0.0:{Port.jaeger_thrift_http.value}"}}
                 )
             self.config.add_component(
-                component=Component.receiver,
-                name="jaeger",
-                config=jaeger_config,
+                Component.receiver,
+                "jaeger/receive-traces",
+                jaeger_config,
                 pipelines=["traces"],
             )
 
@@ -404,9 +408,9 @@ class ConfigManager:
             traces are distinguished by the 'service.name' attribute.
         """
         self.config.add_component(
-            component=Component.processor,
-            name="tail_sampling",
-            config=tail_sampling_config(
+            Component.processor,
+            "tail_sampling",
+            tail_sampling_config(
                 tracing_sampling_rate_charm=sampling_rate_charm,
                 tracing_sampling_rate_workload=sampling_rate_workload,
                 tracing_sampling_rate_error=sampling_rate_error,
@@ -427,13 +431,13 @@ class ConfigManager:
             Tempo charm. The exporter will be added to the 'traces' pipeline.
         """
         self.config.add_component(
-            component=Component.exporter,
-            name="otlphttp/tempo",
-            config={
+            Component.exporter,
+            "otlphttp/send-traces",
+            {
                 "endpoint": endpoint,
                 **self.sending_queue_config,
             },
-            pipelines=["traces"],
+            pipelines=["traces", f"traces/{self._unit_name}"],
         )
 
     def add_cloud_integrator(
@@ -473,19 +477,19 @@ class ConfigManager:
         if prometheus_url:
             self.config.add_component(
                 Component.exporter,
-                "prometheusremotewrite/cloud-integrator",
+                "prometheusremotewrite/cloud-config",
                 {
                     "endpoint": prometheus_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     **exporter_auth_config,
                     **self.prometheus_remotewrite_wal_config,
                 },
-                pipelines=["metrics"],
+                pipelines=["metrics", f"metrics/{self._unit_name}"],
             )
         if loki_url:
             self.config.add_component(
                 Component.exporter,
-                "loki/cloud-integrator",
+                "loki/cloud-config",
                 {
                     "endpoint": loki_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
@@ -494,19 +498,19 @@ class ConfigManager:
                     **exporter_auth_config,
                     **self.sending_queue_config,
                 },
-                pipelines=["logs"],
+                pipelines=["logs", f"logs/{self._unit_name}"],
             )
         if tempo_url:
             self.config.add_component(
-                component=Component.exporter,
-                name="otlphttp/cloud-integrator",
-                config={
+                Component.exporter,
+                "otlphttp/cloud-config",
+                {
                     "endpoint": tempo_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     **exporter_auth_config,
                     **self.sending_queue_config,
                 },
-                pipelines=["traces"],
+                pipelines=["traces", f"traces/{self._unit_name}"],
             )
 
     def add_custom_processors(self, processors_raw: str) -> None:
@@ -517,8 +521,15 @@ class ConfigManager:
         """
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
             self.config.add_component(
-                component=Component.processor,
-                name=processor_name,
-                config=processor_config,
-                pipelines=["metrics", "logs", "traces"],
+                Component.processor,
+                processor_name,
+                processor_config,
+                pipelines=[
+                    "metrics",
+                    f"metrics/{self._unit_name}",
+                    "logs",
+                    f"logs/{self._unit_name}",
+                    "traces",
+                    f"traces/{self._unit_name}",
+                ],
             )
