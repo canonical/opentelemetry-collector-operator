@@ -180,7 +180,7 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.receiver,
-            "loki/send-loki-logs",
+            f"loki/send-loki-logs/{self._unit_name}",
             {
                 "protocols": {
                     "http": {
@@ -189,7 +189,7 @@ class ConfigManager:
                 },
                 "use_incoming_timestamp": True,
             },
-            pipelines=["logs"],
+            pipelines=[f"logs/{self._unit_name}"],
         )
 
     def add_log_forwarding(self, endpoints: List[dict], insecure_skip_verify: bool) -> None:
@@ -211,19 +211,19 @@ class ConfigManager:
         for idx, endpoint in enumerate(endpoints):
             self.config.add_component(
                 Component.exporter,
-                f"loki/send-loki-logs/{idx}",
+                f"loki/send-loki-logs/{self._unit_name}/{idx}",
                 {
                     "endpoint": endpoint["url"],
                     "default_labels_enabled": {"exporter": False, "job": True},
                     "tls": {"insecure_skip_verify": insecure_skip_verify},
                     **self.sending_queue_config,
                 },
-                pipelines=["logs", f"logs/{self._unit_name}"],
+                pipelines=[f"logs/{self._unit_name}"],
             )
         # TODO: Luca: this was gated by having outgoing logs. Do we need that?
         self.config.add_component(
             Component.processor,
-            "resource/send-loki-logs",
+            f"resource/send-loki-logs/{self._unit_name}",
             {
                 "attributes": [
                     {
@@ -233,11 +233,11 @@ class ConfigManager:
                     },
                 ]
             },
-            pipelines=["logs"],
+            pipelines=[f"logs/{self._unit_name}"],
         )
         self.config.add_component(
             Component.processor,
-            "attributes/send-loki-logs",
+            f"attributes/send-loki-logs/{self._unit_name}",
             {
                 "actions": [
                     {
@@ -248,7 +248,7 @@ class ConfigManager:
                     },
                 ]
             },
-            pipelines=["logs"],
+            pipelines=[f"logs/{self._unit_name}"],
         )
 
     def add_self_scrape(self, identifier: str, labels: Dict) -> None:
@@ -322,13 +322,13 @@ class ConfigManager:
         for idx, endpoint in enumerate(endpoints):
             self.config.add_component(
                 Component.exporter,
-                f"prometheusremotewrite/send-remote-write/{idx}",
+                f"prometheusremotewrite/send-remote-write/{self._unit_name}/{idx}",
                 {
                     "endpoint": endpoint["url"],
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     **self.prometheus_remotewrite_wal_config,
                 },
-                pipelines=["metrics", f"metrics/{self._unit_name}"],
+                pipelines=[f"metrics/{self._unit_name}"],
             )
 
         # TODO Receive alert rules via remote write
@@ -361,9 +361,9 @@ class ConfigManager:
         if "zipkin" in requested_tracing_protocols:
             self.config.add_component(
                 Component.receiver,
-                "zipkin/receive-traces",
+                f"zipkin/receive-traces/{self._unit_name}",
                 {"endpoint": f"0.0.0.0:{Port.zipkin.value}"},
-                pipelines=["traces"],
+                pipelines=[f"traces/{self._unit_name}"],
             )
         if (
             "jaeger_grpc" in requested_tracing_protocols
@@ -380,9 +380,9 @@ class ConfigManager:
                 )
             self.config.add_component(
                 Component.receiver,
-                "jaeger/receive-traces",
+                f"jaeger/receive-traces/{self._unit_name}",
                 jaeger_config,
-                pipelines=["traces"],
+                pipelines=[f"traces/{self._unit_name}"],
             )
 
     def add_traces_processing(
@@ -409,13 +409,13 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.processor,
-            "tail_sampling",
+            f"tail_sampling/{self._unit_name}",
             tail_sampling_config(
                 tracing_sampling_rate_charm=sampling_rate_charm,
                 tracing_sampling_rate_workload=sampling_rate_workload,
                 tracing_sampling_rate_error=sampling_rate_error,
             ),
-            pipelines=["traces"],
+            pipelines=[f"traces/{self._unit_name}"],
         )
 
     def add_traces_forwarding(self, endpoint: str) -> None:
@@ -432,12 +432,12 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.exporter,
-            "otlphttp/send-traces",
+            f"otlphttp/send-traces/{self._unit_name}",
             {
                 "endpoint": endpoint,
                 **self.sending_queue_config,
             },
-            pipelines=["traces", f"traces/{self._unit_name}"],
+            pipelines=[f"traces/{self._unit_name}"],
         )
 
     def add_cloud_integrator(
@@ -477,19 +477,19 @@ class ConfigManager:
         if prometheus_url:
             self.config.add_component(
                 Component.exporter,
-                "prometheusremotewrite/cloud-config",
+                f"prometheusremotewrite/cloud-config/{self._unit_name}",
                 {
                     "endpoint": prometheus_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     **exporter_auth_config,
                     **self.prometheus_remotewrite_wal_config,
                 },
-                pipelines=["metrics", f"metrics/{self._unit_name}"],
+                pipelines=[f"metrics/{self._unit_name}"],
             )
         if loki_url:
             self.config.add_component(
                 Component.exporter,
-                "loki/cloud-config",
+                f"loki/cloud-config/{self._unit_name}",
                 {
                     "endpoint": loki_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
@@ -498,19 +498,19 @@ class ConfigManager:
                     **exporter_auth_config,
                     **self.sending_queue_config,
                 },
-                pipelines=["logs", f"logs/{self._unit_name}"],
+                pipelines=[f"logs/{self._unit_name}"],
             )
         if tempo_url:
             self.config.add_component(
                 Component.exporter,
-                "otlphttp/cloud-config",
+                f"otlphttp/cloud-config/{self._unit_name}",
                 {
                     "endpoint": tempo_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     **exporter_auth_config,
                     **self.sending_queue_config,
                 },
-                pipelines=["traces", f"traces/{self._unit_name}"],
+                pipelines=[f"traces/{self._unit_name}"],
             )
 
     def add_custom_processors(self, processors_raw: str) -> None:
@@ -522,14 +522,11 @@ class ConfigManager:
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
             self.config.add_component(
                 Component.processor,
-                processor_name,
+                f"{processor_name}/{self._unit_name}",
                 processor_config,
                 pipelines=[
-                    "metrics",
                     f"metrics/{self._unit_name}",
-                    "logs",
                     f"logs/{self._unit_name}",
-                    "traces",
                     f"traces/{self._unit_name}",
                 ],
             )

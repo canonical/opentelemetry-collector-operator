@@ -153,7 +153,7 @@ class ConfigBuilder:
         # There must be at least one pipeline, and it must have a valid receiver exporter pair.
         self.add_component(
             Component.receiver,
-            "otlp",
+            f"otlp/{self._unit_name}",
             {
                 "protocols": {
                     "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
@@ -161,11 +161,8 @@ class ConfigBuilder:
                 },
             },
             pipelines=[
-                    "metrics",
                     f"metrics/{self._unit_name}",
-                    "logs",
                     f"logs/{self._unit_name}",
-                    "traces",
                     f"traces/{self._unit_name}",
                 ],
         )
@@ -265,10 +262,10 @@ class ConfigBuilder:
             pipeline = self._config["service"]["pipelines"].get(name, {})
             if pipeline:
                 if pipeline.get("receivers", []) and not pipeline.get("exporters", []):
-                    self._add_to_pipeline("debug", Component.exporter, [name])
+                    self._add_to_pipeline(f"debug/{self._unit_name}", Component.exporter, [name])
                     debug_exporter_required = True
         if debug_exporter_required:
-            self.add_component(Component.exporter, "debug", {"verbosity": "normal"})
+            self.add_component(Component.exporter, f"debug/{self._unit_name}", {"verbosity": "normal"})
 
     def _add_tls_to_all_receivers(
         self,
