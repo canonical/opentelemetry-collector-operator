@@ -51,7 +51,7 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # TODO: move this method outside of charm.py together with the cos-agent integrations
 def _filelog_receiver_config(
-    include: List[str], exclude: List[str], attributes: Dict[str, str]
+    include: List[str], exclude: List[str], attributes: Dict[str, Optional[str]]
 ) -> Dict[str, Any]:
     """Build the config for the filelog receiver."""
     config = {
