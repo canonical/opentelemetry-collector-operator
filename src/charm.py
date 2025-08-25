@@ -298,19 +298,20 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             )
         ### Add /var/log scrape job
         var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        # NOTE: var-log is an expensive receiver, avoid duplicating it with a unit identifier
         config_manager.config.add_component(
             Component.receiver,
-            f"filelog/var-log/{self.unit.name}",
+            "filelog/var-log",
             _filelog_receiver_config(
                 include=["/var/log/**/*log"],
                 exclude=var_log_exclusions,
                 attributes={
                     "job": "opentelemetry-collector-var-log",
                     "juju_application": topology.application,
-                    "juju_unit": topology.unit,  # type: ignore
                     "juju_charm": topology.charm_name,
                     "juju_model": topology.model,
                     "juju_model_uuid": topology.model_uuid,
+                    # NOTE: juju_unit is omitted to avoid a unit identifier in the receiver name
                     # NOTE: No snap_name attribute is necessary as these logs are not from a snap
                 },
             ),

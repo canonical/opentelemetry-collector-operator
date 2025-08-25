@@ -147,13 +147,16 @@ class ConfigBuilder:
         return sha256(yaml.safe_dump(self.build()))
 
     def add_default_config(self):
-        """Return the default config for OpenTelemetry Collector."""
-        # Currently, we always include the OTLP receiver to ensure the config is valid at all times.
-        # We also need these receivers for tracing.
-        # There must be at least one pipeline, and it must have a valid receiver exporter pair.
+        """Return the default config for OpenTelemetry Collector.
+
+        We always include the OTLP receiver to ensure the config is valid, i.e. there must be at
+        least one pipeline, and it must have a valid receiver exporter pair.
+        """
+        # NOTE: We omit the unit identifier in the receiver name to avoid duplicate OTLP receivers
+        #       fighting for port bindings.
         self.add_component(
             Component.receiver,
-            f"otlp/{self._unit_name}",
+            "otlp",
             {
                 "protocols": {
                     "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
@@ -161,8 +164,8 @@ class ConfigBuilder:
                 },
             },
             pipelines=[
-                    f"metrics/{self._unit_name}",
                     f"logs/{self._unit_name}",
+                    f"metrics/{self._unit_name}",
                     f"traces/{self._unit_name}",
                 ],
         )
