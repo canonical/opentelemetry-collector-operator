@@ -19,6 +19,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "postgresql:cos-agent")
     # THEN all units are active/blocked
+    assert False  # FIXME: trigger debug test in CI, remove this from PR
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
