@@ -51,7 +51,7 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # TODO: move this method outside of charm.py together with the cos-agent integrations
 def _filelog_receiver_config(
-    include: List[str], exclude: List[str], attributes: Dict[str, str]
+    include: List[str], exclude: List[str], attributes: Dict[str, Optional[str]]
 ) -> Dict[str, Any]:
     """Build the config for the filelog receiver."""
     config = {
@@ -180,6 +180,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # Create the config manager
         config_manager = ConfigManager(
+            unit_name=self.unit.name,
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
@@ -206,7 +207,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         ## Node exporter metrics
         config_manager.config.add_component(
             Component.receiver,
-            name="prometheus/node-exporter",
+            name=f"prometheus/node-exporter/{self.unit.name}",
             config={
                 "config": {
                     "scrape_configs": [
@@ -233,14 +234,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     ],
                 }
             },
-            pipelines=["metrics"],
+            pipelines=[f"metrics/{self.unit.name}"],
         )
         ## COS Agent metrics
         if cos_agent.metrics_jobs:
             config_manager.config.add_component(
                 Component.receiver,
-                name=f"prometheus/cos-agent-{self.unit.name}",
-                config={"config": {"scrape_configs": cos_agent.metrics_jobs}},
+                f"prometheus/cos-agent/{self.unit.name}",
+                {"config": {"scrape_configs": cos_agent.metrics_jobs}},
                 pipelines=[f"metrics/{self.unit.name}"],
             )
         if self.unit.is_leader():
@@ -274,9 +275,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 continue
 
             config_manager.config.add_component(
-                component=Component.receiver,
-                name=f"filelog/{fstab_entry.owner}-{fstab_entry.relative_target}",
-                config=_filelog_receiver_config(
+                Component.receiver,
+                f"filelog/{fstab_entry.owner}-{fstab_entry.relative_target}/{self.unit.name}",
+                _filelog_receiver_config(
                     include=[
                         f"{fstab_entry.target}/**"
                         if fstab_entry
@@ -297,23 +298,24 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             )
         ### Add /var/log scrape job
         var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        # NOTE: var-log is an expensive receiver, avoid duplicating it with a unit identifier
         config_manager.config.add_component(
-            component=Component.receiver,
-            name="filelog/var-log",
-            config=_filelog_receiver_config(
+            Component.receiver,
+            "filelog/var-log",
+            _filelog_receiver_config(
                 include=["/var/log/**/*log"],
                 exclude=var_log_exclusions,
                 attributes={
                     "job": "opentelemetry-collector-var-log",
                     "juju_application": topology.application,
-                    "juju_unit": topology.unit,  # type: ignore
                     "juju_charm": topology.charm_name,
                     "juju_model": topology.model,
                     "juju_model_uuid": topology.model_uuid,
+                    # NOTE: juju_unit is omitted to avoid a unit identifier in the receiver name
                     # NOTE: No snap_name attribute is necessary as these logs are not from a snap
                 },
             ),
-            pipelines=["logs"],
+            pipelines=[f"logs/{self.unit.name}"],
         )
 
         if self.unit.is_leader():
@@ -454,17 +456,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     self.snap(snap_name).start(enable=True)
                 except snap.SnapError as e:
                     raise SnapServiceError(f"Failed to start {snap_name}") from e
-
-            # Merge configurations under a directory into one,
-            # and write it to the default otelcol config file.
-            # This is a placeholder for actual configuration merging logic.
-            # For example:
-            #
-            # content = merge_config()
-            # with open('etc/otelcol/config.yaml', 'w') as f:
-            #     f.write(content)
-            #     f.flush()
-            pass
 
     def _stop(self) -> bool:
         """Coordinate snap and config file removal.

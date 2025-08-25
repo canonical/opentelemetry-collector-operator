@@ -87,6 +87,7 @@ class ConfigBuilder:
 
     def __init__(
         self,
+        unit_name: str,
         global_scrape_interval: str,
         global_scrape_timeout: str,
         receiver_tls: bool = False,
@@ -95,6 +96,7 @@ class ConfigBuilder:
         """Generate an empty OpenTelemetry collector config.
 
         Args:
+            unit_name: the name of the unit
             global_scrape_interval: value for `scrape_interval` in all prometheus receivers
             global_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
             receiver_tls: whether to inject TLS config in all receivers on build
@@ -112,6 +114,7 @@ class ConfigBuilder:
                 "telemetry": {},
             },
         }
+        self._unit_name = unit_name
         self._receiver_tls = receiver_tls
         self._exporter_skip_verify = exporter_skip_verify
         self._scrape_interval = global_scrape_interval
@@ -144,10 +147,13 @@ class ConfigBuilder:
         return sha256(yaml.safe_dump(self.build()))
 
     def add_default_config(self):
-        """Return the default config for OpenTelemetry Collector."""
-        # Currently, we always include the OTLP receiver to ensure the config is valid at all times.
-        # We also need these receivers for tracing.
-        # There must be at least one pipeline, and it must have a valid receiver exporter pair.
+        """Return the default config for OpenTelemetry Collector.
+
+        We always include the OTLP receiver to ensure the config is valid, i.e. there must be at
+        least one pipeline, and it must have a valid receiver exporter pair.
+        """
+        # NOTE: We omit the unit identifier in the receiver name to avoid duplicate OTLP receivers
+        #       fighting for port bindings.
         self.add_component(
             Component.receiver,
             "otlp",
@@ -157,7 +163,11 @@ class ConfigBuilder:
                     "grpc": {"endpoint": f"0.0.0.0:{Port.otlp_grpc.value}"},
                 },
             },
-            pipelines=["logs", "metrics", "traces"],
+            pipelines=[
+                    f"logs/{self._unit_name}",
+                    f"metrics/{self._unit_name}",
+                    f"traces/{self._unit_name}",
+                ],
         )
         # TODO https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
         # Add TLS config to extensions
@@ -251,14 +261,14 @@ class ConfigBuilder:
         exporters.
         """
         debug_exporter_required = False
-        for signal in self._config["service"]["pipelines"].keys():
-            pipeline = self._config["service"]["pipelines"].get(signal, {})
+        for name in self._config["service"]["pipelines"].keys():
+            pipeline = self._config["service"]["pipelines"].get(name, {})
             if pipeline:
                 if pipeline.get("receivers", []) and not pipeline.get("exporters", []):
-                    self._add_to_pipeline("debug", Component.exporter, [signal])
+                    self._add_to_pipeline(f"debug/{self._unit_name}", Component.exporter, [name])
                     debug_exporter_required = True
         if debug_exporter_required:
-            self.add_component(Component.exporter, "debug", {"verbosity": "normal"})
+            self.add_component(Component.exporter, f"debug/{self._unit_name}", {"verbosity": "normal"})
 
     def _add_tls_to_all_receivers(
         self,
