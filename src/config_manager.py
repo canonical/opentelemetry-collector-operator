@@ -211,7 +211,7 @@ class ConfigManager:
         for idx, endpoint in enumerate(endpoints):
             self.config.add_component(
                 Component.exporter,
-                f"loki/send-loki-logs/{self._unit_name}/{idx}",
+                f"loki/send-loki-logs/{idx}",
                 {
                     "endpoint": endpoint["url"],
                     "default_labels_enabled": {"exporter": False, "job": True},
@@ -223,7 +223,7 @@ class ConfigManager:
         # TODO: Luca: this was gated by having outgoing logs. Do we need that?
         self.config.add_component(
             Component.processor,
-            f"resource/send-loki-logs/{self._unit_name}",
+            "resource/send-loki-logs/_charm",
             {
                 "attributes": [
                     {
@@ -237,7 +237,7 @@ class ConfigManager:
         )
         self.config.add_component(
             Component.processor,
-            f"attributes/send-loki-logs/{self._unit_name}",
+            "attributes/send-loki-logs/_charm",
             {
                 "actions": [
                     {
@@ -322,7 +322,7 @@ class ConfigManager:
         for idx, endpoint in enumerate(endpoints):
             self.config.add_component(
                 Component.exporter,
-                f"prometheusremotewrite/send-remote-write/{self._unit_name}/{idx}",
+                f"prometheusremotewrite/send-remote-write/{idx}",
                 {
                     "endpoint": endpoint["url"],
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
@@ -409,7 +409,7 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.processor,
-            f"tail_sampling/{self._unit_name}",
+            "tail_sampling/_charm",
             tail_sampling_config(
                 tracing_sampling_rate_charm=sampling_rate_charm,
                 tracing_sampling_rate_workload=sampling_rate_workload,
@@ -432,7 +432,7 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.exporter,
-            f"otlphttp/send-traces/{self._unit_name}",
+            "otlphttp/send-traces",
             {
                 "endpoint": endpoint,
                 **self.sending_queue_config,
@@ -477,7 +477,7 @@ class ConfigManager:
         if prometheus_url:
             self.config.add_component(
                 Component.exporter,
-                f"prometheusremotewrite/cloud-config/{self._unit_name}",
+                "prometheusremotewrite/cloud-config",
                 {
                     "endpoint": prometheus_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
@@ -489,7 +489,7 @@ class ConfigManager:
         if loki_url:
             self.config.add_component(
                 Component.exporter,
-                f"loki/cloud-config/{self._unit_name}",
+                "loki/cloud-config",
                 {
                     "endpoint": loki_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
@@ -503,7 +503,7 @@ class ConfigManager:
         if tempo_url:
             self.config.add_component(
                 Component.exporter,
-                f"otlphttp/cloud-config/{self._unit_name}",
+                "otlphttp/cloud-config",
                 {
                     "endpoint": tempo_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
@@ -522,7 +522,7 @@ class ConfigManager:
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
             self.config.add_component(
                 Component.processor,
-                f"{processor_name}/{self._unit_name}",
+                f"{processor_name}/_custom",
                 processor_config,
                 pipelines=[
                     f"metrics/{self._unit_name}",
