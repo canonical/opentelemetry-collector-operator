@@ -5,7 +5,8 @@
 
 import functools
 import logging
-import os
+
+# import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -90,6 +91,8 @@ async def charm_22_04(charm) -> str:
 
 @pytest.fixture(scope="module")
 def juju():
-    keep_models: bool = os.environ.get("KEEP_MODELS") is not None
-    with jubilant.temp_model(keep=keep_models) as juju:
+    # keep_models: bool = os.environ.get("KEEP_MODELS") is not None
+    with jubilant.temp_model(
+        keep=True
+    ) as juju:  # FIXME: debugging in CI, revert this before merging
         yield juju

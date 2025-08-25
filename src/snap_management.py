@@ -47,8 +47,8 @@ class SnapMap:
         },
         "node-exporter": {
             # (confinement, arch): revision
-            ("strict", "amd64"): 1935,  # v1.9.1
-            ("strict", "arm64"): 1937,  # v1.9.1
+            ("strict", "amd64"): 1904,  # v1.9.1
+            ("strict", "arm64"): 1908,  # v1.9.1
         },
     }
 

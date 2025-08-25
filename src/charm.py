@@ -188,6 +188,22 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
         )
 
+        # Tracing setup
+        if self._has_incoming_traces_relation:
+            requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
+            config_manager.add_traces_ingestion(requested_tracing_protocols)
+            # Add default processors to traces
+            config_manager.add_traces_processing(
+                sampling_rate_charm=cast(float, self.config.get("tracing_sampling_rate_charm")),
+                sampling_rate_workload=cast(
+                    float, self.config.get("tracing_sampling_rate_workload")
+                ),
+                sampling_rate_error=cast(float, self.config.get("tracing_sampling_rate_error")),
+            )
+        if tracing_otlp_http_endpoint := integrations.send_traces(self):
+            config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
+            integrations.send_charm_traces(self)
+
         # COS Agent setup
         cos_agent = COSAgentRequirer(self)
         cos_agent_relations = self.model.relations.get("cos-agent", [])
@@ -296,25 +312,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 pipelines=[f"logs/{self.unit.name}"],
             )
         ### Add /var/log scrape job
-        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
-        config_manager.config.add_component(
-            component=Component.receiver,
-            name="filelog/var-log",
-            config=_filelog_receiver_config(
-                include=["/var/log/**/*log"],
-                exclude=var_log_exclusions,
-                attributes={
-                    "job": "opentelemetry-collector-var-log",
-                    "juju_application": topology.application,
-                    "juju_unit": topology.unit,  # type: ignore
-                    "juju_charm": topology.charm_name,
-                    "juju_model": topology.model,
-                    "juju_model_uuid": topology.model_uuid,
-                    # NOTE: No snap_name attribute is necessary as these logs are not from a snap
-                },
-            ),
-            pipelines=["logs"],
-        )
+        # var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        # FIXME: removing /var/log scrape job to ease debugging in CI
 
         if self.unit.is_leader():
             integrations._add_alerts(
@@ -348,23 +347,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             # This is conditional because otherwise remote_write.endpoints causes error on relation-broken
             remote_write_endpoints = integrations.send_remote_write(self)
             config_manager.add_remote_write(remote_write_endpoints)
-
-        # Tracing setup
-        if self._has_incoming_traces_relation:
-            requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
-            config_manager.add_traces_ingestion(requested_tracing_protocols)
-            # Add default processors to traces
-            config_manager.add_traces_processing(
-                sampling_rate_charm=cast(bool, self.config.get("tracing_sampling_rate_charm")),
-                sampling_rate_workload=cast(
-                    bool, self.config.get("tracing_sampling_rate_workload")
-                ),
-                sampling_rate_error=cast(bool, self.config.get("tracing_sampling_rate_error")),
-            )
-        tracing_otlp_http_endpoint = integrations.send_traces(self)
-        if tracing_otlp_http_endpoint:
-            config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
-        integrations.send_charm_traces(self)
 
         # Dashboards setup
         ## COS Agent dashboards
