@@ -312,7 +312,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 pipelines=[f"logs/{self.unit.name}"],
             )
         ### Add /var/log scrape job
-        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        # var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
         # FIXME: removing /var/log scrape job to ease debugging in CI
 
         if self.unit.is_leader():
