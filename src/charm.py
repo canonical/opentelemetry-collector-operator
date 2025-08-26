@@ -455,19 +455,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 except snap.SnapError as e:
                     raise SnapServiceError(f"Failed to start {snap_name}") from e
 
-            # Merge configurations under a directory into one,
-            # and write it to the default otelcol config file.
-            # This is a placeholder for actual configuration merging logic.
-            # For example:
-            #
-            # content = merge_config()
-            # with open('etc/otelcol/config.yaml', 'w') as f:
-            #     f.write(content)
-            #     f.flush()
-            pass
-
     def _remove(self):
-        """Coordinate snap and config file removal."""
+        """Coordinate snap and config file removal.
+
+        Handling removal should be done in the stop hook, but other hooks can fire after it, so we
+        handle this in the remove hook. This ensures that no future hooks run without an installed
+        snap in the machine.
+
+        https://documentation.ubuntu.com/juju/3.6/reference/hook/#remove
+        """
         manager = SingletonSnapManager(self.unit.name)
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
