@@ -522,7 +522,7 @@ class ConfigManager:
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
             self.config.add_component(
                 Component.processor,
-                f"{processor_name}/_custom",
+                f"{processor_name}/{self._unit_name}/_custom",
                 processor_config,
                 pipelines=[
                     f"metrics/{self._unit_name}",
