@@ -6,9 +6,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Set
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass

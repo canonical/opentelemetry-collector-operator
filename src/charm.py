@@ -458,7 +458,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     raise SnapServiceError(f"Failed to start {snap_name}") from e
 
     def _remove(self):
-        """Coordinate snap and config file removal."""
+        """Coordinate snap and config file removal.
+
+        Handling removal should be done in the stop hook, but other hooks can fire after it, so we
+        handle this in the remove hook. This ensures that no future hooks run without an installed
+        snap in the machine.
+
+        https://documentation.ubuntu.com/juju/3.6/reference/hook/#remove
+        """
         manager = SingletonSnapManager(self.unit.name)
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)

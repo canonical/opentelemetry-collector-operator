@@ -141,7 +141,7 @@ async def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
         "ubuntu/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
     otelcol_config_1 = juju.ssh(
-        "ubuntu/1", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
+        "ubuntu/2", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
     assert otelcol_config_0.strip() == "does not exist"
     assert otelcol_config_1.strip() == "does not exist"
