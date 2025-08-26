@@ -457,17 +457,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 except snap.SnapError as e:
                     raise SnapServiceError(f"Failed to start {snap_name}") from e
 
-            # Merge configurations under a directory into one,
-            # and write it to the default otelcol config file.
-            # This is a placeholder for actual configuration merging logic.
-            # For example:
-            #
-            # content = merge_config()
-            # with open('etc/otelcol/config.yaml', 'w') as f:
-            #     f.write(content)
-            #     f.flush()
-            pass
-
     def _remove(self):
         """Coordinate snap and config file removal."""
         manager = SingletonSnapManager(self.unit.name)
