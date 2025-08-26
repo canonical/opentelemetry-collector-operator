@@ -9,7 +9,6 @@ import jubilant
 
 from constants import CONFIG_FOLDER
 from singleton_snap import SnapRegistrationFile
-from pdb import set_trace
 import os
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
@@ -56,7 +55,6 @@ async def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     )
     assert juju.status().get_units("otelcol") == {}
     # AND the otelcol config directory is removed from disk
-    set_trace()
     otelcol_config_dir = juju.ssh(
         "ubuntu/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
@@ -127,7 +125,7 @@ async def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     # WHEN the relation is removed
     juju.remove_relation("otelcol:juju-info", "ubuntu:juju-info")
     juju.wait(
-        lambda status: jubilant.all_blocked(status, "ubuntu"),
+        lambda status: jubilant.all_active(status, "ubuntu"),
         error=jubilant.any_error,
         timeout=240,
     )

@@ -139,7 +139,6 @@ class SingletonSnapManager:
             snap_name=snap_name,
             snap_revision=snap_revision,
         )
-        logger.warning(f"+++LOCK: {(type(self.LOCK_DIR.joinpath(registration_file.filename)), self.LOCK_DIR.joinpath(registration_file.filename))}")
         os.remove(self.LOCK_DIR.joinpath(registration_file.filename))
 
     @classmethod
