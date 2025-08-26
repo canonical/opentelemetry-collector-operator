@@ -6,6 +6,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Set
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -136,6 +139,7 @@ class SingletonSnapManager:
             snap_name=snap_name,
             snap_revision=snap_revision,
         )
+        logger.warning(f"+++LOCK: {(type(self.LOCK_DIR.joinpath(registration_file.filename)), self.LOCK_DIR.joinpath(registration_file.filename))}")
         os.remove(self.LOCK_DIR.joinpath(registration_file.filename))
 
     @classmethod
