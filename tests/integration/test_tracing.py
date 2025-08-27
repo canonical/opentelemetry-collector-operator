@@ -19,7 +19,6 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "postgresql:cos-agent")
     # THEN all units are active/blocked
-    assert False  # FIXME: trigger debug test in CI, remove this from PR
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
@@ -53,12 +52,6 @@ def test_alerts_are_aggregated(juju: jubilant.Juju):
     assert "postgresql" in alert_files
 
 
-async def test_traces_are_scraped(juju: jubilant.Juju):
-    grep_filters = ["service.name=postgresql-charm"]
-    result = await is_pattern_in_snap_logs(juju, grep_filters)
-    assert result
-
-
 # @retry(stop=stop_after_attempt(25), wait=wait_fixed(10))
 # def test_dashboards_are_aggregated(juju: jubilant.Juju):
 #     dashboard_files = juju.ssh(
@@ -66,3 +59,9 @@ async def test_traces_are_scraped(juju: jubilant.Juju):
 #         command="find /var/lib/juju/agents/unit-otelcol-0/charm/grafana_dashboards -type f",
 #     )
 #     assert "postgresql" in dashboard_files
+
+
+async def test_traces_are_scraped(juju: jubilant.Juju):
+    grep_filters = ["ScopeTraces", "postgresql-charm"]
+    result = await is_pattern_in_snap_logs(juju, grep_filters)
+    assert result
