@@ -465,6 +465,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self.snap(snap_name).ensure(state=snap.SnapState.Absent)
         except (snap.SnapError, SnapSpecError) as e:
             raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
+        logger.info(f"{snap_name} snap was uninstalled")
 
     def _remove_node_exporter(self):
         """Coordinate node-exporter snap removal."""
@@ -474,7 +475,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         manager.unregister(snap_name, snap_revision)
         if not manager.is_used_by_other_units(snap_name):
             self._remove_snap(snap_name)
-
 
     def _remove_opentelemetry_collector(self):
         """Coordinate opentelemetry-collector snap and config file removal."""
@@ -486,12 +486,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_filename = f"{SnapRegistrationFile._normalize_name(self.unit.name)}.yaml"
             config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
             config_path.unlink()
-            logger.info(f"Removed the opentelemetry-collector config file: {config_path}")
+            logger.info(f"removed the opentelemetry-collector config file: {config_path}")
             self.snap("opentelemetry-collector").restart()
         else:
             self._remove_snap(snap_name)
             shutil.rmtree(LocalPath(CONFIG_FOLDER))
-            logger.info(f"Removed the opentelemetry-collector config folder: {CONFIG_FOLDER}")
+            logger.info(f"removed the opentelemetry-collector config folder: {CONFIG_FOLDER}")
 
         # TODO: Luca if the snap is used by other units, we should probably `ensure`
         # that the max_revision is installed instead.
