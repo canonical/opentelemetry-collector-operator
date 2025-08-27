@@ -209,7 +209,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         ## Node exporter metrics
         config_manager.config.add_component(
             Component.receiver,
-            name=f"prometheus/node-exporter/{self.unit.name}",
+            name="prometheus/node-exporter",
             config={
                 "config": {
                     "scrape_configs": [
@@ -228,7 +228,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                                         "juju_model": topology.model,
                                         "juju_model_uuid": topology.model_uuid,
                                         "juju_application": topology.application,
-                                        "juju_unit": topology.unit,
                                     },
                                 }
                             ],

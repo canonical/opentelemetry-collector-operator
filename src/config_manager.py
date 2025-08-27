@@ -223,7 +223,7 @@ class ConfigManager:
         # TODO: Luca: this was gated by having outgoing logs. Do we need that?
         self.config.add_component(
             Component.processor,
-            "resource/send-loki-logs/_charm",
+            "resource/send-loki-logs",
             {
                 "attributes": [
                     {
@@ -237,7 +237,7 @@ class ConfigManager:
         )
         self.config.add_component(
             Component.processor,
-            "attributes/send-loki-logs/_charm",
+            "attributes/send-loki-logs",
             {
                 "actions": [
                     {
@@ -409,7 +409,7 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.processor,
-            "tail_sampling/_charm",
+            "tail_sampling",
             tail_sampling_config(
                 tracing_sampling_rate_charm=sampling_rate_charm,
                 tracing_sampling_rate_workload=sampling_rate_workload,
