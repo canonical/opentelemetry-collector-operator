@@ -5,7 +5,6 @@
 
 import pathlib
 import jubilant
-from tenacity import retry, stop_after_attempt, wait_fixed
 from helpers import is_pattern_in_snap_logs
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
