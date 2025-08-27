@@ -189,17 +189,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
 
         # Tracing setup
-        if self._has_incoming_traces_relation:
-            requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
-            config_manager.add_traces_ingestion(requested_tracing_protocols)
-            # Add default processors to traces
-            config_manager.add_traces_processing(
-                sampling_rate_charm=cast(float, self.config.get("tracing_sampling_rate_charm")),
-                sampling_rate_workload=cast(
-                    float, self.config.get("tracing_sampling_rate_workload")
-                ),
-                sampling_rate_error=cast(float, self.config.get("tracing_sampling_rate_error")),
-            )
+        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
+        config_manager.add_traces_ingestion(requested_tracing_protocols)
+        # Add default processors to traces
+        config_manager.add_traces_processing(
+            sampling_rate_charm=cast(float, self.config.get("tracing_sampling_rate_charm")),
+            sampling_rate_workload=cast(float, self.config.get("tracing_sampling_rate_workload")),
+            sampling_rate_error=cast(float, self.config.get("tracing_sampling_rate_error")),
+        )
         if tracing_otlp_http_endpoint := integrations.send_traces(self):
             config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
             integrations.send_charm_traces(self)
