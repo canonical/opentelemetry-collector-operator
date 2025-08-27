@@ -920,10 +920,10 @@ class COSAgentRequirer(Object):
         self,
         charm: CharmType,
         *,
-        is_tracing_ready: Callable,
         relation_name: str = DEFAULT_RELATION_NAME,
         peer_relation_name: str = DEFAULT_PEER_RELATION_NAME,
         refresh_events: Optional[List[str]] = None,
+        is_tracing_ready: Optional[Callable] = None,
     ):
         """Create a COSAgentRequirer instance.
 
@@ -938,7 +938,9 @@ class COSAgentRequirer(Object):
         self._relation_name = relation_name
         self._peer_relation_name = peer_relation_name
         self._refresh_events = refresh_events or [self._charm.on.config_changed]
-        self._is_tracing_ready = is_tracing_ready
+        self._is_tracing_ready = self._charm.tracing.is_ready  # type: ignore
+        if is_tracing_ready:
+            self._is_tracing_ready = is_tracing_ready
 
         events = self._charm.on[relation_name]
         self.framework.observe(
