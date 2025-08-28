@@ -51,7 +51,7 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 # TODO: move this method outside of charm.py together with the cos-agent integrations
 def _filelog_receiver_config(
-    include: List[str], exclude: List[str], attributes: Dict[str, str]
+    include: List[str], exclude: List[str], attributes: Dict[str, Optional[str]]
 ) -> Dict[str, Any]:
     """Build the config for the filelog receiver."""
     config = {
@@ -135,13 +135,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         super().__init__(framework)
         if hook() == "install":  # FIXME: install is not enough, we also need upgrade
             self._install_snaps()
+        elif hook() == "remove":
+            # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
+            # on the stop hook, then it will be reverted by the reconciler on `peer_relation_*`
+            # hooks. Instead of filtering out these hooks, we do everything in the remove hook.
+            # https://documentation.ubuntu.com/juju/3.6/reference/hook/#remove
+            self._remove_node_exporter()
+            self._remove_opentelemetry_collector()
+            return
 
-        reconcile_required = True
-        if hook() in ["stop", "remove"]:
-            reconcile_required = self._stop()
-
-        if reconcile_required:
-            self._reconcile()
+        self._reconcile()
 
     def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
@@ -180,6 +183,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # Create the config manager
         config_manager = ConfigManager(
+            unit_name=self.unit.name,
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
@@ -225,7 +229,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                                         "juju_model": topology.model,
                                         "juju_model_uuid": topology.model_uuid,
                                         "juju_application": topology.application,
-                                        "juju_unit": topology.unit,
                                     },
                                 }
                             ],
@@ -233,14 +236,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     ],
                 }
             },
-            pipelines=["metrics"],
+            pipelines=[f"metrics/{self.unit.name}"],
         )
         ## COS Agent metrics
         if cos_agent.metrics_jobs:
             config_manager.config.add_component(
                 Component.receiver,
-                name=f"prometheus/cos-agent-{self.unit.name}",
-                config={"config": {"scrape_configs": cos_agent.metrics_jobs}},
+                f"prometheus/cos-agent/{self.unit.name}",
+                {"config": {"scrape_configs": cos_agent.metrics_jobs}},
                 pipelines=[f"metrics/{self.unit.name}"],
             )
         if self.unit.is_leader():
@@ -274,9 +277,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 continue
 
             config_manager.config.add_component(
-                component=Component.receiver,
-                name=f"filelog/{fstab_entry.owner}-{fstab_entry.relative_target}",
-                config=_filelog_receiver_config(
+                Component.receiver,
+                f"filelog/{fstab_entry.owner}-{fstab_entry.relative_target}/{self.unit.name}",
+                _filelog_receiver_config(
                     include=[
                         f"{fstab_entry.target}/**"
                         if fstab_entry
@@ -297,23 +300,24 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             )
         ### Add /var/log scrape job
         var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        # NOTE: var-log is an expensive receiver, avoid duplicating it with a unit identifier
         config_manager.config.add_component(
-            component=Component.receiver,
-            name="filelog/var-log",
-            config=_filelog_receiver_config(
+            Component.receiver,
+            "filelog/var-log",
+            _filelog_receiver_config(
                 include=["/var/log/**/*log"],
                 exclude=var_log_exclusions,
                 attributes={
                     "job": "opentelemetry-collector-var-log",
                     "juju_application": topology.application,
-                    "juju_unit": topology.unit,  # type: ignore
                     "juju_charm": topology.charm_name,
                     "juju_model": topology.model,
                     "juju_model_uuid": topology.model_uuid,
+                    # NOTE: juju_unit is omitted to avoid a unit identifier in the receiver name
                     # NOTE: No snap_name attribute is necessary as these logs are not from a snap
                 },
             ),
-            pipelines=["logs"],
+            pipelines=[f"logs/{self.unit.name}"],
         )
 
         if self.unit.is_leader():
@@ -477,50 +481,43 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 except snap.SnapError as e:
                     raise SnapServiceError(f"Failed to start {snap_name}") from e
 
-            # Merge configurations under a directory into one,
-            # and write it to the default otelcol config file.
-            # This is a placeholder for actual configuration merging logic.
-            # For example:
-            #
-            # content = merge_config()
-            # with open('etc/otelcol/config.yaml', 'w') as f:
-            #     f.write(content)
-            #     f.flush()
-            pass
+    def _remove_snap(self, snap_name: str):
+        """Attempt to remove the snap."""
+        self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
+        try:
+            self.snap(snap_name).ensure(state=snap.SnapState.Absent)
+        except (snap.SnapError, SnapSpecError) as e:
+            raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
+        logger.info(f"{snap_name} snap was uninstalled")
 
-    def _stop(self) -> bool:
-        """Coordinate snap and config file removal.
-
-        If the snap is solely used by this unit, then skip reconciling the charm since it depends
-        on snap operations.
-        """
+    def _remove_node_exporter(self):
+        """Coordinate node-exporter snap removal."""
         manager = SingletonSnapManager(self.unit.name)
-        reconcile_required = True
-        for snap_name in SnapMap.snaps():
-            snap_revision = SnapMap.get_revision(snap_name)
-            if manager.get_units(snap_name):
-                manager.unregister(snap_name, snap_revision)
-                if not manager.is_used_by_other_units(snap_name):
-                    # Remove the snap
-                    self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
-                    try:
-                        self.snap(snap_name).ensure(state=snap.SnapState.Absent)
-                    except (snap.SnapError, SnapSpecError) as e:
-                        raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
-                    # Remove the config file
-                    if snap_name == "opentelemetry-collector":
-                        shutil.rmtree(LocalPath(CONFIG_FOLDER))
-                        logger.info(
-                            f"Removed the opentelemetry-collector config folder: {CONFIG_FOLDER}"
-                        )
-                    reconcile_required = False
+        snap_name = "node-exporter"
+        snap_revision = SnapMap.get_revision(snap_name)
+        manager.unregister(snap_name, snap_revision)
+        if not manager.is_used_by_other_units(snap_name):
+            self._remove_snap(snap_name)
 
-                # TODO: Luca if the snap is used by other units, we should probably `ensure`
-                # that the max_revision is installed instead.
-            else:
-                reconcile_required = False
+    def _remove_opentelemetry_collector(self):
+        """Coordinate opentelemetry-collector snap and config file removal."""
+        manager = SingletonSnapManager(self.unit.name)
+        snap_name = "opentelemetry-collector"
+        snap_revision = SnapMap.get_revision(snap_name)
+        manager.unregister(snap_name, snap_revision)
+        if manager.is_used_by_other_units(snap_name):
+            config_filename = f"{SnapRegistrationFile._normalize_name(self.unit.name)}.yaml"
+            config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
+            config_path.unlink()
+            logger.info(f"removed the opentelemetry-collector config file: {config_path}")
+            self.snap("opentelemetry-collector").restart()
+        else:
+            self._remove_snap(snap_name)
+            shutil.rmtree(LocalPath(CONFIG_FOLDER))
+            logger.info(f"removed the opentelemetry-collector config folder: {CONFIG_FOLDER}")
 
-        return reconcile_required
+        # TODO: Luca if the snap is used by other units, we should probably `ensure`
+        # that the max_revision is installed instead.
 
     def _configure_node_exporter_collectors(self):
         """Configure the node-exporter snap collectors."""
