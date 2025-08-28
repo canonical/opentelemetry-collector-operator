@@ -206,7 +206,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             integrations.send_charm_traces(self)
 
         # COS Agent setup
-        cos_agent = COSAgentRequirer(self, is_tracing_ready=lambda: True)
+        cos_agent = COSAgentRequirer(
+            self,
+            # NOTE: We pass True because the COS Agent library silently enforces the presence of
+            # an outgoing traces relation; the collector instead can always receive traces, due
+            # to our use of the debug exporter.
+            is_tracing_ready=lambda: True,
+        )
         cos_agent_relations = self.model.relations.get("cos-agent", [])
         # Trigger _on_relation_data_changed so that data from cos-agent is stored in the peer relation
         # TODO: instead of calling a private method, expose a public one in the COS Agent library
