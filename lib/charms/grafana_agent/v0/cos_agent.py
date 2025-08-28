@@ -1050,7 +1050,7 @@ class COSAgentRequirer(Object):
     def update_tracing_receivers(self):
         """Updates the list of exposed tracing receivers in all relations."""
         tracing_ready = (
-            self._is_tracing_ready if self._is_tracing_ready else self._charm.tracing.is_ready
+            self._is_tracing_ready if self._is_tracing_ready else self._charm.tracing.is_ready  # type: ignore
         )
         try:
             for relation in self._charm.model.relations[self._relation_name]:
