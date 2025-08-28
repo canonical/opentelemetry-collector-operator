@@ -260,10 +260,6 @@ PYDEPS = ["cosl >= 0.0.50", "pydantic"]
 
 DEFAULT_RELATION_NAME = "cos-agent"
 DEFAULT_PEER_RELATION_NAME = "peers"
-DEFAULT_SCRAPE_CONFIG = {
-    "static_configs": [{"targets": ["localhost:80"]}],
-    "metrics_path": "/metrics",
-}
 
 logger = logging.getLogger(__name__)
 SnapEndpoint = namedtuple("SnapEndpoint", "owner, name")
@@ -714,7 +710,7 @@ class COSAgentProvider(Object):
                 }
             )
 
-        scrape_configs = scrape_configs or [DEFAULT_SCRAPE_CONFIG]
+        scrape_configs = scrape_configs or []
 
         # Augment job name to include the app name and a unique id (index)
         for idx, scrape_config in enumerate(scrape_configs):
