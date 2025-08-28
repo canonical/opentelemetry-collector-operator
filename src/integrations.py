@@ -277,6 +277,8 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
         }
     )
     # Send tracing receivers over relation data to charms sending traces to otel collector
+    # TODO: leader-only because of
+    #  https://github.com/canonical/opentelemetry-collector-operator/issues/71
     if charm.unit.is_leader():
         tracing_provider.publish_receivers(
             tuple(
@@ -295,7 +297,8 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
 def receive_profiles(charm: CharmBase, tls:bool) -> None:
     """Integrate with other charms over the receive-profiles relation endpoint."""
     if not charm.unit.is_leader():
-        # profile ingestion goes per app
+        # TODO: leader-only because of
+        #  https://github.com/canonical/opentelemetry-collector-operator/issues/71
         return
     fqdn = socket.getfqdn()
     grpc_endpoint = f"{fqdn}:{Port.otlp_grpc.value}"
