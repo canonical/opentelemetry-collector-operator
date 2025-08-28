@@ -932,15 +932,14 @@ class COSAgentRequirer(Object):
             relation_name: The name of the relation to communicate over.
             peer_relation_name: The name of the peer relation to communicate over.
             refresh_events: List of events on which to refresh relation data.
+            is_tracing_ready: Custom function to evaluate whether the trace receiver url should be sent.
         """
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self._peer_relation_name = peer_relation_name
         self._refresh_events = refresh_events or [self._charm.on.config_changed]
-        self._is_tracing_ready = self._charm.tracing.is_ready  # type: ignore
-        if is_tracing_ready:
-            self._is_tracing_ready = is_tracing_ready
+        self._is_tracing_ready = is_tracing_ready
 
         events = self._charm.on[relation_name]
         self.framework.observe(
@@ -1050,6 +1049,9 @@ class COSAgentRequirer(Object):
 
     def update_tracing_receivers(self):
         """Updates the list of exposed tracing receivers in all relations."""
+        tracing_ready = (
+            self._is_tracing_ready if self._is_tracing_ready else self._charm.tracing.is_ready
+        )
         try:
             for relation in self._charm.model.relations[self._relation_name]:
                 CosAgentRequirerUnitData(
@@ -1063,7 +1065,7 @@ class COSAgentRequirer(Object):
                             # databag contents (as it expects a string in URL) but that won't cause any errors as
                             # tracing endpoints are the only content in the grafana-agent's side of the databag.
                             url=f"{self._get_tracing_receiver_url(protocol)}"
-                            if self._is_tracing_ready()
+                            if tracing_ready()
                             else None,
                             protocol=ProtocolType(
                                 name=protocol,
