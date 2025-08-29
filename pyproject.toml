@@ -3,7 +3,7 @@
 [project]
 name = "opentelemetry-collector"
 version = "0.0"
-requires-python = "~=3.8"
+requires-python = ">=3.10"
 
 dependencies = [
   "ops[tracing]>=3.1",
