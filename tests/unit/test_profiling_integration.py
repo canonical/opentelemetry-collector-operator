@@ -77,7 +77,7 @@ def test_receive_profiles_integration(sock_mock, ctx, insecure_skip_verify, unit
 
     # THEN the profiling pipeline contains a profiling pipeline, but no exporters other than debug
     cfg = get_otelcol_file(unit_name,config_folder)
-    assert cfg['service']['pipelines']['profiles']['exporters'] == ['debug']
+    assert cfg['service']['pipelines']['profiles']['exporters'] == ['debug/otelcol/0']
 
     # AND we publish to app databag our profile ingestion endpoints for otlp_http and otlp_grpc
     receive_profiles_app_data = state_out.get_relation(receive_profiles.id).local_app_data
