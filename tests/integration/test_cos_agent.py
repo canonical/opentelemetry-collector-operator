@@ -21,12 +21,12 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=360,
+        timeout=420,
     )
     juju.wait(
         lambda status: jubilant.all_active(status, "zookeeper"),
         error=jubilant.any_error,
-        timeout=600,
+        timeout=420,
     )
 
 async def test_metrics_are_scraped(juju: jubilant.Juju):

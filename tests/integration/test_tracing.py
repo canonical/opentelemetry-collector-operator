@@ -21,12 +21,12 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=420,
     )
     juju.wait(
         lambda status: jubilant.all_active(status, "postgresql"),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=420,
     )
 
 
