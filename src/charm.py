@@ -345,6 +345,24 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
             )
 
+        # Profiling setup
+        # cfr. https://github.com/open-telemetry/opentelemetry-collector/tree/main/featuregate
+        feature_gates = None
+        # TODO: it would be more efficient to always enable all feature gates we might potentially need,
+        #  instead of conditionally enabling them depending on relations/config. That would save us a restart!
+        #  However, opt-in feature gates are opt-in because they might be unstable and might be removed in the future,
+        #  so it feels more safe to only enable them as necessary. We should carefully consider whether we're
+        #  making the right choice in this tradeoff.
+        if self._has_incoming_profiles:
+            config_manager.add_profile_ingestion()
+            integrations.receive_profiles(self, tls=is_tls_ready())
+        if profiling_endpoints := integrations.send_profiles(self):
+            config_manager.add_profile_forwarding(
+                profiling_endpoints,
+            )
+        if self._has_incoming_profiles or profiling_endpoints:
+            feature_gates = "service.profilesSupport"
+
         # Logs setup
         integrations.receive_loki_logs(self, tls=is_tls_ready())
         loki_endpoints = integrations.send_loki_logs(self)
@@ -419,6 +437,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self.snap("opentelemetry-collector").stop()
             self.unit.status = WaitingStatus("CSR sent; otelcol down while waiting for a cert")
             return
+
+        if feature_gates:
+            self.snap("opentelemetry-collector").set({"feature-gates": feature_gates})
+
         # Start the otelcol snap in case it was stopped while waiting for certificates
         self.snap("opentelemetry-collector").start()
 
@@ -528,6 +550,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_incoming_traces_relation(self) -> bool:
         return any(self.model.relations.get("receive-traces", []))
+
+    @property
+    def _has_incoming_profiles(self) -> bool:
+        return any(self.model.relations.get("receive-profiles", []))
 
     @property
     def _has_outgoing_metrics_relation(self) -> bool:

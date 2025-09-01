@@ -6,6 +6,7 @@ import json
 import logging
 import shutil
 import socket
+from collections import namedtuple
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, cast, get_args
@@ -25,6 +26,10 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 )
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
+)
+from charms.pyroscope_coordinator_k8s.v0.profiling import (
+    ProfilingEndpointRequirer,
+    ProfilingEndpointProvider,
 )
 from charms.tempo_coordinator_k8s.v0.tracing import (
     ReceiverProtocol,
@@ -53,6 +58,8 @@ from constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+ProfilingEndpoint = namedtuple("ProfilingEndpoint", "endpoint, insecure")
 
 
 def cleanup():
@@ -273,6 +280,8 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
         }
     )
     # Send tracing receivers over relation data to charms sending traces to otel collector
+    # TODO: leader-only because of
+    #  https://github.com/canonical/opentelemetry-collector-operator/issues/71
     if charm.unit.is_leader():
         tracing_provider.publish_receivers(
             tuple(
@@ -287,6 +296,33 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
             )
         )
     return requested_tracing_protocols
+
+def receive_profiles(charm: CharmBase, tls:bool) -> None:
+    """Integrate with other charms over the receive-profiles relation endpoint."""
+    if not charm.unit.is_leader():
+        # TODO: leader-only because of
+        #  https://github.com/canonical/opentelemetry-collector-operator/issues/71
+        return
+    fqdn = socket.getfqdn()
+    grpc_endpoint = f"{fqdn}:{Port.otlp_grpc.value}"
+    # this charm lib exposes a holistic API, so we don't need to bind the instance
+    ProfilingEndpointProvider(
+        charm.model.relations['receive-profiles'],
+        app=charm.app
+        ).publish_endpoint(
+        otlp_grpc_endpoint=grpc_endpoint,
+        insecure=not tls
+    )
+
+
+def send_profiles(charm: CharmBase) -> List[ProfilingEndpoint]:
+    """Integrate with other charms via the send-profiles relation endpoint.
+
+    Returns:
+        All profiling endpoints that we are receiving over `profiling` integrations.
+    """
+    profiling_requirer = ProfilingEndpointRequirer(charm.model.relations['send-profiles'])
+    return [ProfilingEndpoint(ep.otlp_grpc, ep.insecure) for ep in profiling_requirer.get_endpoints()]
 
 
 def send_traces(charm: CharmBase) -> Optional[str]:

@@ -3,27 +3,37 @@ from shutil import copytree
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ops.testing import Context, Exec
+from ops.testing import Context
 
 from charm import OpenTelemetryCollectorCharm
 
+CHARM_ROOT=Path(__file__).parent.parent.parent
 
 @pytest.fixture
-def ctx(tmp_path):
+def unit_id():
+    return 0
+
+@pytest.fixture
+def app_name():
+    return "otelcol"
+
+
+@pytest.fixture
+def unit_name(unit_id, app_name):
+    return f"{app_name}/{unit_id}"
+
+
+@pytest.fixture
+def ctx(tmp_path, unit_id, app_name):
     src_dirs = ["grafana_dashboards", "loki_alert_rules", "prometheus_alert_rules"]
     # Create a virtual charm_root so Scenario respects the `src_dirs`
     # Related to https://github.com/canonical/operator/issues/1673
     for src_dir in src_dirs:
-        source_path = Path("src") / src_dir
+        source_path = CHARM_ROOT/ "src" / src_dir
         target_path = tmp_path / "src" / src_dir
         copytree(source_path, target_path, dirs_exist_ok=True)
     with patch("charm.refresh_certs", lambda: True):
-        yield Context(OpenTelemetryCollectorCharm, charm_root=tmp_path)
-
-
-@pytest.fixture
-def execs():
-    yield {Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")}
+        yield Context(OpenTelemetryCollectorCharm, charm_root=tmp_path, unit_id=unit_id, app_name=app_name)
 
 
 @pytest.fixture
@@ -70,6 +80,14 @@ def recv_ca_folder_path(tmp_path):
     ca_dir = tmp_path / "juju_receive-ca-cert"
     with patch("charm.RECV_CA_CERT_FOLDER_PATH", ca_dir):
         yield ca_dir
+
+
+@pytest.fixture
+def server_cert_paths(tmp_path):
+    """Mock the received CA certificates directory path and ensure it exists."""
+    with patch("charm.SERVER_CERT_PATH", tmp_path / "juju_server-cert") as server_cert:
+        with patch("charm.SERVER_CERT_PRIVATE_KEY_PATH", tmp_path/"juju_privkey") as privkey:
+            yield server_cert, privkey
 
 
 @pytest.fixture(autouse=True)
