@@ -162,11 +162,6 @@ class ConfigManager:
         FIXME The WAL config is broken upstream, so we remove it until this is fixed:
         https://github.com/canonical/opentelemetry-collector-k8s-operator/issues/105
         """
-        # return {
-        #     "wal": {
-        #         "directory": FILE_STORAGE_DIRECTORY,
-        #     },
-        # }
         return {}
 
     def add_log_ingestion(self) -> None:
