@@ -1,4 +1,66 @@
-"""Profiling integration endpoint wrapper."""
+"""Profiling integration endpoint wrappers.
+
+Install with:
+> $ charmcraft fetch-lib charms.pyroscope_coordinator_k8s.v0.profiling
+
+## Requirer usage
+
+Update charmcraft.yaml to add a `profiling` requirer endpoint
+```yaml
+requires:
+  profiling:
+    interface: profiling
+    optional: true
+    description: Send profiles to a profiling backend (Pyroscope).
+```
+
+Then update your charm code:
+
+```python
+from charms.pyroscope_coordinator_k8s.v0.profiling import ProfilingEndpointRequirer, Endpoint
+...
+class MyCharm(ops.CharmBase):
+        def __init__(self, ...):
+            ...
+            self._profiling = ProfilingEndpointRequirer(self.model.relations['profiling'])  # has to match the endpoint name declared in charmcraft.yaml
+
+        @property
+        def profiling_endpoints(self) -> List[Endpoint]:
+            "The profiling backend endpoints we receive over the 'profiling' interface."
+            return self._profiling.get_endpoints()
+
+        def configure_profiling(self):
+            "Configure your application to send profiles to the provided endpoint."
+            for endpoint in self.profiling_endpoints:
+                self.add_profiling_endpoint(url=endpoint.otlp_grpc, insecure=endpoint.insecure)
+```
+
+## Provider usage
+
+Update charmcraft.yaml to add a `profiling` provider endpoint
+```yaml
+provides:
+  profiling:
+    interface: profiling
+    optional: true
+    description: Receive otel profiles.
+```
+
+Then update your charm code:
+
+```python
+from charms.pyroscope_coordinator_k8s.v0.profiling import ProfilingEndpointProvider
+...
+class MyCharm(ops.CharmBase):
+        def __init__(self, ...):
+            ...
+            self._profiling = ProfilingEndpointProvider(self.model.relations['profiling'], self.application)
+
+        def publish_profiling_endpoint(self):
+            "Update all our `profiling` relations, advertising this unit's ingestion endpoint url."
+            self._profiling.publish_endpoint(f"{socket.getfqdn()}:1239", insecure=True)
+```
+"""
 
 import dataclasses
 import logging
@@ -15,7 +77,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 DEFAULT_ENDPOINT_NAME = "profiling"
 
