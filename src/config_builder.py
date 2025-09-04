@@ -153,7 +153,7 @@ class ConfigBuilder:
         least one pipeline, and it must have a valid receiver exporter pair.
         """
         # NOTE: We omit the unit identifier in the receiver name to avoid duplicate OTLP receivers
-        #       fighting for port bindings.
+        #       fighting for port bindings. This is only for relevant for the vm charm
         self.add_component(
             Component.receiver,
             "otlp",

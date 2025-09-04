@@ -162,11 +162,6 @@ class ConfigManager:
         FIXME The WAL config is broken upstream, so we remove it until this is fixed:
         https://github.com/canonical/opentelemetry-collector-k8s-operator/issues/105
         """
-        # return {
-        #     "wal": {
-        #         "directory": FILE_STORAGE_DIRECTORY,
-        #     },
-        # }
         return {}
 
     def add_log_ingestion(self) -> None:
@@ -181,7 +176,7 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.receiver,
-            f"loki/send-loki-logs/{self._unit_name}",
+            f"loki/receive-loki-logs/{self._unit_name}",
             {
                 "protocols": {
                     "http": {
@@ -284,8 +279,8 @@ class ConfigManager:
                     # the client defaults to https and fails to handshake unless we set `insecure=False`.
                     "tls": {
                         "insecure": endpoint.insecure,
-                        "insecure_skip_verify": self._insecure_skip_verify
-                        },
+                        "insecure_skip_verify": self._insecure_skip_verify,
+                    },
                 },
                 pipelines=["profiles"],
             )
@@ -342,18 +337,19 @@ class ConfigManager:
             The scrape jobs will be added to the Prometheus receiver configuration
             with TLS verification settings inherited from the ConfigManager instance.
         """
-        # create the scrape_configs key path if it does not exist
-        if jobs:
-            self.config._config["receivers"].setdefault("prometheus", {}).setdefault(
-                "config", {}
-            ).setdefault("scrape_configs", [])
+        if not jobs:
+            return
         for scrape_job in jobs:
             # Otelcol acts as a client and scrapes the metrics-generating server, so we enable
             # toggling of skipping the validation of the server certificate
             scrape_job.update({"tls_config": {"insecure_skip_verify": self._insecure_skip_verify}})
-            self.config._config["receivers"]["prometheus"]["config"]["scrape_configs"].append(
-                scrape_job
-            )
+
+        self.config.add_component(
+            Component.receiver,
+            f"prometheus/metrics-endpoint/{self._unit_name}",
+            config={"config": {"scrape_configs": jobs}},
+            pipelines=[f"metrics/{self._unit_name}"],
+        )
 
     def add_remote_write(self, endpoints: List[Dict[str, str]]):
         """Configure forwarding alert rules to prometheus/mimir via remote-write."""
