@@ -16,7 +16,7 @@ $ juju deploy opentelemetry-collector
 
 ## Snap
 
-This charm, by default, uses the [Opentelemetry Collector snap](https://github.com/canonical/opentelemetry-collector-snap/).
+This charm uses the [Opentelemetry Collector snap](https://github.com/canonical/opentelemetry-collector-snap/).
 
 ## Contributing
 
