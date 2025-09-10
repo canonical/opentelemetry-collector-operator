@@ -62,6 +62,12 @@ def juju_hook_name(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture(autouse=True)
+def otelcol_version():
+    with patch.object(OpenTelemetryCollectorCharm, "_otelcol_version", property(lambda *_: "0.0.0")):
+        yield OpenTelemetryCollectorCharm
+
+
+@pytest.fixture(autouse=True)
 def mock_lock_dir(tmp_path):
     with patch("singleton_snap.SingletonSnapManager.LOCK_DIR", tmp_path / "lock_dir"):
         yield
