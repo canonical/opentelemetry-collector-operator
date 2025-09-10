@@ -466,6 +466,21 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Mandatory relation pairs
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
+        
+        # Workload version
+        self.unit.set_workload_version(self._otelcol_version or "")
+        
+    @property
+    def _otelcol_version(self) -> Optional[str]:
+        """Returns the otelcol workload version."""
+        version_output = subprocess.run(["otelcol", "--version"], capture_output=True, text=True).stdout
+        
+        # Output looks like this:
+        # otelcol version 0.130.1
+        result = re.search(r"version (\d*\.\d*\.\d*)", version_output)
+        if result is None:
+            return result
+        return result.group(1)
 
     def _install_snaps(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
