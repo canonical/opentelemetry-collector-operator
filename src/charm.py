@@ -332,6 +332,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     "juju_charm": topology.charm_name,
                     "juju_model": topology.model,
                     "juju_model_uuid": topology.model_uuid,
+                    "instance": socket.getfqdn(),
                     # NOTE: juju_unit is omitted to avoid a unit identifier in the receiver name
                     # NOTE: No snap_name attribute is necessary as these logs are not from a snap
                 },
