@@ -473,7 +473,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _otelcol_version(self) -> Optional[str]:
         """Returns the otelcol workload version."""
-        version_output = subprocess.run(["otelcol", "--version"], capture_output=True, text=True).stdout
+        version_output = subprocess.run(
+            ["/snap/opentelemetry-collector/current/bin/otelcol", "--version"],
+            capture_output=True,
+            text=True
+        ).stdout
 
         # Output looks like this:
         # otelcol version 0.130.1
