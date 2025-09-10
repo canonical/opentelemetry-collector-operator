@@ -19,7 +19,7 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
     juju.deploy(
-        charm, app="otelcol", config={"path_exclude": "/var/log/cloud-init-output.log"}
+        charm, app="otelcol", config={"path_exclude": "/var/log/**/{cloud-init-output.log,syslog}"}
     )
     juju.deploy("ubuntu", base="ubuntu@22.04", channel="latest/stable")
     # WHEN they are related

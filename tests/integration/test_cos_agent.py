@@ -11,9 +11,14 @@ from helpers import is_pattern_in_snap_logs
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
+
 async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
-    juju.deploy(charm_22_04, app="otelcol")
+    juju.deploy(
+        charm_22_04,
+        app="otelcol",
+        config={"path_exclude": "/var/log/**/{cloud-init-output.log,syslog}"},
+    )
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "zookeeper:cos-agent")
@@ -29,6 +34,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
         timeout=420,
     )
 
+
 async def test_metrics_are_scraped(juju: jubilant.Juju):
     grep_filters = ["juju_application=zookeeper", f"juju_model={juju.model}"]
     result = await is_pattern_in_snap_logs(juju, grep_filters)
@@ -36,10 +42,7 @@ async def test_metrics_are_scraped(juju: jubilant.Juju):
 
 
 async def test_logs_are_scraped(juju: jubilant.Juju):
-    grep_filters=[
-        "log.file.name=zookeeper.log",
-        "log.file.path=/snap/opentelemetry-collector"
-    ]
+    grep_filters = ["log.file.name=zookeeper.log", "log.file.path=/snap/opentelemetry-collector"]
     result = await is_pattern_in_snap_logs(juju, grep_filters)
     assert result
 

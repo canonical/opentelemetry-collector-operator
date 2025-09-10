@@ -13,7 +13,11 @@ TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
-    juju.deploy(charm_22_04, app="otelcol")
+    juju.deploy(
+        charm_22_04,
+        app="otelcol",
+        config={"path_exclude": "/var/log/**/{cloud-init-output.log,syslog}"},
+    )
     juju.deploy("postgresql", channel="14/stable")
     # WHEN they are related
     juju.integrate("otelcol:cos-agent", "postgresql:cos-agent")
