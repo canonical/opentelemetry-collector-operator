@@ -133,7 +133,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "install":  # FIXME: install is not enough, we also need upgrade
+        if hook() == "meter-status-changed":
+            return
+        if hook() == "install" or hook() == "upgrade":
             self._install_snaps()
         elif hook() == "remove":
             # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
@@ -476,7 +478,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         version_output = subprocess.run(
             ["/snap/opentelemetry-collector/current/bin/otelcol", "--version"],
             capture_output=True,
-            text=True
+            text=True,
         ).stdout
 
         # Output looks like this:
