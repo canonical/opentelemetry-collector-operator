@@ -133,8 +133,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "meter-status-changed":
-            return
         if hook() == "install" or hook() == "upgrade":
             self._install_snaps()
         elif hook() == "remove":
