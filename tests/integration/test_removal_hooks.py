@@ -11,6 +11,8 @@ from constants import CONFIG_FOLDER
 from singleton_snap import SnapRegistrationFile
 import os
 
+from helpers import PATH_EXCLUDE
+
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
@@ -18,9 +20,7 @@ TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 async def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
-    juju.deploy(
-        charm, app="otelcol", config={"path_exclude": "/var/log/**/{cloud-init-output.log,syslog}"}
-    )
+    juju.deploy(charm, app="otelcol", config={"path_exclude": PATH_EXCLUDE})
     juju.deploy("ubuntu", base="ubuntu@22.04", channel="latest/stable")
     # WHEN they are related
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")

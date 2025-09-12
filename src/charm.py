@@ -320,7 +320,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 pipelines=[f"logs/{self.unit.name}"],
             )
         ### Add /var/log scrape job
-        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(";")
         # NOTE: var-log is an expensive receiver, avoid duplicating it with a unit identifier
         config_manager.config.add_component(
             Component.receiver,

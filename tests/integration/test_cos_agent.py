@@ -6,7 +6,7 @@
 import pathlib
 import jubilant
 from tenacity import retry, stop_after_attempt, wait_fixed
-from helpers import is_pattern_in_snap_logs
+from helpers import PATH_EXCLUDE, is_pattern_in_snap_logs
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -17,7 +17,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.deploy(
         charm_22_04,
         app="otelcol",
-        config={"path_exclude": "/var/log/**/{cloud-init-output.log,syslog}"},
+        config={"path_exclude": PATH_EXCLUDE},
     )
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
