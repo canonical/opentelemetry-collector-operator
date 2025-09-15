@@ -133,7 +133,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "install":  # FIXME: install is not enough, we also need upgrade
+        if hook() == "install" or hook() == "upgrade":
             self._install_snaps()
         elif hook() == "remove":
             # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
@@ -318,7 +318,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 pipelines=[f"logs/{self.unit.name}"],
             )
         ### Add /var/log scrape job
-        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(",")
+        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(";")
         # NOTE: var-log is an expensive receiver, avoid duplicating it with a unit identifier
         config_manager.config.add_component(
             Component.receiver,
@@ -430,7 +430,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         if current_hash != old_hash:
             for snap_name in SnapMap.snaps():
-                self.snap(snap_name).restart()
+                self._restart_snap(self.snap(snap_name))
 
         # Set status
         if self._has_server_cert_relation and not is_tls_ready():
@@ -476,7 +476,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         version_output = subprocess.run(
             ["/snap/opentelemetry-collector/current/bin/otelcol", "--version"],
             capture_output=True,
-            text=True
+            text=True,
         ).stdout
 
         # Output looks like this:
@@ -554,6 +554,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
         snap.set(configs)  # type: ignore
+
+    # We use tenacity because .restart() might rarely fail due to some timing issues with snapd
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
+    def _restart_snap(self, snap: snap.Snap):
+        """Restart the snap."""
+        snap.restart()
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
