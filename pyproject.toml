@@ -16,6 +16,7 @@ dependencies = [
   "pydantic",
   "charmlibs-pathops",
   "sh",
+  "tenacity",
 ]
 
 [project.optional-dependencies]
@@ -32,7 +33,6 @@ dev = [
   "pytest-operator",
   "ops[testing]",
   "jubilant",
-  "tenacity",
 ]
 
 # Testing tools configuration

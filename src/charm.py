@@ -9,7 +9,6 @@ import re
 import shutil
 import socket
 import subprocess
-from time import sleep
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -431,9 +430,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         if current_hash != old_hash:
             for snap_name in SnapMap.snaps():
-                logger.info("+++ SLEEPY SLEEP AFTER INSTALL +++")
-                sleep(15)
-                self.snap(snap_name).restart()
+                self._restart_snap(self.snap(snap_name))
 
         # Set status
         if self._has_server_cert_relation and not is_tls_ready():
@@ -557,6 +554,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
         snap.set(configs)  # type: ignore
+
+    # We use tenacity because .restart() might rarely fail due to some timing issues with snapd
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
+    def _restart_snap(self, snap: snap.Snap):
+        """Restart the snap."""
+        snap.restart()
 
     def snap(self, snap_name: str) -> snap.Snap:
         """Return the snap object for the given snap.
