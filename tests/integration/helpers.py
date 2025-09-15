@@ -8,7 +8,7 @@ from typing import Final
 import jubilant
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-
+# Exclude some logs to avoid circular ingestion during tests
 PATH_EXCLUDE: Final[str] = "/var/log/**/{cloud-init-output.log,syslog,auth.log};/var/log/juju/**"
 
 

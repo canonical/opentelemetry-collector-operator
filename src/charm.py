@@ -9,6 +9,7 @@ import re
 import shutil
 import socket
 import subprocess
+from time import sleep
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -430,6 +431,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         if current_hash != old_hash:
             for snap_name in SnapMap.snaps():
+                logger.info("+++ SLEEPY SLEEP AFTER INSTALL +++")
+                sleep(15)
                 self.snap(snap_name).restart()
 
         # Set status

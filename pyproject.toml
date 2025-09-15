@@ -15,6 +15,7 @@ dependencies = [
   "cosl",
   "pydantic",
   "charmlibs-pathops",
+  "sh",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +31,6 @@ dev = [
   # Integration
   "pytest-operator",
   "ops[testing]",
-  "sh",
   "jubilant",
   "tenacity",
 ]
