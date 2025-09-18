@@ -59,6 +59,10 @@ provides:
     interface: tracing
     optional: true
     description: Receive traces from other charms.
+  receive-profiles:
+    interface: profiling
+    optional: true
+    description: Receive profiles from other charms.
 
 requires:
   juju-info:
@@ -124,6 +128,10 @@ requires:
     limit: 1
     optional: true
     description: Send charm traces to a charmed Tempo instance.
+  send-profiles:
+    interface: profiling
+    optional: true
+    description: Send any received profiling data to other charms.
 
 peers:
   peers:
@@ -172,6 +180,9 @@ config:
 
         For example, `/var/log/**/{app_one,app_two}.log` will result in the agent ignoring both
         `/var/log/app_one.log` and `/var/log/app_two.log`.
+        
+        To provide multiple path exclusion globs, separate with semicolons (;), such as
+        `/var/log/app_one.log;/var/log/juju`.
 
         Note that the value you provide here is not interpreted as a path, but rather as a glob matcher.
         Specifically, if you want to exclude logs in the `/var/log/test` folder, you should set the

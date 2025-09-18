@@ -7,23 +7,28 @@ import pathlib
 import re
 
 import jubilant
-from helpers import is_pattern_in_snap_logs, is_pattern_not_in_logs
+from helpers import PATH_EXCLUDE, is_pattern_in_snap_logs, is_pattern_not_in_logs
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
 async def is_node_exporter_running_with_collectors(juju: jubilant.Juju, pattern: str):
-    output_ps = juju.ssh("otelcol/0", command="ps ax | grep node-exporter | egrep -v 'grep|snapfuse'")
+    output_ps = juju.ssh(
+        "otelcol/0", command="ps ax | grep node-exporter | egrep -v 'grep|snapfuse'"
+    )
     if not re.search(pattern, output_ps):
         raise Exception(f"Pattern {pattern} not found in the node-exporter process output")
     return True
+
 
 async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
     juju.deploy(
-        charm_22_04, app="otelcol", config={"path_exclude": "/var/log/cloud-init-output.log"}
+        charm_22_04,
+        app="otelcol",
+        config={"path_exclude": PATH_EXCLUDE},
     )
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
@@ -32,12 +37,12 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
         error=jubilant.any_error,
-        timeout=300,
+        timeout=420,
     )
     juju.wait(
         lambda status: jubilant.all_active(status, "zookeeper"),
         error=jubilant.any_error,
-        timeout=600,
+        timeout=420,
     )
 
 
@@ -54,7 +59,7 @@ async def test_path_exclude(juju: jubilant.Juju):
     is_included = await is_pattern_in_snap_logs(juju, included_log_pattern)
     assert is_included
 
-    is_excluded= is_pattern_not_in_logs(juju, excluded_log_pattern)
+    is_excluded = is_pattern_not_in_logs(juju, excluded_log_pattern)
     assert is_excluded
 
 
@@ -62,6 +67,7 @@ async def test_node_metrics(juju: jubilant.Juju):
     node_metric = ["node_scrape_collector_success"]
     is_included = await is_pattern_in_snap_logs(juju, node_metric)
     assert is_included
+
 
 async def test_node_exporter_collectors(juju: jubilant.Juju):
     node_exporter_collectors = r"collector.drm"
