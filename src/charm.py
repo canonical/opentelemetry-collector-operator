@@ -16,7 +16,7 @@ from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
-from ops import BlockedStatus, CharmBase, RelationChangedEvent
+from ops import BlockedStatus, CharmBase, Relation, RelationChangedEvent, Unit
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -213,7 +213,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             # to our use of the debug exporter.
             is_tracing_ready=lambda: True,
         )
-        cos_agent_relations = self.model.relations.get("cos-agent", [])
+        cos_agent_relations: List[Relation] = self.model.relations.get("cos-agent", [])
         # Trigger _on_relation_data_changed so that data from cos-agent is stored in the peer relation
         # TODO: instead of calling a private method, expose a public one in the COS Agent library
         for relation in cos_agent_relations:
@@ -229,7 +229,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         ## Node exporter metrics
         config_manager.config.add_component(
             Component.receiver,
-            name="prometheus/node-exporter",
+            name=f"prometheus/node-exporter/{self.unit.name}",
             config={
                 "config": {
                     "scrape_configs": [
@@ -248,6 +248,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                                         "juju_model": topology.model,
                                         "juju_model_uuid": topology.model_uuid,
                                         "juju_application": topology.application,
+                                        "juju_unit": topology.unit,
                                     },
                                 }
                             ],
