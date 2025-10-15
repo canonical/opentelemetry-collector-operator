@@ -16,7 +16,7 @@ from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
-from ops import BlockedStatus, CharmBase, Relation, RelationChangedEvent, Unit
+from ops import BlockedStatus, CharmBase, Relation, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
 
