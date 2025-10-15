@@ -21,7 +21,7 @@ def get_system_arch() -> str:
     If platform is x86_64 or amd64, it returns amd64.
     If platform is aarch64, arm64, armv8b, or armv8l, it returns arm64.
     """
-    arch = platform.machine()
+    arch = platform.machine().lower()
     if arch in ["x86_64", "amd64"]:
         arch = "amd64"
     elif arch in ["aarch64", "arm64", "armv8b", "armv8l"]:
