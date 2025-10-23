@@ -138,7 +138,7 @@ def logrotate_file(tmp_path):
 
 @pytest.fixture(autouse=True)
 def etc_node_exporter_dir(tmp_path):
-    with patch("constants.NODE_EXPORTER_TEXTFILE_DIR", tmp_path / "etc-node-exporter"):
+    with patch("charm.NODE_EXPORTER_TEXTFILE_DIR", tmp_path / "etc-node-exporter"):
         yield
 
 
