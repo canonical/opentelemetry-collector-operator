@@ -23,13 +23,21 @@ INTERNAL_TELEMETRY_LOG_FILE: Final[str] = "/var/snap/opentelemetry-collector/com
 # SNAP_COMMON dir: https://snapcraft.io/docs/data-locations#p-94053-system-data
 FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
 
+# Directory where node-exporter's textfile collector reads metrics files written by
+# subordinates. Each subordinate unit should write a file named after the unit
+# (slashes replaced with underscores) containing Prometheus text-based metrics.
+# Note that the folder (or one of its parents) must be declared as a plug by the node exporter snap.
+NODE_EXPORTER_TEXTFILE_DIR: Final[str] = "/etc/node-exporter/textfile-collector.d"
+
 # Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
 NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
-NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
+NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {"drm", "logind", "systemd", "mountstats", "processes", "sysctl"}
     "drm",
     "logind",
     "systemd",
     "mountstats",
     "processes",
     "sysctl",
+	"textfile",
+	f"textfile.directory={NODE_EXPORTER_TEXTFILE_DIR}",
 }
