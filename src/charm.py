@@ -692,7 +692,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         LocalPath(NODE_EXPORTER_TEXTFILE_DIR).mkdir(parents=True, exist_ok=True)
         # Filename must match the glob `*.prom` used by node-exporter's textfile collector
         # Ref: https://github.com/prometheus/node_exporter/tree/master?tab=readme-ov-file#textfile-collector
-        LocalPath(os.path.join(NODE_EXPORTER_TEXTFILE_DIR, f"{self.unit.name.replace("/", "_")}.prom")).write_text("\n".join(lines) + ("\n" if lines else ""))
+        LocalPath(os.path.join(NODE_EXPORTER_TEXTFILE_DIR, f'{self.unit.name.replace("/", "_")}.prom')).write_text("\n".join(lines) + ("\n" if lines else ""))
 
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))

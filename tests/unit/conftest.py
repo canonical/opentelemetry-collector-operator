@@ -14,6 +14,7 @@ from ops.testing import Context
 from charm import OpenTelemetryCollectorCharm
 from config_manager import ConfigManager
 
+
 CHARM_ROOT = Path(__file__).parent.parent.parent
 
 
@@ -133,6 +134,12 @@ def logrotate_file(tmp_path):
     """Mock the logrotate file path and ensure it exists."""
     with patch("charm.LOGROTATE_PATH", tmp_path / "logrotate.d/otelcol") as logrotate_file:
         yield logrotate_file
+
+
+@pytest.fixture(autouse=True)
+def etc_node_exporter_dir(tmp_path):
+    with patch("constants.NODE_EXPORTER_TEXTFILE_DIR", tmp_path / "etc-node-exporter"):
+        yield
 
 
 @pytest.fixture
