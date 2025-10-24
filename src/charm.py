@@ -677,7 +677,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     principals.add(unit.name)
 
         # Build metric lines
-        lines = []
+        lines = [
+            "# HELP subordinate_charm_info An info metric for correlating between principal charms and the corresponding node-exporter metrics.",
+            "# TYPE subordinate_charm_info gauge",
+        ]
         for principal in sorted(principals):
             labels = {
                 "subordinate_unit": self.unit.name,
