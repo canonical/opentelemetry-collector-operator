@@ -26,8 +26,8 @@ FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
 # Directory where node-exporter's textfile collector reads metrics files written by
 # subordinates. Each subordinate unit should write a file named after the unit
 # (slashes replaced with underscores) containing Prometheus text-based metrics.
-# Note that the folder (or one of its parents) must be declared as a plug by the node exporter snap.
-NODE_EXPORTER_TEXTFILE_DIR: Final[str] = "/etc/node-exporter/textfile-collector.d"
+# Using $SNAP_COMMON (which is owned by root) because the charm (and node-exporter) runs as root
+NODE_EXPORTER_TEXTFILE_DIR: Final[str] = "/var/snap/node-exporter/common/textfile-collector.d"
 
 # Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
 NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
