@@ -1589,7 +1589,7 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
-    "charm: opentelemetry-collector-k8s"
+    "charm: opentelemetry-collector"
   ],
   "templating": {
     "list": [
