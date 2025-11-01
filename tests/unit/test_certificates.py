@@ -345,10 +345,8 @@ def test_update_jobs_with_ca_paths_preserves_other_config(config_manager):
 # Integration test - end-to-end flow
 def test_ensure_certs_dir_creates_directory_when_not_exists():
     """Test that _ensure_certs_dir creates directory when it doesn't exist."""
-    from charm import OpenTelemetryCollectorCharm, CERT_DIR
+    from charm import OpenTelemetryCollectorCharm
 
-    # Create a mock instance with proper method implementation
-    mock_framework = MagicMock()
     with patch('charm.Path') as mock_path_class:
         mock_cert_dir = MagicMock()
         mock_cert_dir.exists.return_value = False
@@ -370,10 +368,8 @@ def test_ensure_certs_dir_creates_directory_when_not_exists():
 
 def test_ensure_certs_dir_skips_when_directory_exists():
     """Test that _ensure_certs_dir skips creation when directory exists."""
-    from charm import OpenTelemetryCollectorCharm, CERT_DIR
+    from charm import OpenTelemetryCollectorCharm
 
-    # Create a mock instance with proper method implementation
-    mock_framework = MagicMock()
     with patch('charm.Path') as mock_path_class:
         mock_cert_dir = MagicMock()
         mock_cert_dir.exists.return_value = True
