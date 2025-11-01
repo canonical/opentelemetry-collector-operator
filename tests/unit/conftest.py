@@ -1,11 +1,14 @@
 from pathlib import Path
 from shutil import copytree
+from textwrap import dedent
 from unittest.mock import MagicMock, patch
+import tempfile
 
 import pytest
 from ops.testing import Context
 
 from charm import OpenTelemetryCollectorCharm
+from config_manager import ConfigManager
 
 CHARM_ROOT=Path(__file__).parent.parent.parent
 
@@ -135,3 +138,64 @@ def mock_cos_agent_update_tracing():
         return_value=None,
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def mock_ensure_certs_dir(request):
+    """Mock the _ensure_certs_dir method to avoid PermissionError in tests."""
+    # Don't mock for the specific _ensure_certs_dir tests
+    if "ensure_certs_dir" in request.node.name:
+        yield
+    else:
+        with patch("charm.OpenTelemetryCollectorCharm._ensure_certs_dir"):
+            yield
+
+
+# Certificate testing fixtures
+@pytest.fixture
+def sample_ca_cert():
+    """Sample CA certificate content for testing."""
+    return dedent("""\
+        -----BEGIN CERTIFICATE-----
+        MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiIMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
+        BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
+        aWRnaXRzIFB0eUzMkQwHhcNMTMwOTEyMjE1MjAyWhcNMTQwOTEyMjE1MjAyWjBF
+        MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
+        ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
+        CgKCAQEAwxKxPqB/NBOOfJUA9t4gCjGcNnHvEjQc8g8MJp8qN3lqf8d4d8d4d8d4
+        d8d4d8d8d8d8d4d8d8d4d8d8d4d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d4d8d4d8d4d8d4d
+        -----END CERTIFICATE-----""").strip()
+
+
+@pytest.fixture
+def second_ca_cert():
+    """Second sample CA certificate for testing multiple certificates."""
+    return dedent("""\
+        -----BEGIN CERTIFICATE-----
+        MIIDXjCCAkYCCQCCKpT1rYK7pzANBgkqhkiG9w0BAQFADCBiDELMAkGA1UEBhMC
+        -----END CERTIFICATE-----""").strip()
+
+
+@pytest.fixture
+def mock_charm():
+    """Create a mock charm instance for testing."""
+    with patch('charm.OpenTelemetryCollectorCharm.__init__', lambda self, *args: None):
+        return OpenTelemetryCollectorCharm(MagicMock())
+
+
+@pytest.fixture
+def config_manager():
+    """Create a ConfigManager instance for testing."""
+    return ConfigManager(
+        unit_name="test/0",
+        global_scrape_interval="15s",
+        global_scrape_timeout="",
+        insecure_skip_verify=True,
+    )
+
+
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory for testing."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)

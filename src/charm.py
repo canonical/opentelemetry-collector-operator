@@ -9,6 +9,7 @@ import re
 import shutil
 import socket
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -24,6 +25,7 @@ import integrations
 from config_builder import Component
 from config_manager import ConfigManager
 from constants import (
+    CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
     LOKI_RULES_DEST_PATH,
@@ -385,7 +387,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         # For now, the only incoming and outgoing metrics relations are remote-write/scrape
         metrics_consumer_jobs = integrations.scrape_metrics(self)
+        # Write CA certificates to disk and update job configurations
+        self._ensure_certs_dir()
+        cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
+        metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(metrics_consumer_jobs, cert_paths)
         config_manager.add_prometheus_scrape_jobs(metrics_consumer_jobs)
+
         if self._has_outgoing_metrics_relation:
             # This is conditional because otherwise remote_write.endpoints causes error on relation-broken
             remote_write_endpoints = integrations.send_remote_write(self)
@@ -569,7 +576,53 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """
         return snap.SnapCache()[snap_name]
 
-    @property
+    def _ensure_certs_dir(self) -> None:
+        cert_dir = Path(CERT_DIR)
+
+        if cert_dir.exists():
+            return
+
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        cert_dir.chmod(0o755)
+
+
+    def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
+        """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
+
+        This method processes Prometheus scrape jobs, extracts CA certificate content,
+        and writes it to CERT_DIR.
+
+        Args:
+            scrape_jobs: List of scrape job dictionaries from MetricsEndpointConsumer
+
+        Returns:
+            Dictionary mapping job names to their certificate file paths
+        """
+        cert_paths = {}
+        cert_dir = Path(CERT_DIR)
+
+        for job in scrape_jobs:
+            tls_config = job.get("tls_config", {})
+            ca_file_content = tls_config.get("ca_file")
+
+            # Skip jobs without valid certificate content
+            if not ca_file_content or not ca_file_content.strip().startswith("-----BEGIN CERTIFICATE-----"):
+                continue
+
+            job_name = job.get("job_name", "default")
+            safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
+            ca_cert_path = cert_dir / f"otel_{safe_job_name}_ca.pem"
+
+            try:
+                ca_cert_path.write_text(ca_file_content)
+                ca_cert_path.chmod(0o644)
+                cert_paths[job_name] = str(ca_cert_path)
+                logger.debug(f"CA certificate for job '{job_name}' written to {ca_cert_path}")
+            except (OSError, PermissionError) as e:
+                logger.error(f"Failed to write CA certificate for job '{job_name}': {e}")
+
+        return cert_paths
+
     def _has_incoming_logs_relation(self) -> bool:
         return any(self.model.relations.get("receive-loki-logs", []))
 
