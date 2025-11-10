@@ -35,6 +35,7 @@ typically in the `__init__` method of your charm (the one which sends telemetry)
         logs_rules_dir: str = "./src/loki_alert_rules",
         recurse_rules_dirs: bool = False,
         log_slots: Optional[List[str]] = None,
+        log_files: Optional[List[str]] = None,
         dashboard_dirs: Optional[List[str]] = None,
         refresh_events: Optional[List] = None,
         tracing_protocols: Optional[List[str]] = None,
@@ -62,6 +63,8 @@ typically in the `__init__` method of your charm (the one which sends telemetry)
   search alert rules files recursively in the previous two directories or not.
 
 - `log_slots`: Snap slots to connect to for scraping logs in the form ["snap-name:slot", ...].
+
+- `log_files`: Log files to scrape in the form ["/path/to/file.log", ...].
 
 - `dashboard_dirs`: List of directories where the dashboards are stored in the Charmed Operator.
 
@@ -110,6 +113,7 @@ class TelemetryProviderCharm(CharmBase):
             logs_rules_dir="./src/alert_rules/loki",
             recursive_rules_dir=True,
             log_slots=["my-app:slot"],
+            log_files=["/var/log/my-app.log", "/var/log/my-app-error.log"],
             dashboard_dirs=["./src/dashboards_1", "./src/dashboards_2"],
             refresh_events=["update-status", "upgrade-charm"],
             tracing_protocols=["otlp_http", "otlp_grpc"],
@@ -254,7 +258,7 @@ if TYPE_CHECKING:
 
 LIBID = "dc15fa84cef84ce58155fb84f6c6213a"
 LIBAPI = 0
-LIBPATCH = 22
+LIBPATCH = 23
 
 PYDEPS = ["cosl >= 0.0.50", "pydantic"]
 
@@ -485,6 +489,7 @@ class CosAgentProviderUnitData(DatabagModel):  # type: ignore
     # this data does not need to be forwarded to the gagent leader
     metrics_scrape_jobs: List[Dict]
     log_slots: List[str]
+    log_files: Optional[List[str]] = None
 
     # Requested tracing protocols.
     tracing_protocols: Optional[List[str]] = None
@@ -615,6 +620,7 @@ class COSAgentProvider(Object):
         logs_rules_dir: str = "./src/loki_alert_rules",
         recurse_rules_dirs: bool = False,
         log_slots: Optional[List[str]] = None,
+        log_files: Optional[List[str]] = None,
         dashboard_dirs: Optional[List[str]] = None,
         refresh_events: Optional[List] = None,
         tracing_protocols: Optional[List[str]] = None,
@@ -634,6 +640,7 @@ class COSAgentProvider(Object):
             recurse_rules_dirs: Whether to recurse into rule paths.
             log_slots: Snap slots to connect to for scraping logs
                 in the form ["snap-name:slot", ...].
+            log_files: Log files to scrape in the form ["/path/to/file.log", ...].
             dashboard_dirs: Directory where the dashboards are stored.
             refresh_events: List of events on which to refresh relation data.
             tracing_protocols: List of protocols that the charm will be using for sending traces.
@@ -652,6 +659,7 @@ class COSAgentProvider(Object):
         self._logs_rules = logs_rules_dir
         self._recursive = recurse_rules_dirs
         self._log_slots = log_slots or []
+        self._log_files = log_files or []
         self._dashboard_dirs = dashboard_dirs
         self._refresh_events = refresh_events or [self._charm.on.config_changed]
         self._tracing_protocols = tracing_protocols
@@ -680,6 +688,7 @@ class COSAgentProvider(Object):
                         dashboards=self._dashboards,
                         metrics_scrape_jobs=self._scrape_jobs,
                         log_slots=self._log_slots,
+                        log_files=self._log_files,
                         tracing_protocols=self._tracing_protocols,
                     )
                     relation.data[self._charm.unit][data.KEY] = data.json()
@@ -1314,6 +1323,16 @@ class COSAgentRequirer(Object):
                 endpoints.append((endpoint, topology))
 
         return endpoints
+
+    @property
+    def log_files_with_topology(self) -> List[Tuple[str, JujuTopology]]:
+        """Fetch log files and charm topology for each related unit."""
+        log_files = []
+        for data, topology in self._remote_data:
+            if data.log_files:
+                for log_file in data.log_files:
+                    log_files.append((log_file, topology))
+        return log_files
 
     @property
     def logs_alerts(self) -> Dict[str, Any]:

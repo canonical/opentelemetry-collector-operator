@@ -317,6 +317,28 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 ),
                 pipelines=[f"logs/{self.unit.name}"],
             )
+        ## COS Agent log files (specified by path)
+        for log_file, log_topology in cos_agent.log_files_with_topology:
+            # Create a unique receiver name based on the log file path
+            # Replace slashes and dots to create a valid receiver name
+            safe_filename = log_file.replace("/", "_").replace(".", "_").strip("_")
+            config_manager.config.add_component(
+                Component.receiver,
+                f"filelog/{safe_filename}/{self.unit.name}",
+                _filelog_receiver_config(
+                    include=[log_file],
+                    exclude=[],
+                    attributes={
+                        "job": f"cos-agent-{safe_filename}",
+                        "juju_application": log_topology.application,
+                        "juju_unit": log_topology.unit,
+                        "juju_charm": log_topology.charm_name,
+                        "juju_model": log_topology.model,
+                        "juju_model_uuid": log_topology.model_uuid,
+                    },
+                ),
+                pipelines=[f"logs/{self.unit.name}"],
+            )
         ### Add /var/log scrape job
         var_log_exclusions = cast(str, self.config.get("path_exclude")).split(";")
         # NOTE: var-log is an expensive receiver, avoid duplicating it with a unit identifier
