@@ -7,6 +7,7 @@ from ops.testing import Context
 
 from charm import OpenTelemetryCollectorCharm
 
+
 CHARM_ROOT=Path(__file__).parent.parent.parent
 
 @pytest.fixture
@@ -78,6 +79,12 @@ def config_folder(tmp_path):
     config_file = tmp_path / "config.d"
     with patch("charm.CONFIG_FOLDER", config_file):
         yield config_file
+
+
+@pytest.fixture(autouse=True)
+def etc_node_exporter_dir(tmp_path):
+    with patch("charm.NODE_EXPORTER_TEXTFILE_DIR", tmp_path / "etc-node-exporter"):
+        yield
 
 
 @pytest.fixture
