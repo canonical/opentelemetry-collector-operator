@@ -28,7 +28,7 @@ def test_cos_agent_log_files_are_scraped(ctx, config_folder, unit_name):
             })
         },
     )
-    
+
     state = State(
         relations=[cos_agent_relation],
         config={"path_exclude": ""},
@@ -42,36 +42,36 @@ def test_cos_agent_log_files_are_scraped(ctx, config_folder, unit_name):
     config_filename = f"{SnapRegistrationFile._normalize_name(unit_name)}.yaml"
     config_path = LocalPath(Path(config_folder) / config_filename)
     assert config_path.exists(), "config file should exist"
-    
+
     cfg = yaml.safe_load(config_path.read_text())
-    
+
     # Check that we have receivers for the log files
     assert "receivers" in cfg
-    
+
     # Look for the filelog receivers with the expected names
     receiver_names = list(cfg["receivers"].keys())
-    
+
     # We should have receivers for both log files
     var_log_app_log_receivers = [
-        name for name in receiver_names 
+        name for name in receiver_names
         if "filelog" in name and "var_log_app_log" in name
     ]
     var_log_app_error_log_receivers = [
-        name for name in receiver_names 
+        name for name in receiver_names
         if "filelog" in name and "var_log_app-error_log" in name
     ]
-    
+
     assert len(var_log_app_log_receivers) > 0, "Should have receiver for /var/log/app.log"
     assert len(var_log_app_error_log_receivers) > 0, "Should have receiver for /var/log/app-error.log"
-    
+
     # Verify the receiver configuration for the first log file
     receiver_name = var_log_app_log_receivers[0]
     receiver_config = cfg["receivers"][receiver_name]
-    
+
     assert receiver_config["include"] == ["/var/log/app.log"]
     assert "attributes" in receiver_config
     assert receiver_config["attributes"]["job"] == "cos-agent-var_log_app_log"
-    
+
 
 def test_cos_agent_log_files_have_topology_labels(ctx, config_folder, unit_name):
     """Test that log files from cos-agent get proper topology labels."""
@@ -90,7 +90,7 @@ def test_cos_agent_log_files_have_topology_labels(ctx, config_folder, unit_name)
             })
         },
     )
-    
+
     state = State(
         relations=[cos_agent_relation],
         config={"path_exclude": ""},
@@ -104,17 +104,17 @@ def test_cos_agent_log_files_have_topology_labels(ctx, config_folder, unit_name)
     config_filename = f"{SnapRegistrationFile._normalize_name(unit_name)}.yaml"
     config_path = LocalPath(Path(config_folder) / config_filename)
     cfg = yaml.safe_load(config_path.read_text())
-    
+
     # Find the receiver for our log file
     receiver_names = [
         name for name in cfg["receivers"].keys()
         if "filelog" in name and "var_log_myapp_log" in name
     ]
-    
+
     assert len(receiver_names) > 0
     receiver_name = receiver_names[0]
     receiver_config = cfg["receivers"][receiver_name]
-    
+
     # Verify topology labels
     attrs = receiver_config["attributes"]
     assert attrs["juju_application"] == "my-principal-app"
@@ -140,7 +140,7 @@ def test_cos_agent_empty_log_files(ctx, config_folder, unit_name):
             })
         },
     )
-    
+
     state = State(
         relations=[cos_agent_relation],
         config={"path_exclude": ""},
@@ -154,7 +154,7 @@ def test_cos_agent_empty_log_files(ctx, config_folder, unit_name):
     config_filename = f"{SnapRegistrationFile._normalize_name(unit_name)}.yaml"
     config_path = LocalPath(Path(config_folder) / config_filename)
     assert config_path.exists(), "config file should exist"
-    
+
     cfg = yaml.safe_load(config_path.read_text())
     assert "receivers" in cfg
 
@@ -174,7 +174,7 @@ def test_cos_agent_log_files_none(ctx, config_folder, unit_name):
             })
         },
     )
-    
+
     state = State(
         relations=[cos_agent_relation],
         config={"path_exclude": ""},
@@ -188,6 +188,6 @@ def test_cos_agent_log_files_none(ctx, config_folder, unit_name):
     config_filename = f"{SnapRegistrationFile._normalize_name(unit_name)}.yaml"
     config_path = LocalPath(Path(config_folder) / config_filename)
     assert config_path.exists(), "config file should exist"
-    
+
     cfg = yaml.safe_load(config_path.read_text())
     assert "receivers" in cfg
