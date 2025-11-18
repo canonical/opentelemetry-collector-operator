@@ -12,7 +12,7 @@ from ops.testing import State, SubordinateRelation
 from singleton_snap import SnapRegistrationFile
 
 
-def test_cos_agent_log_files_are_scraped(ctx, config_folder, unit_name):
+def test_cos_agent_include_log_files_are_scraped(ctx, config_folder, unit_name):
     """Test that log files specified via cos-agent are properly configured."""
     # GIVEN a charm with a cos-agent relation that provides include_log_files
     cos_agent_relation = SubordinateRelation(
@@ -73,7 +73,7 @@ def test_cos_agent_log_files_are_scraped(ctx, config_folder, unit_name):
     assert receiver_config["attributes"]["job"] == "cos-agent-var_log_app_log"
 
 
-def test_cos_agent_log_files_have_topology_labels(ctx, config_folder, unit_name):
+def test_cos_agent_include_log_files_have_topology_labels(ctx, config_folder, unit_name):
     """Test that log files from cos-agent get proper topology labels."""
     # GIVEN a charm with a cos-agent relation from a specific principal
     cos_agent_relation = SubordinateRelation(
@@ -124,9 +124,9 @@ def test_cos_agent_log_files_have_topology_labels(ctx, config_folder, unit_name)
     assert "juju_charm" in attrs
 
 
-def test_cos_agent_empty_log_files(ctx, config_folder, unit_name):
-    """Test that empty include_log_files list doesn't cause errors."""
-    # GIVEN a charm with cos-agent relation but no include_log_files
+def test_cos_agent_empty_include_log_files(ctx, config_folder, unit_name):
+    """Test that empty log_files list doesn't cause errors."""
+    # GIVEN a charm with cos-agent relation but no log_files
     cos_agent_relation = SubordinateRelation(
         "cos-agent",
         remote_unit_data={
@@ -136,7 +136,7 @@ def test_cos_agent_empty_log_files(ctx, config_folder, unit_name):
                 "dashboards": [],
                 "metrics_scrape_jobs": [],
                 "log_slots": [],
-                "include_log_files": []
+                "log_files": []
             })
         },
     )
@@ -159,9 +159,9 @@ def test_cos_agent_empty_log_files(ctx, config_folder, unit_name):
     assert "receivers" in cfg
 
 
-def test_cos_agent_log_files_none(ctx, config_folder, unit_name):
-    """Test that missing include_log_files field doesn't cause errors (backward compatibility)."""
-    # GIVEN a charm with cos-agent relation without include_log_files field
+def test_cos_agent_include_log_files_none(ctx, config_folder, unit_name):
+    """Test that missing log_files field doesn't cause errors (backward compatibility)."""
+    # GIVEN a charm with cos-agent relation without log_files field
     cos_agent_relation = SubordinateRelation(
         "cos-agent",
         remote_unit_data={

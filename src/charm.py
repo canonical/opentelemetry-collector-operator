@@ -318,7 +318,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 pipelines=[f"logs/{self.unit.name}"],
             )
         ## COS Agent log files (specified by path)
-        for log_file, log_topology in cos_agent.log_files_with_topology:
+        for log_file, log_topology in cos_agent.include_log_files_with_topology:
             # Create a unique receiver name based on the log file path
             # Replace slashes and dots to create a valid receiver name
             safe_filename = log_file.replace("/", "_").replace(".", "_").strip("_")
