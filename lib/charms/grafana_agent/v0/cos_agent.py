@@ -64,7 +64,7 @@ typically in the `__init__` method of your charm (the one which sends telemetry)
 
 - `log_slots`: Snap slots to connect to for scraping logs in the form ["snap-name:slot", ...].
 
-- `include_log_files`: List of log files to scrape in the form ["/path/to/file.log", ...]. Note that strictly-confined collector snaps will only have access to files matching declared (and connected) interfaces.
+- `include_log_files`: List of file glob patterns to scrape in the form ["/path/to/file.log", ...]. Note that strictly-confined collector snaps will only have access to files matching declared (and connected) interfaces.
 
 - `dashboard_dirs`: List of directories where the dashboards are stored in the Charmed Operator.
 
@@ -640,7 +640,7 @@ class COSAgentProvider(Object):
             recurse_rules_dirs: Whether to recurse into rule paths.
             log_slots: Snap slots to connect to for scraping logs
                 in the form ["snap-name:slot", ...].
-            include_log_files: List of log files to scrape in the form ["/path/to/file.log", ...]. Note that strictly-confined collector snaps will only have access to files matching declared (and connected) interfaces.
+            include_log_files: List of file glob patterns to scrape in the form ["/path/to/file.log", ...]. Note that strictly-confined collector snaps will only have access to files matching declared (and connected) interfaces.
             dashboard_dirs: Directory where the dashboards are stored.
             refresh_events: List of events on which to refresh relation data.
             tracing_protocols: List of protocols that the charm will be using for sending traces.
