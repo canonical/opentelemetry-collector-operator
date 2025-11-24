@@ -32,6 +32,7 @@ from constants import (
     NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
     SERVER_CERT_PATH,
+    SERVER_CA_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager, SnapRegistrationFile
@@ -159,13 +160,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         receive_ca_certs_hash = integrations.receive_ca_cert(
             self,
             recv_ca_cert_folder_path=LocalPath(RECV_CA_CERT_FOLDER_PATH),
-            refresh_certs=refresh_certs,
         )
         server_cert_hash = integrations.receive_server_cert(
             self,
             server_cert_path=LocalPath(SERVER_CERT_PATH),
             private_key_path=LocalPath(SERVER_CERT_PRIVATE_KEY_PATH),
+            root_ca_cert_path=LocalPath(SERVER_CA_CERT_PATH),
         )
+        # Refresh system certs
+        # This must be run after receive_ca_cert and/or receive_server_cert because they update
+        # certs in the /usr/local/share/ca-certificates directory
+        refresh_certs()
 
         # Global scrape configs
         global_configs = {
