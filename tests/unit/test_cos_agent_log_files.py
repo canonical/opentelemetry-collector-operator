@@ -70,12 +70,12 @@ def test_cos_agent_log_files_are_scraped(ctx, config_folder, unit_name):
 
     assert receiver_config["include"] == ["/var/log/app.log"]
     assert "attributes" in receiver_config
-    
+
     # Verify topology labels
     attrs = receiver_config["attributes"]
     assert attrs["job"] == "cos-agent-var_log_app_log"
-    assert attrs["juju_application"] == "my-principal-app"
-    assert attrs["juju_unit"] == "my-principal-app/0"
+    assert attrs["juju_application"] == "remote"
+    assert attrs["juju_unit"] == "remote/0"
     assert "juju_model" in attrs
     assert "juju_model_uuid" in attrs
     assert "juju_charm" in attrs
