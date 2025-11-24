@@ -70,53 +70,10 @@ def test_cos_agent_log_files_are_scraped(ctx, config_folder, unit_name):
 
     assert receiver_config["include"] == ["/var/log/app.log"]
     assert "attributes" in receiver_config
-    assert receiver_config["attributes"]["job"] == "cos-agent-var_log_app_log"
-
-
-def test_cos_agent_log_files_have_topology_labels(ctx, config_folder, unit_name):
-    """Test that log files from cos-agent get proper topology labels."""
-    # GIVEN a charm with a cos-agent relation from a specific principal
-    cos_agent_relation = SubordinateRelation(
-        "cos-agent",
-        remote_app_name="my-principal-app",
-        remote_unit_data={
-            "config": json.dumps({
-                "metrics_alert_rules": {},
-                "log_alert_rules": {},
-                "dashboards": [],
-                "metrics_scrape_jobs": [],
-                "log_slots": [],
-                "include_log_files": ["/var/log/myapp.log"]
-            })
-        },
-    )
-
-    state = State(
-        relations=[cos_agent_relation],
-        config={"path_exclude": ""},
-    )
-
-    # WHEN the config-changed event is triggered
-    with ctx(ctx.on.config_changed(), state=state) as mgr:
-        mgr.run()
-
-    # THEN the config should have topology labels from the principal
-    config_filename = f"{SnapRegistrationFile._normalize_name(unit_name)}.yaml"
-    config_path = LocalPath(Path(config_folder) / config_filename)
-    cfg = yaml.safe_load(config_path.read_text())
-
-    # Find the receiver for our log file
-    receiver_names = [
-        name for name in cfg["receivers"].keys()
-        if "filelog" in name and "var_log_myapp_log" in name
-    ]
-
-    assert len(receiver_names) > 0
-    receiver_name = receiver_names[0]
-    receiver_config = cfg["receivers"][receiver_name]
-
+    
     # Verify topology labels
     attrs = receiver_config["attributes"]
+    assert attrs["job"] == "cos-agent-var_log_app_log"
     assert attrs["juju_application"] == "my-principal-app"
     assert attrs["juju_unit"] == "my-principal-app/0"
     assert "juju_model" in attrs
