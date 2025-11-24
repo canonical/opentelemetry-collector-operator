@@ -3,10 +3,9 @@
 from typing import Final, Set
 
 RECV_CA_CERT_FOLDER_PATH: Final[str] = "/usr/local/share/ca-certificates/juju_receive-ca-cert"
-SERVER_CERT_PATH: Final[str] = (
-    "/var/snap/opentelemetry-collector/common/juju_tls-certificates/otelcol-server.crt"
-)
-SERVER_CERT_PRIVATE_KEY_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/private.key"
+SERVER_CERT_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol-server-cert.crt"
+SERVER_CERT_PRIVATE_KEY_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol-private-key.key"
+SERVER_CA_CERT_PATH: Final[str] = "/usr/local/share/ca-certificates/juju_receive-ca-cert/cos-ca.crt"
 CONFIG_FOLDER: Final[str] = "/etc/otelcol/config.d"
 SERVICE_NAME: Final[str] = "otelcol"
 METRICS_RULES_SRC_PATH: Final[str] = "src/prometheus_alert_rules"
