@@ -478,7 +478,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
             revisions = SingletonSnapManager.get_revisions(snap_name)
-            installed_revision = max(revisions) if revisions else 0
+            installed_revision = max(revisions) if revisions else None
             if snap_revision != installed_revision:
                 logger.error(
                     f"Mismatching snap revisions for {snap_name}. "
@@ -615,10 +615,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def _ensure_certs_dir(self) -> None:
         cert_dir = Path(CERT_DIR)
-
-        if cert_dir.exists():
-            return
-
         cert_dir.mkdir(parents=True, exist_ok=True)
         cert_dir.chmod(0o755)
 
