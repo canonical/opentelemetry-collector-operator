@@ -650,7 +650,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ca_content = tls_config.get("ca")
 
             # Skip jobs without valid certificate content
-            if not ca_content or not self._validate_cert(ca_content):
+            if not ca_content or not validate_cert(ca_content):
                 continue
 
             job_name = job.get("job_name", "default")
