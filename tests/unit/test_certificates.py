@@ -220,7 +220,7 @@ def test_write_ca_certificates_to_disk_filename_safety(job_name, safe_job_name, 
     "certificate_content,should_write",
     [
         ("-----BEGIN CERTIFICATE-----\nVALID_CERT\n-----END CERTIFICATE-----", True),
-        ("-----BEGIN CERTIFICATE-----\nVALID_CERT", False),
+        ("-----BEGIN CERTIFICATE-----\nINCOMPLETE_CERT", False),
         ("INVALID_CERT_CONTENT", False),  # Invalid format
         ("", False),  # Empty string
         ("   ", False),  # Whitespace only
