@@ -172,7 +172,7 @@ class ConfigBuilder:
         # TODO https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
         # Add TLS config to extensions
         self.add_extension("health_check", {"endpoint": f"0.0.0.0:{Port.health.value}"})
-        self.add_telemetry("logs", {"level": "INFO"})
+        self.add_telemetry("logs", {"level": "WARN"})
         self.add_telemetry("metrics", {"level": "normal"})
 
     def add_component(

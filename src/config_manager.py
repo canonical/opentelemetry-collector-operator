@@ -588,6 +588,8 @@ class ConfigManager:
             if job_name in cert_paths:
                 tls_config = job.get("tls_config", {})
                 tls_config["ca_file"] = cert_paths[job_name]
+                if "ca" in tls_config:
+                    tls_config.pop("ca")
                 job["tls_config"] = tls_config
                 logger.debug(f"Updated job '{job_name}' to use certificate path: {cert_paths[job_name]}")
 

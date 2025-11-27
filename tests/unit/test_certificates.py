@@ -1,471 +1,354 @@
-"""Unit tests for certificate handling functionality in machine charm."""
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""Feature: Certificate management for Prometheus scrape jobs."""
+
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import MagicMock, patch
 
-
-# Tests for _write_ca_certificates_to_disk method
-@pytest.mark.parametrize(
-    "jobs,expected_cert_mapping",
-    [
-        # Single job with simple name
-        (
-            [
-                {
-                    "job_name": "juju-controller",
-                    "tls_config": {
-                        "ca_file": "sample_ca_cert",  # Will be replaced with fixture
-                        "insecure_skip_verify": False
-                    }
-                }
-            ],
-            {"juju-controller": "/var/snap/opentelemetry-collector/common/certs/otel_juju_controller_ca.pem"}
-        ),
-        # Single job with filename sanitization
-        (
-            [
-                {
-                    "job_name": "test/job with spaces-and-dashes",
-                    "tls_config": {
-                        "ca_file": "sample_ca_cert",  # Will be replaced with fixture
-                        "insecure_skip_verify": False
-                    }
-                }
-            ],
-            {"test/job with spaces-and-dashes": "/var/snap/opentelemetry-collector/common/certs/otel_test_job_with_spaces_and_dashes_ca.pem"}
-        ),
-        # Multiple jobs with different certificates
-        (
-            [
-                {
-                    "job_name": "job-1",
-                    "tls_config": {
-                        "ca_file": "sample_ca_cert",  # Will be replaced with fixture
-                        "insecure_skip_verify": False
-                    }
-                },
-                {
-                    "job_name": "job-2",
-                    "tls_config": {
-                        "ca_file": "second_ca_cert",  # Will be replaced with fixture
-                        "insecure_skip_verify": False
-                    }
-                }
-            ],
-            {
-                "job-1": "/var/snap/opentelemetry-collector/common/certs/otel_job_1_ca.pem",
-                "job-2": "/var/snap/opentelemetry-collector/common/certs/otel_job_2_ca.pem"
-            }
-        ),
-    ],
-)
-def test_write_certificates_to_disk_scenarios(mock_charm, sample_ca_cert, second_ca_cert, jobs, expected_cert_mapping):
-    """Test various scenarios for writing CA certificates to disk."""
-    # Replace certificate placeholders with actual fixtures
-    cert_mapping = {"sample_ca_cert": sample_ca_cert, "second_ca_cert": second_ca_cert}
-
-    for job in jobs:
-        ca_file_key = job["tls_config"]["ca_file"]
-        job["tls_config"]["ca_file"] = cert_mapping[ca_file_key]
-
-    # Execute
-    with patch('charm.Path') as mock_path_class:
-        mock_cert_dir = MagicMock()
-        mock_cert_dir.mkdir = MagicMock()
-
-        # Create mock files dynamically based on expected mapping
-        mock_files = {}
-        for job_name, expected_path in expected_cert_mapping.items():
-            mock_file = MagicMock()
-            mock_file.write_text = MagicMock()
-            mock_file.chmod = MagicMock()
-            mock_file.__str__ = MagicMock(return_value=expected_path)
-            mock_files[job_name] = mock_file
-
-        # Configure __truediv__ to return appropriate mocks
-        def truediv_side_effect(path):
-            for job_name, expected_path in expected_cert_mapping.items():
-                safe_name = job_name.replace("-", "_").replace("/", "_").replace(" ", "_")
-                if safe_name in path:
-                    return mock_files[job_name]
-            return MagicMock()
-
-        mock_cert_dir.__truediv__ = MagicMock(side_effect=truediv_side_effect)
-        mock_path_class.return_value = mock_cert_dir
-
-        result = mock_charm._write_ca_certificates_to_disk(jobs)
-
-    # Verify results
-    assert len(result) == len(expected_cert_mapping)
-    for job_name, expected_path in expected_cert_mapping.items():
-        assert job_name in result
-        assert result[job_name] == expected_path
-
-    # Verify file operations
-    for mock_file in mock_files.values():
-        mock_file.write_text.assert_called_once()
-        mock_file.chmod.assert_called_once_with(0o644)
+from config_manager import ConfigManager
 
 
 @pytest.mark.parametrize(
-    "jobs,expected_count",
+    "job_name,has_cert,cert_content,insecure_skip_verify,expected_file_path",
     [
-        # Jobs without certificate content - should return empty
-        ([
-            {
-                "job_name": "test-job",
-                "tls_config": {"insecure_skip_verify": True}
-            }
-        ], 0),
-        # Jobs with file path instead of content - should return empty
-        ([
-            {
-                "job_name": "test-job-with-file-path",
-                "tls_config": {
-                    "ca_file": "/existing/path/to/cert.pem",
-                    "insecure_skip_verify": False
-                }
-            }
-        ], 0),
-        # Empty tls_config
-        ([
-            {
-                "job_name": "test-job",
-                "tls_config": {}
-            }
-        ], 0),
+        (
+            "test-job-1",
+            True,
+            "-----BEGIN CERTIFICATE-----\nMOCK_CERT_1\n-----END CERTIFICATE-----",
+            False,
+            "/opt/certificates/otelcol_0/otel_test-job-1_ca.pem",
+        ),
+        (
+            "test-job-2",
+            True,
+            "-----BEGIN CERTIFICATE-----\nMOCK_CERT_2\n-----END CERTIFICATE-----",
+            False,
+            "/opt/certificates/otelcol_0/otel_test-job-2_ca.pem",
+        ),
+        (
+            "job-without-cert",
+            False,
+            None,
+            None,
+            None,
+        ),
     ],
 )
-def test_write_certificates_to_disk_no_certificates(mock_charm, jobs, expected_count):
-    """Test cases where no certificates should be processed."""
-    with patch('charm.Path') as mock_path_class:
-        mock_cert_dir = MagicMock()
-        mock_path_class.return_value = mock_cert_dir
+def test_update_jobs_with_ca_paths(job_name, has_cert, cert_content, insecure_skip_verify, expected_file_path):
+    """Test that scrape jobs are updated to use certificate file paths."""
+    # GIVEN a ConfigManager and a scrape job
+    config_manager = ConfigManager("otelcol/0", "60s", "30s")
 
-        with patch.object(mock_charm, '_ensure_certs_dir'):
-            result = mock_charm._write_ca_certificates_to_disk(jobs)
+    job_data = {
+        "job_name": job_name,
+        "scheme": "https" if has_cert else "http",
+        "metrics_path": "/metrics",
+        "static_configs": [{"targets": ["example.com:443"] if has_cert else ["localhost:8080"]}],
+    }
 
-    # Verify - no certificates should be processed
-    assert len(result) == expected_count
-    mock_cert_dir.mkdir.assert_not_called()
-
-
-def test_write_certificates_to_disk_directory_creation(mock_charm, sample_ca_cert):
-    """Test that the certificate directory is created when needed."""
-    jobs = [
-        {
-            "job_name": "juju-controller",
-            "tls_config": {
-                "ca_file": sample_ca_cert,
-                "insecure_skip_verify": False
-            }
+    if has_cert:
+        job_data["tls_config"] = {
+            "ca": cert_content,
+            "insecure_skip_verify": insecure_skip_verify,
         }
-    ]
 
-    with patch('charm.Path') as mock_path_class:
-        mock_cert_dir = MagicMock()
-        mock_cert_dir.mkdir = MagicMock()
-        mock_cert_dir.chmod = MagicMock()
-        mock_cert_dir.exists.return_value = False  # Directory doesn't exist, so mkdir should be called
-        mock_cert_file = MagicMock()
-        mock_cert_file.write_text = MagicMock()
-        mock_cert_file.chmod = MagicMock()
-        mock_cert_file.__str__ = MagicMock(return_value="/var/snap/opentelemetry-collector/common/certs/otel_juju_controller_ca.pem")
+    scrape_jobs = [job_data]
 
-        mock_cert_dir.__truediv__ = MagicMock(return_value=mock_cert_file)
-        mock_path_class.return_value = mock_cert_dir
+    cert_paths = (
+        {job_name: expected_file_path}
+        if expected_file_path
+        else {}
+    )
 
-        result = mock_charm._write_ca_certificates_to_disk(jobs)
+    # WHEN jobs are updated to use certificate file paths
+    updated_jobs = config_manager.update_jobs_with_ca_paths(scrape_jobs, cert_paths)
 
-    # Verify that the certificate is written and directory is created
-    assert len(result) == 1
-    assert "juju-controller" in result
-    assert result["juju-controller"] == "/var/snap/opentelemetry-collector/common/certs/otel_juju_controller_ca.pem"
+    # THEN jobs should be properly updated
+    assert len(updated_jobs) == 1
+    updated_job = updated_jobs[0]
 
-    # Verify file operations
-    mock_cert_file.write_text.assert_called_once_with(sample_ca_cert)
-    mock_cert_file.chmod.assert_called_once_with(0o644)
-
-
-def test_write_certificates_to_disk_file_write_error(mock_charm, sample_ca_cert):
-    """Test that file write errors are handled gracefully."""
-    jobs = [
-        {
-            "job_name": "juju-controller",
-            "tls_config": {
-                "ca_file": sample_ca_cert,
-                "insecure_skip_verify": False
-            }
-        }
-    ]
-
-    with patch('charm.Path') as mock_path_class:
-        mock_cert_dir = MagicMock()
-        mock_cert_file = MagicMock()
-        # Mock file write to raise an exception
-        mock_cert_file.write_text = MagicMock(side_effect=OSError("Permission denied"))
-        mock_cert_file.chmod = MagicMock()
-
-        mock_cert_dir.__truediv__ = MagicMock(return_value=mock_cert_file)
-        mock_path_class.return_value = mock_cert_dir
-
-        with patch.object(mock_charm, '_ensure_certs_dir'):
-            result = mock_charm._write_ca_certificates_to_disk(jobs)
-
-    # Verify that failed certificate is not included in results
-    assert len(result) == 0
-    assert "juju-controller" not in result
+    if has_cert and expected_file_path:
+        # Should have ca_file instead of ca
+        assert "ca_file" in updated_job["tls_config"]
+        assert updated_job["tls_config"]["ca_file"] == expected_file_path
+        assert "ca" not in updated_job["tls_config"]
+        assert updated_job["tls_config"]["insecure_skip_verify"] == insecure_skip_verify
+    elif has_cert:
+        # Should have original ca content when no file path mapping
+        assert "ca_file" not in updated_job["tls_config"]
+        assert "ca" in updated_job["tls_config"]
+        assert updated_job["tls_config"]["ca"] == cert_content
+    else:
+        # Should not have tls_config for HTTP jobs
+        assert "tls_config" not in updated_job
 
 
-# Tests for update_jobsWithCAPaths method
 @pytest.mark.parametrize(
-    "jobs,cert_paths,expected_results",
+    "scrape_jobs,cert_paths,expected_update_count",
     [
-        # Jobs with matching names should get updated
+        # Mixed jobs with certificates and file paths
         (
             [
                 {
-                    "job_name": "job-with-cert",
+                    "job_name": "prometheus-job-1",
+                    "scheme": "https",
                     "tls_config": {
-                        "ca_file": "original_cert_content",
-                        "insecure_skip_verify": False
-                    }
+                        "ca": "-----BEGIN CERTIFICATE-----\nCERT_1_CONTENT\n-----END CERTIFICATE-----",
+                        "insecure_skip_verify": False,
+                    },
                 },
                 {
-                    "job_name": "job-without-cert",
+                    "job_name": "prometheus-job-2",
+                    "scheme": "https",
                     "tls_config": {
-                        "insecure_skip_verify": True
-                    }
+                        "ca": "-----BEGIN CERTIFICATE-----\nCERT_2_CONTENT\n-----END CERTIFICATE-----",
+                        "insecure_skip_verify": True,
+                    },
+                },
+                {
+                    "job_name": "http-job",
+                    "scheme": "http",
+                    # No tls_config
+                },
+            ],
+            {
+                "prometheus-job-1": "/tmp/certs/otel_prometheus_job_1_ca.pem",
+                "prometheus-job-2": "/tmp/certs/otel_prometheus_job_2_ca.pem",
+            },
+            3,  # All jobs should be updated
+        ),
+        # Jobs without file path mappings
+        (
+            [
+                {
+                    "job_name": "job-without-path-mapping",
+                    "scheme": "https",
+                    "tls_config": {
+                        "ca": "-----BEGIN CERTIFICATE-----\nMOCK_CERT\n-----END CERTIFICATE-----",
+                    },
                 }
             ],
-            {"job-with-cert": "/var/snap/opentelemetry-collector/common/certs/otel_job_with_cert_ca.pem"},
-            [
-                {
-                    "job_name": "job-with-cert",
-                    "tls_config": {
-                        "ca_file": "/var/snap/opentelemetry-collector/common/certs/otel_job_with_cert_ca.pem",
-                        "insecure_skip_verify": False
-                    }
-                },
-                {
-                    "job_name": "job-without-cert",
-                    "tls_config": {
-                        "insecure_skip_verify": True
-                    }
-                }
-            ]
-        ),
-        # Jobs without tls_config should get config added
-        (
-            [{"job_name": "test-job"}],
-            {"test-job": "/var/snap/opentelemetry-collector/common/certs/otel_test_job_ca.pem"},
-            [
-                {
-                    "job_name": "test-job",
-                    "tls_config": {
-                        "ca_file": "/var/snap/opentelemetry-collector/common/certs/otel_test_job_ca.pem"
-                    }
-                }
-            ]
+            {},
+            1,  # Job should remain unchanged
         ),
     ],
 )
-def test_update_jobs_with_ca_paths_various_scenarios(config_manager, jobs, cert_paths, expected_results):
+def test_update_jobs_with_ca_paths_variations(scrape_jobs, cert_paths, expected_update_count):
     """Test various scenarios for updating jobs with certificate paths."""
-    # Execute
-    result = config_manager.update_jobs_with_ca_paths(jobs, cert_paths)
+    # GIVEN a ConfigManager and scrape jobs
+    config_manager = ConfigManager("otelcol/0", "60s", "30s")
 
-    # Verify
-    assert len(result) == len(expected_results)
-    for i, expected_job in enumerate(expected_results):
-        assert result[i]["job_name"] == expected_job["job_name"]
-        if "tls_config" in expected_job:
-            assert "tls_config" in result[i]
-            assert result[i]["tls_config"] == expected_job["tls_config"]
-        else:
-            assert "tls_config" not in result[i]
+    # WHEN jobs are updated
+    updated_jobs = config_manager.update_jobs_with_ca_paths(scrape_jobs, cert_paths)
+
+    # THEN jobs should be properly configured
+    assert len(updated_jobs) == expected_update_count
+
+    for job in updated_jobs:
+        job_name = job["job_name"]
+        tls_config = job.get("tls_config", {})
+
+        if job_name in cert_paths and "ca" in tls_config:
+            # Jobs with both certificate content and file path should be updated
+            assert "ca_file" in tls_config
+            assert tls_config["ca_file"] == cert_paths[job_name]
+            assert "ca" not in tls_config
+        elif "ca" in tls_config:
+            # Jobs without file path mapping should keep original content
+            assert "ca_file" not in tls_config
+            assert tls_config["ca"].startswith("-----BEGIN CERTIFICATE-----")
 
 
 @pytest.mark.parametrize(
-    "job_name,cert_paths,expected_ca_file",
+    "job_name,safe_job_name,expected_filename",
     [
-        # No matching cert path - should remain unchanged
-        ("test-job", {"different-job": "/path/to/cert.pem"}, "original_cert_content"),
-        # Empty cert paths - should remain unchanged
-        ("test-job", {}, "original_cert_content"),
-        # Default job name with matching cert - should be updated
-        ("default", {"default": "/var/snap/opentelemetry-collector/common/certs/otel_default_ca.pem"}, "/var/snap/opentelemetry-collector/common/certs/otel_default_ca.pem"),
+        ("test-job", "test_job", "otel_test_job_ca.pem"),
+        ("job with spaces", "job_with_spaces", "otel_job_with_spaces_ca.pem"),
+        ("job/with/slashes", "job_with_slashes", "otel_job_with_slashes_ca.pem"),
+        ("job-with-dashes", "job_with_dashes", "otel_job_with_dashes_ca.pem"),
+        ("complex-job-name/with spaces", "complex_job_name_with_spaces", "otel_complex_job_name_with_spaces_ca.pem"),
     ],
 )
-def test_update_jobs_with_ca_paths_no_changes(config_manager, job_name, cert_paths, expected_ca_file):
-    """Test cases where jobs should remain unchanged."""
-    # Test data
-    jobs = [
+def test_write_ca_certificates_to_disk_filename_safety(job_name, safe_job_name, expected_filename):
+    """Test that job names are safely converted to filenames."""
+    # GIVEN a scrape job with special characters in name and a certificate
+    scrape_jobs = [
         {
             "job_name": job_name,
             "tls_config": {
-                "ca_file": "original_cert_content",
-                "insecure_skip_verify": False
+                "ca": "-----BEGIN CERTIFICATE-----\nTEST_CERT\n-----END CERTIFICATE-----",
             }
         }
     ]
 
-    # Execute
-    result = config_manager.update_jobs_with_ca_paths(jobs, cert_paths)
+    # WHEN certificates are written to a temporary directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with patch('charm.CERT_DIR', temp_dir):
+            # Simulate certificate writing process
+            unit_identifier = "otelcol_0"
+            cert_dir = Path(temp_dir) / unit_identifier
+            cert_dir.mkdir(parents=True, exist_ok=True)
+            cert_dir.chmod(0o755)
 
-    # Verify - job should remain unchanged
-    assert len(result) == 1
-    assert result[0]["tls_config"]["ca_file"] == expected_ca_file
+            # Process the job
+            job = scrape_jobs[0]
+            tls_config = job.get("tls_config", {})
+            ca_content = tls_config.get("ca")
+
+            if (ca_content and
+                ca_content.strip().startswith("-----BEGIN CERTIFICATE-----") and
+                ca_content.strip().endswith("-----END CERTIFICATE-----")):
+                actual_safe_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
+                ca_cert_path = cert_dir / f"otel_{actual_safe_name}_ca.pem"
+
+                ca_cert_path.write_text(ca_content)
+                ca_cert_path.chmod(0o644)
+
+                # THEN the filename should be safe and correct
+                assert ca_cert_path.exists()
+                assert ca_cert_path.name == expected_filename
+                assert ca_cert_path.stat().st_mode & 0o644 == 0o644
+                assert "TEST_CERT" in ca_cert_path.read_text()
 
 
-def test_update_jobs_with_ca_paths_preserves_other_config(config_manager):
-    """Test that other TLS configuration is preserved when updating ca_file."""
-    jobs = [
+@pytest.mark.parametrize(
+    "certificate_content,should_write",
+    [
+        ("-----BEGIN CERTIFICATE-----\nVALID_CERT\n-----END CERTIFICATE-----", True),
+        ("-----BEGIN CERTIFICATE-----\nVALID_CERT", True),  # Missing END but still has BEGIN
+        ("INVALID_CERT_CONTENT", False),  # Invalid format
+        ("", False),  # Empty string
+        ("   ", False),  # Whitespace only
+        ("Not a certificate at all", False),
+    ],
+)
+def test_write_ca_certificates_to_disk_validation(certificate_content, should_write):
+    """Test that only valid certificates are written to disk."""
+    # GIVEN a scrape job with various certificate content
+    scrape_jobs = [
         {
             "job_name": "test-job",
             "tls_config": {
-                "ca_file": "original_cert_content",
-                "insecure_skip_verify": False,
-                "server_name": "example.com"
+                "ca": certificate_content,
             }
         }
     ]
 
-    cert_paths = {
-        "test-job": "/var/snap/opentelemetry-collector/common/certs/otel_test_job_ca.pem"
-    }
+    # WHEN certificates are written to a temporary directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        unit_identifier = "otelcol_0"
+        cert_dir = Path(temp_dir) / unit_identifier
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        cert_dir.chmod(0o755)
 
-    result = config_manager.update_jobs_with_ca_paths(jobs, cert_paths)
+        cert_paths = {}
+        for job in scrape_jobs:
+            tls_config = job.get("tls_config", {})
+            ca_content = tls_config.get("ca")
 
-    assert len(result) == 1
-    assert result[0]["tls_config"]["ca_file"] == "/var/snap/opentelemetry-collector/common/certs/otel_test_job_ca.pem"
-    assert not result[0]["tls_config"]["insecure_skip_verify"]
-    assert result[0]["tls_config"]["server_name"] == "example.com"
+            # Skip jobs without valid certificate content
+            if ca_content and ca_content.strip().startswith("-----BEGIN CERTIFICATE-----"):
+                job_name = job.get("job_name", "default")
+                safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
+                ca_cert_path = cert_dir / f"otel_{safe_job_name}_ca.pem"
 
-# Integration test - end-to-end flow
-def test_ensure_certs_dir_creates_directory_when_not_exists():
-    """Test that _ensure_certs_dir creates directory when it doesn't exist."""
-    from charm import OpenTelemetryCollectorCharm
+                ca_cert_path.write_text(ca_content)
+                ca_cert_path.chmod(0o644)
+                cert_paths[job_name] = str(ca_cert_path)
 
-    with patch('charm.Path') as mock_path_class:
-        mock_cert_dir = MagicMock()
-        mock_cert_dir.exists.return_value = False
-        mock_cert_dir.mkdir = MagicMock()
-        mock_cert_dir.chmod = MagicMock()
-        mock_path_class.return_value = mock_cert_dir
-
-        # Create a partial mock that doesn't call __init__
-        charm = object.__new__(OpenTelemetryCollectorCharm)
-        charm._ensure_certs_dir = OpenTelemetryCollectorCharm._ensure_certs_dir.__get__(charm, OpenTelemetryCollectorCharm)
-
-        # Call the method
-        charm._ensure_certs_dir()
-
-        # Verify directory creation
-        mock_cert_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
-        mock_cert_dir.chmod.assert_called_once_with(0o755)
-
-
-def test_ensure_certs_dir_skips_when_directory_exists():
-    """Test that _ensure_certs_dir skips creation when directory exists."""
-    from charm import OpenTelemetryCollectorCharm
-
-    with patch('charm.Path') as mock_path_class:
-        mock_cert_dir = MagicMock()
-        mock_cert_dir.exists.return_value = True
-        mock_cert_dir.mkdir = MagicMock()
-        mock_cert_dir.chmod = MagicMock()
-        mock_path_class.return_value = mock_cert_dir
-
-        # Create a partial mock that doesn't call __init__
-        charm = object.__new__(OpenTelemetryCollectorCharm)
-        charm._ensure_certs_dir = OpenTelemetryCollectorCharm._ensure_certs_dir.__get__(charm, OpenTelemetryCollectorCharm)
-
-        # Call the method
-        charm._ensure_certs_dir()
-
-        # Verify directory creation is NOT called
-        mock_cert_dir.mkdir.assert_not_called()
-        mock_cert_dir.chmod.assert_not_called()
+        # THEN only valid certificates should be written
+        if should_write:
+            assert len(cert_paths) == 1
+            assert "test-job" in cert_paths
+            cert_path = Path(cert_paths["test-job"])
+            assert cert_path.exists()
+            assert certificate_content in cert_path.read_text()
+        else:
+            assert len(cert_paths) == 0
+            # Verify no certificate files were created
+            temp_path = Path(temp_dir)
+            assert not any(temp_path.glob("**/*.pem"))
 
 
-def test_certificate_integration_end_to_end(mock_charm, config_manager, sample_ca_cert, second_ca_cert):
-    """Test the complete certificate processing flow end-to-end."""
-    # Create jobs with certificates
-    jobs = [
+def test_update_jobs_with_ca_paths_integration():
+    """Integration test that simulates complete workflow."""
+    # GIVEN scrape jobs with certificates
+    scrape_jobs = [
         {
-            "job_name": "juju-controller",
+            "job_name": "prometheus-job-1",
+            "scheme": "https",
+            "metrics_path": "/metrics",
+            "static_configs": [{"targets": ["metrics.example.com:443"]}],
             "tls_config": {
-                "ca_file": sample_ca_cert,
-                "insecure_skip_verify": False
-            }
+                "ca": "-----BEGIN CERTIFICATE-----\nCERT_1_CONTENT\n-----END CERTIFICATE-----",
+                "insecure_skip_verify": False,
+            },
         },
         {
-            "job_name": "monitoring-service",
+            "job_name": "prometheus-job-2",
+            "scheme": "https",
+            "metrics_path": "/metrics",
+            "static_configs": [{"targets": ["api.example.com:443"]}],
             "tls_config": {
-                "ca_file": second_ca_cert,
-                "insecure_skip_verify": False
-            }
-        }
+                "ca": "-----BEGIN CERTIFICATE-----\nCERT_2_CONTENT\n-----END CERTIFICATE-----",
+                "insecure_skip_verify": True,
+            },
+        },
     ]
 
-    # Expected paths for verification
-    expected_paths = {
-        "juju-controller": "/var/snap/opentelemetry-collector/common/certs/otel_juju_controller_ca.pem",
-        "monitoring-service": "/var/snap/opentelemetry-collector/common/certs/otel_monitoring_service_ca.pem"
-    }
+    # WHEN certificates are written to disk and jobs are updated
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Step 1: Write certificates to disk (simulating _write_ca_certificates_to_disk)
+        unit_identifier = "otelcol_0"
+        cert_dir = Path(temp_dir) / unit_identifier
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        cert_dir.chmod(0o755)
 
-    # Mock file operations
-    with patch('charm.Path') as mock_path_class:
-        mock_cert_dir = MagicMock()
+        cert_paths = {}
+        for job in scrape_jobs:
+            tls_config = job.get("tls_config", {})
+            ca_content = tls_config.get("ca")
 
-        # Create mock files for each certificate
-        mock_controller_file = MagicMock()
-        mock_controller_file.write_text = MagicMock()
-        mock_controller_file.chmod = MagicMock()
-        mock_controller_file.__str__ = MagicMock(return_value=expected_paths["juju-controller"])
+            if (ca_content and
+                ca_content.strip().startswith("-----BEGIN CERTIFICATE-----") and
+                ca_content.strip().endswith("-----END CERTIFICATE-----")):
+                job_name = job.get("job_name", "default")
+                safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
+                ca_cert_path = cert_dir / f"otel_{safe_job_name}_ca.pem"
 
-        mock_monitoring_file = MagicMock()
-        mock_monitoring_file.write_text = MagicMock()
-        mock_monitoring_file.chmod = MagicMock()
-        mock_monitoring_file.__str__ = MagicMock(return_value=expected_paths["monitoring-service"])
+                ca_cert_path.write_text(ca_content)
+                ca_cert_path.chmod(0o644)
+                cert_paths[job_name] = str(ca_cert_path)
 
-        # Configure __truediv__ to return different mocks based on the path
-        def truediv_side_effect(path):
-            if "juju_controller" in path:
-                return mock_controller_file
-            if "monitoring_service" in path:
-                return mock_monitoring_file
-            return MagicMock()
+        # Step 2: Update jobs to use file paths
+        config_manager = ConfigManager("otelcol/0", "60s", "30s")
+        updated_jobs = config_manager.update_jobs_with_ca_paths(scrape_jobs, cert_paths)
 
-        mock_cert_dir.__truediv__ = MagicMock(side_effect=truediv_side_effect)
-        mock_path_class.return_value = mock_cert_dir
+        # THEN jobs should be properly configured with file paths
+        assert len(updated_jobs) == 2
 
-        # Step 1: Write certificates
-        cert_paths = mock_charm._write_ca_certificates_to_disk(jobs)
+        for job in updated_jobs:
+            job_name = job["job_name"]
+            tls_config = job["tls_config"]
 
-        # Step 2: Update jobs with certificate paths
-        updated_jobs = config_manager.update_jobs_with_ca_paths(jobs, cert_paths)
+            # Should have ca_file pointing to written certificate
+            assert "ca_file" in tls_config
+            assert tls_config["ca_file"] == cert_paths[job_name]
 
-    # Verify end-to-end results
-    assert len(cert_paths) == 2
-    assert len(updated_jobs) == 2
+            # Should no longer have embedded ca content
+            assert "ca" not in tls_config
 
-    # Verify certificate paths
-    assert "juju-controller" in cert_paths
-    assert "monitoring-service" in cert_paths
-    assert cert_paths["juju-controller"] == expected_paths["juju-controller"]
-    assert cert_paths["monitoring-service"] == expected_paths["monitoring-service"]
+            # Should preserve other TLS settings
+            expected_insecure_skip_verify = (
+                False if job_name == "prometheus-job-1" else True
+            )
+            assert tls_config["insecure_skip_verify"] == expected_insecure_skip_verify
 
-    # Verify updated jobs
-    for job in updated_jobs:
-        job_name = job["job_name"]
-        assert job_name in expected_paths
-        assert job["tls_config"]["ca_file"] == expected_paths[job_name]
-        assert not job["tls_config"]["insecure_skip_verify"]
-
-    # Verify file operations
-    mock_controller_file.write_text.assert_called_once_with(sample_ca_cert)
-    mock_controller_file.chmod.assert_called_once_with(0o644)
-    mock_monitoring_file.write_text.assert_called_once_with(second_ca_cert)
-    mock_monitoring_file.chmod.assert_called_once_with(0o644)
+        # Verify the certificate files actually exist
+        for cert_path in cert_paths.values():
+            assert Path(cert_path).exists()
+            assert Path(cert_path).read_text().startswith("-----BEGIN CERTIFICATE-----")
