@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from config_manager import ConfigManager
+from charm import validate_cert
 
 
 @pytest.mark.parametrize(
@@ -219,7 +220,7 @@ def test_write_ca_certificates_to_disk_filename_safety(job_name, safe_job_name, 
     "certificate_content,should_write",
     [
         ("-----BEGIN CERTIFICATE-----\nVALID_CERT\n-----END CERTIFICATE-----", True),
-        ("-----BEGIN CERTIFICATE-----\nVALID_CERT", True),  # Missing END but still has BEGIN
+        ("-----BEGIN CERTIFICATE-----\nVALID_CERT", False),
         ("INVALID_CERT_CONTENT", False),  # Invalid format
         ("", False),  # Empty string
         ("   ", False),  # Whitespace only
@@ -250,8 +251,8 @@ def test_write_ca_certificates_to_disk_validation(certificate_content, should_wr
             tls_config = job.get("tls_config", {})
             ca_content = tls_config.get("ca")
 
-            # Skip jobs without valid certificate content
-            if ca_content and ca_content.strip().startswith("-----BEGIN CERTIFICATE-----"):
+            # Skip jobs without valid certificate content using the same validation as the charm
+            if ca_content and validate_cert(ca_content):
                 job_name = job.get("job_name", "default")
                 safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
                 ca_cert_path = cert_dir / f"otel_{safe_job_name}_ca.pem"

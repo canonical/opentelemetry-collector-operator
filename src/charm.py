@@ -51,6 +51,19 @@ logger = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 
+def validate_cert(cert: str) -> bool:
+    """Validate certificate content using PEM format validation.
+
+    Args:
+        cert: Certificate content to validate
+
+    Returns:
+        True if the certificate has valid PEM format, False otherwise
+    """
+    pem_pattern = r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----"
+    return bool(re.search(pem_pattern, cert, re.DOTALL))
+
+
 # TODO: move this method outside of charm.py together with the cos-agent integrations
 def _filelog_receiver_config(
     include: List[str], exclude: List[str], attributes: Dict[str, Optional[str]]
@@ -637,7 +650,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ca_content = tls_config.get("ca")
 
             # Skip jobs without valid certificate content
-            if not ca_content or not ca_content.strip().startswith("-----BEGIN CERTIFICATE-----"):
+            if not ca_content or not self._validate_cert(ca_content):
                 continue
 
             job_name = job.get("job_name", "default")
