@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 from shutil import copytree
 from textwrap import dedent
@@ -5,16 +6,22 @@ from unittest.mock import MagicMock, patch
 import tempfile
 
 import pytest
+from charms.tls_certificates_interface.v4.tls_certificates import (
+    Certificate,
+    TLSCertificatesRequiresV4,
+)
 from ops.testing import Context
 
 from charm import OpenTelemetryCollectorCharm
 from config_manager import ConfigManager
 
-CHARM_ROOT=Path(__file__).parent.parent.parent
+CHARM_ROOT = Path(__file__).parent.parent.parent
+
 
 @pytest.fixture
 def unit_id():
     return 0
+
 
 @pytest.fixture
 def app_name():
@@ -32,16 +39,23 @@ def ctx(tmp_path, unit_id, app_name):
     # Create a virtual charm_root so Scenario respects the `src_dirs`
     # Related to https://github.com/canonical/operator/issues/1673
     for src_dir in src_dirs:
-        source_path = CHARM_ROOT/ "src" / src_dir
+        source_path = CHARM_ROOT / "src" / src_dir
         target_path = tmp_path / "src" / src_dir
         copytree(source_path, target_path, dirs_exist_ok=True)
     with patch("charm.refresh_certs", lambda: True):
-        yield Context(OpenTelemetryCollectorCharm, charm_root=tmp_path, unit_id=unit_id, app_name=app_name)
+        yield Context(
+            OpenTelemetryCollectorCharm, charm_root=tmp_path, unit_id=unit_id, app_name=app_name
+        )
 
 
 @pytest.fixture
-def cert():
-    return "mocked_certificate"
+def server_cert():
+    return "mocked_server_certificate"
+
+
+@pytest.fixture
+def ca_cert():
+    return "mocked_ca_certificate"
 
 
 @pytest.fixture
@@ -49,14 +63,30 @@ def private_key():
     return "mocked_private_key"
 
 
+@dataclass
+class Cert:
+    raw: str
+
+
 class MockCertificate:
-    def __init__(self, certificate):
-        self.certificate = certificate
+    def __init__(self, server_cert, ca_cert):
+        self.certificate = Cert(server_cert)
+        self.ca = Cert(ca_cert)
+
+
+@pytest.fixture(autouse=True)
+def cert_obj(server_cert, ca_cert):
+    return MockCertificate(server_cert, ca_cert)
 
 
 @pytest.fixture
-def cert_obj(cert):
-    return MockCertificate(cert)
+def tls_mock(cert_obj, private_key):
+    with patch.object(
+        TLSCertificatesRequiresV4, "_find_available_certificates", return_value=None
+    ), patch.object(
+        TLSCertificatesRequiresV4, "get_assigned_certificate", return_value=(cert_obj, private_key)
+    ), patch.object(Certificate, "from_string", return_value=cert_obj):
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -66,7 +96,9 @@ def juju_hook_name(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture(autouse=True)
 def otelcol_version():
-    with patch.object(OpenTelemetryCollectorCharm, "_otelcol_version", property(lambda *_: "0.0.0")):
+    with patch.object(
+        OpenTelemetryCollectorCharm, "_otelcol_version", property(lambda *_: "0.0.0")
+    ):
         yield OpenTelemetryCollectorCharm
 
 
@@ -93,10 +125,11 @@ def recv_ca_folder_path(tmp_path):
 
 @pytest.fixture
 def server_cert_paths(tmp_path):
-    """Mock the received CA certificates directory path and ensure it exists."""
+    """Mock the received certificate directories paths and ensure they exists."""
     with patch("charm.SERVER_CERT_PATH", tmp_path / "juju_server-cert") as server_cert:
-        with patch("charm.SERVER_CERT_PRIVATE_KEY_PATH", tmp_path/"juju_privkey") as privkey:
-            yield server_cert, privkey
+        with patch("charm.SERVER_CERT_PRIVATE_KEY_PATH", tmp_path / "juju_privkey") as privkey:
+            with patch("charm.SERVER_CA_CERT_PATH", tmp_path / "juju_ca-cert") as ca_cert:
+                yield server_cert, privkey, ca_cert
 
 
 @pytest.fixture(autouse=True)

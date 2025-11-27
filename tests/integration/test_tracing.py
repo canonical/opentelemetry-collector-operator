@@ -1,7 +1,7 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Feature: COS Agent integration works as expected."""
+"""Feature: Ingested traces are pushed to Tempo via COS Agent."""
 
 import pathlib
 import jubilant
