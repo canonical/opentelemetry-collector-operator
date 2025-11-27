@@ -228,6 +228,7 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
         extra_alert_labels=key_value_pair_string_to_dict(
             cast(str, charm.model.config.get("extra_alert_labels", ""))
         ),
+        peer_relation_name="peers",
     )
     charm.__setattr__("remote_write", remote_write)
     # TODO: add alerts from remote write
