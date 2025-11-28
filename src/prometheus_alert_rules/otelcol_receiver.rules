@@ -2,7 +2,7 @@ groups:
   - name: Receiver
     rules:
       - alert: receiver-refused-logs
-        expr: sum(rate(otelcol_receiver_refused_log_records_total{}[1m])) > 0
+        expr: sum(rate(otelcol_receiver_refused_log_records_total{}[5m])) > 0
         for: 5m
         labels:
           severity: critical
@@ -10,7 +10,7 @@ groups:
           summary: Some log points have been refused by receiver
           description: Maybe collector has received non standard log points or it reached some limits
       - alert: receiver-refused-metrics
-        expr: sum(rate(otelcol_receiver_refused_metric_points_total{}[1m])) > 0
+        expr: sum(rate(otelcol_receiver_refused_metric_points_total{}[5m])) > 0
         for: 5m
         labels:
           severity: critical
