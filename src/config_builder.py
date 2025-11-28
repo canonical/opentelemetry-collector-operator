@@ -2,12 +2,12 @@
 
 import hashlib
 import logging
-from typing import Any, Dict, List, Literal, Optional, Union
 from enum import Enum, unique
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
 
-from constants import SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
+from constants import INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -164,15 +164,24 @@ class ConfigBuilder:
                 },
             },
             pipelines=[
-                    f"logs/{self._unit_name}",
-                    f"metrics/{self._unit_name}",
-                    f"traces/{self._unit_name}",
-                ],
+                f"logs/{self._unit_name}",
+                f"metrics/{self._unit_name}",
+                f"traces/{self._unit_name}",
+            ],
         )
-        # TODO https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
+        # FIXME https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11780
         # Add TLS config to extensions
         self.add_extension("health_check", {"endpoint": f"0.0.0.0:{Port.health.value}"})
-        self.add_telemetry("logs", {"level": "WARN"})
+        self.add_telemetry(
+            "logs",
+            {
+                "level": "WARN",
+                "disable_stacktrace": True,
+                # We want a designated log file for internal telemetry logs
+                # otherwise they go to stderr and syslog by default
+                "output_paths": [INTERNAL_TELEMETRY_LOG_FILE],
+            },
+        )
         self.add_telemetry("metrics", {"level": "normal"})
 
     def add_component(
@@ -268,7 +277,9 @@ class ConfigBuilder:
                     self._add_to_pipeline(f"debug/{self._unit_name}", Component.exporter, [name])
                     debug_exporter_required = True
         if debug_exporter_required:
-            self.add_component(Component.exporter, f"debug/{self._unit_name}", {"verbosity": "normal"})
+            self.add_component(
+                Component.exporter, f"debug/{self._unit_name}", {"verbosity": "normal"}
+            )
 
     def _add_tls_to_all_receivers(
         self,

@@ -78,11 +78,15 @@ def cert_obj(server_cert, ca_cert):
 
 @pytest.fixture
 def tls_mock(cert_obj, private_key):
-    with patch.object(
-        TLSCertificatesRequiresV4, "_find_available_certificates", return_value=None
-    ), patch.object(
-        TLSCertificatesRequiresV4, "get_assigned_certificate", return_value=(cert_obj, private_key)
-    ), patch.object(Certificate, "from_string", return_value=cert_obj):
+    with (
+        patch.object(TLSCertificatesRequiresV4, "_find_available_certificates", return_value=None),
+        patch.object(
+            TLSCertificatesRequiresV4,
+            "get_assigned_certificate",
+            return_value=(cert_obj, private_key),
+        ),
+        patch.object(Certificate, "from_string", return_value=cert_obj),
+    ):
         yield
 
 
@@ -109,6 +113,13 @@ def mock_lock_dir(tmp_path):
 def config_folder(tmp_path):
     config_file = tmp_path / "config.d"
     with patch("charm.CONFIG_FOLDER", config_file):
+        yield config_file
+
+
+@pytest.fixture(autouse=True)
+def otelcol_log_file(tmp_path):
+    config_file = str(tmp_path / "otelcol.log")
+    with patch("config_builder.INTERNAL_TELEMETRY_LOG_FILE", config_file):
         yield config_file
 
 
