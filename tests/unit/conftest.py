@@ -3,7 +3,6 @@ from pathlib import Path
 from shutil import copytree
 from textwrap import dedent
 from unittest.mock import MagicMock, patch
-import tempfile
 
 import pytest
 from charms.tls_certificates_interface.v4.tls_certificates import (
@@ -214,75 +213,43 @@ def sample_ca_cert():
     """Sample CA certificate content for testing."""
     return dedent("""\
         -----BEGIN CERTIFICATE-----
-        MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiIMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-        BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-        aWRnaXRzIFB0eUzMkQwHhcNMTMwOTEyMjE1MjAyWhcNMTQwOTEyMjE1MjAyWjBF
-        MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-        ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-        CgKCAQEAwxKxPqB/NBOOfJUA9t4gCjGcNnHvEjQc8g8MJp8qN3lqf8d4d8d4d8d4
-        d8d4d8d8d8d8d4d8d8d4d8d8d4d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d4d8d4d8d4d8d4d
-        -----END CERTIFICATE-----""").strip()
+        MIIEEzCCAnugAwIBAgIVAO/E0PkhzNYw2zOnc1gUphCXMIbvMA0GCSqGSIb3DQEB
+        CwUAMCExDTALBgNVBAoTBEp1anUxEDAOBgNVBAMTB2p1anUtY2EwHhcNMjUxMDE2
+        MTM1NzE5WhcNMzUxMDE2MTQwMjE5WjAhMQ0wCwYDVQQKEwRKdWp1MRAwDgYDVQQD
+        EwdqdWp1LWNhMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAzpvU/8aa
+        RacEOYQkAL1Pi3Ag8wgcSlr3dFyFKfBHJbRDio+kX5W0OWsF2A6BHW7qJB9OuwD3
+        4Jk6qMo31HzP7ESNQ9RV2GqANmtz7ykzEBUR29Ql+lcut6LUH9ghCMgnSnY8HuYc
+        ez1UhjhvXK86nidlBdf7lP7CamyyJio+q7vgaLjMaz+FQvitB16bvGUcDGaCtD3a
+        ZDZPEu5Anzz7IPC3fuH5WdCgzrgi5R+up5H29UaYzCH9yUDiYU286gOowyH4MDgS
+        2Kn3BU2+PXrOFtRfmTPxQ6kX0EWEhpNTTU2fnfe6TfZ8OyBT6yGAj6gsbnmSldDa
+        KuzqkJWiOlrgYkvTYaYJsa0SAZxyHKOPkF5aah/PNsigi2WdM7BoxcjdjH8MvMYp
+        qYwiVrwPDFDa5nzdp6cW9olJ/cdloZW6bVdgKDs3gJIh2dHiV2pW02ulGzg4eqru
+        9ib94W1sR+3ELo0M9GrIr3na1G6GSpRLN1kFLP2+daBC6YBI/HzYcepZAgMBAAGj
+        QjBAMA4GA1UdDwEB/wQEAwICpDAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR3
+        8+e1gq/izCNuacdsUjt78PnfpjANBgkqhkiG9w0BAQsFAAOCAYEAp4OXlO6WyGXy
+        clts452ujuYuq11EdXUMiYxB8XEfqjoGuhplcLxXeE5nWIU8X7enLSa3TqyqS4F/
+        /WnC5SAPu0wPPwOYX5i4Ng9KcBo6vpsBom2TEoeLRRQd9CY4kX2F0+FQQQogtRpy
+        yq7WuT0TOloHjN1AVFJZPlGPcxkm7SnqF4a3CwfTKmGrYmjStSHQXYH8A2m+2o6T
+        0ilzLSaVKVuKuYfSqgUR2xlJ/3FHb5yvi9Aw0EdneGU+mpAFYlXExxd+qgs1KYTX
+        AODWGeScvD+6D8pKsYAkBx2lWMlkLnoJKmohyz0tvdpvXm/paCGeFFiO/5tHd49r
+        njnHoRZnhu5yvadsu0kXiEFsLswWj9xe9ONcg9SjMSOQ7q/ucnSAtur3MKSAN/Ub
+        boS+t/C7s/Xn9HfNcpM0J0rgrOEWgj+t6YuYTDWEsOXCgnsOTCI4BWSCEpAPwWWN
+        6vqscXomNMAY8BLg5W+QVWDIsEwWcgul7zi2EN0CyiLWkuWvTlY5
+        -----END CERTIFICATE-----
+        """).strip()
+
+
+# Additional certificate fixtures for testing various scenarios
+@pytest.fixture
+def sample_incomplete_cert():
+    """Sample incomplete CA certificate content for testing."""
+    return "-----BEGIN CERTIFICATE-----\nINCOMPLETE_CERT"
 
 
 @pytest.fixture
-def second_ca_cert():
-    """Second sample CA certificate for testing multiple certificates."""
-    return dedent("""\
-        -----BEGIN CERTIFICATE-----
-        MIIDXjCCAkYCCQCCKpT1rYK7pzANBgkqhkiG9w0BAQFADCBiDELMAkGA1UEBhMC
-        -----END CERTIFICATE-----""").strip()
-
-
-@pytest.fixture
-def mock_charm():
-    """Create a mock charm instance for testing."""
-    # Create the charm with proper mocking
-    with patch('charm.OpenTelemetryCollectorCharm.__init__') as mock_init:
-        # Mock the framework to avoid breakpoint issues
-        mock_framework = MagicMock()
-        mock_framework.breakpoint = MagicMock()
-
-        # Set up the unit mock for certificate directory isolation
-        mock_unit = MagicMock()
-        mock_unit.name = "otelcol/0"
-
-        def init_side_effect(self, *args, **kwargs):
-            self.unit = mock_unit
-            self.framework = mock_framework
-            return
-
-        mock_init.side_effect = init_side_effect
-
-        charm = OpenTelemetryCollectorCharm(MagicMock())
-
-        # Create proper method mocks
-        def write_ca_certificates_to_disk(scrape_jobs):
-            """Mock implementation of _write_ca_certificates_to_disk."""
-            cert_paths = {}
-            for job in scrape_jobs:
-                tls_config = job.get("tls_config", {})
-                ca_content = tls_config.get("ca")
-
-                # Skip jobs without valid certificate content
-                if not ca_content or not ca_content.strip().startswith("-----BEGIN CERTIFICATE-----"):
-                    continue
-
-                job_name = job.get("job_name", "default")
-                safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
-                # Just return expected paths for tests
-                cert_paths[job_name] = f"/var/snap/opentelemetry-collector/common/certs/otel_{safe_job_name}_ca.pem"
-
-            return cert_paths
-
-        def ensure_certs_dir():
-            """Mock implementation of _ensure_certs_dir."""
-            pass  # Just succeed
-
-        # Assign the mocks directly to avoid __get__ issues
-        charm._write_ca_certificates_to_disk = write_ca_certificates_to_disk
-        charm._ensure_certs_dir = ensure_certs_dir
-
-        return charm
+def sample_invalid_cert():
+    """Sample invalid CA certificate content for testing."""
+    return "INVALID_CERT_CONTENT"
 
 
 @pytest.fixture
@@ -294,10 +261,3 @@ def config_manager():
         global_scrape_timeout="",
         insecure_skip_verify=True,
     )
-
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)

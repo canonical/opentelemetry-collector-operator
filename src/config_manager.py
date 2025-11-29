@@ -585,12 +585,15 @@ class ConfigManager:
         for job in metrics_consumer_jobs:
             job_name = job.get("job_name", "default")
 
-            if job_name in cert_paths:
-                tls_config = job.get("tls_config", {})
-                tls_config["ca_file"] = cert_paths[job_name]
-                if "ca" in tls_config:
-                    tls_config.pop("ca")
-                job["tls_config"] = tls_config
-                logger.debug(f"Updated job '{job_name}' to use certificate path: {cert_paths[job_name]}")
+            if job_name not in cert_paths:
+                job.pop("tls_config", None)
+                continue
+
+            tls_config = job.get("tls_config", {})
+            tls_config["ca_file"] = cert_paths[job_name]
+            if "ca" in tls_config:
+                tls_config.pop("ca")
+            job["tls_config"] = tls_config
+            logger.debug(f"Updated job '{job_name}' to use certificate path: {cert_paths[job_name]}")
 
         return metrics_consumer_jobs
