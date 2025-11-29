@@ -636,7 +636,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Create unit-specific certificate directory
         unit_identifier = self.unit.name.replace("/", "_")
         cert_dir = Path(CERT_DIR) / unit_identifier
-        # Only create directory if we have certificates to write
+
         if not cert_dir.exists():
             cert_dir.mkdir(parents=True, exist_ok=True)
             cert_dir.chmod(0o755)
