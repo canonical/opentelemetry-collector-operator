@@ -7,6 +7,7 @@ SERVER_CERT_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol
 SERVER_CERT_PRIVATE_KEY_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol-private-key.key"
 SERVER_CA_CERT_PATH: Final[str] = "/usr/local/share/ca-certificates/juju_receive-ca-cert/cos-ca.crt"
 CONFIG_FOLDER: Final[str] = "/etc/otelcol/config.d"
+CERT_DIR: Final[str] = "/var/snap/opentelemetry-collector/common/certs"
 SERVICE_NAME: Final[str] = "otelcol"
 METRICS_RULES_SRC_PATH: Final[str] = "src/prometheus_alert_rules"
 METRICS_RULES_DEST_PATH: Final[str] = "prometheus_alert_rules"
