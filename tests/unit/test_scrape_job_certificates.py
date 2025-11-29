@@ -6,7 +6,7 @@
 from pathlib import Path
 
 import pytest
-from ops.testing import Relation, State, SubordinateRelation
+from ops.testing import Relation, State
 
 from config_manager import ConfigManager
 from tests.unit.conftest import (
