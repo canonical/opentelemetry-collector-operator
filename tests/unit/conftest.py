@@ -172,7 +172,7 @@ def mock_cos_agent_update_tracing():
         yield
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_ensure_certs_dir(request):
     """Mock the _ensure_certs_dir method to avoid PermissionError in tests."""
     with patch("charm.OpenTelemetryCollectorCharm._ensure_certs_dir"), \

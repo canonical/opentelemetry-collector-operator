@@ -92,7 +92,7 @@ def test_update_jobs_with_ca_paths_variations(scrape_jobs, cert_paths, expected_
         ("test-job", "sample_invalid_cert", "", False),  # Invalid format
     ],
 )
-def test_write_ca_certificates_to_disk_validation(ctx, request, job_name, certificate_content, expected_filename, should_write, mock_ensure_certs_dir):
+def test_write_ca_certificates_to_disk_validation(ctx, request, job_name, certificate_content, expected_filename, should_write):
     """Test that only valid certificates are written to disk using the charm's _write_ca_certificates_to_disk method."""
     # GIVEN a metrics-endpoint relation and
     relation = Relation("metrics-endpoint")
