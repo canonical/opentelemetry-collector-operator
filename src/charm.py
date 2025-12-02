@@ -26,13 +26,15 @@ from config_manager import ConfigManager
 from constants import (
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
+    LOGROTATE_PATH,
+    LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
-    SERVER_CERT_PATH,
     SERVER_CA_CERT_PATH,
+    SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager, SnapRegistrationFile
@@ -196,6 +198,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             queue_size=cast(int, self.config.get("queue_size")),
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
         )
+
+        # Self-mon logging
+        self._configure_logrotate(config_manager.config.build())
 
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
@@ -554,6 +559,23 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         }
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
+
+    def _configure_logrotate(self, config: str):
+        """Configure logrotate for otelcol's internal logs.
+
+        When we set `output_paths` in the internal logging config:
+        https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-logs
+
+        a custom logrotate configuration is needed to rotate the logs written to disk.
+        """
+        config_path = LocalPath(LOGROTATE_PATH)
+        if not config_path.exists():
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+
+            charm_root = self.charm_dir.absolute()
+            with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), 'r') as f:
+                config_path.write_text(f.read())
+
 
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))

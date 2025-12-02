@@ -1,0 +1,15 @@
+/var/snap/opentelemetry-collector/common/otelcol.log
+{
+    rotate 4
+    weekly
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        if [ -d /run/systemd/system ]; then
+            kill -HUP $(pidof otelcol)
+        fi
+    endscript
+}

@@ -32,7 +32,7 @@ def unit_name(unit_id, app_name):
 
 @pytest.fixture
 def ctx(tmp_path, unit_id, app_name):
-    src_dirs = ["grafana_dashboards", "loki_alert_rules", "prometheus_alert_rules"]
+    src_dirs = ["grafana_dashboards", "loki_alert_rules", "prometheus_alert_rules", "logrotate.d"]
     # Create a virtual charm_root so Scenario respects the `src_dirs`
     # Related to https://github.com/canonical/operator/issues/1673
     for src_dir in src_dirs:
@@ -138,6 +138,13 @@ def server_cert_paths(tmp_path):
         with patch("charm.SERVER_CERT_PRIVATE_KEY_PATH", tmp_path / "juju_privkey") as privkey:
             with patch("charm.SERVER_CA_CERT_PATH", tmp_path / "juju_ca-cert") as ca_cert:
                 yield server_cert, privkey, ca_cert
+
+
+@pytest.fixture(autouse=True)
+def logrotate_file(tmp_path):
+    """Mock the logrotate file path and ensure it exists."""
+    with patch("charm.LOGROTATE_PATH", tmp_path / "logrotate.d/otelcol") as logrotate_file:
+        yield logrotate_file
 
 
 @pytest.fixture(autouse=True)
