@@ -414,7 +414,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         try:
             self._ensure_certs_dir()
             cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
-            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(metrics_consumer_jobs, cert_paths)
+            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
+                metrics_consumer_jobs, cert_paths
+            )
         except Exception as e:
             logger.warning(f"Certificate processing failed, continuing without certs: {e}")
             # Continue without certificate functionality
@@ -606,15 +608,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-logs
 
         a custom logrotate configuration is needed to rotate the logs written to disk.
+
+        FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/139
         """
         config_path = LocalPath(LOGROTATE_PATH)
-        if not config_path.exists():
-            config_path.parent.mkdir(parents=True, exist_ok=True)
+        if config_path.exists():
+            return
 
-            charm_root = self.charm_dir.absolute()
-            with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), 'r') as f:
-                config_path.write_text(f.read())
-
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        charm_root = self.charm_dir.absolute()
+        with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), "r") as f:
+            config_path.write_text(f.read())
 
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
@@ -639,7 +643,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         cert_dir = Path(CERT_DIR)
         cert_dir.mkdir(parents=True, exist_ok=True)
         cert_dir.chmod(0o755)
-
 
     def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
         """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
@@ -696,7 +699,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         unit_cert_dir = Path(CERT_DIR) / unit_identifier
 
         if not unit_cert_dir.exists():
-            logger.debug(f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up")
+            logger.debug(
+                f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up"
+            )
             return
 
         try:

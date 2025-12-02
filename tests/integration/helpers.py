@@ -17,7 +17,7 @@ PATH_EXCLUDE: Final[str] = "/var/log/**/{cloud-init-output.log,syslog,auth.log};
 @retry(stop=stop_after_attempt(10), wait=wait_fixed(10))
 async def is_pattern_in_snap_logs(juju: jubilant.Juju, grep_filters: list):
     cmd = (
-        f"cat {INTERNAL_TELEMETRY_LOG_FILE}"
+        f"tail -5000 {INTERNAL_TELEMETRY_LOG_FILE}"
         + " | "
         + " | ".join([f"grep {p}" for p in grep_filters])
     )
@@ -30,7 +30,7 @@ async def is_pattern_in_snap_logs(juju: jubilant.Juju, grep_filters: list):
 
 @retry(stop=stop_after_attempt(10), wait=wait_fixed(10))
 async def is_pattern_not_in_logs(juju: jubilant.Juju, pattern: str):
-    otelcol_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
+    otelcol_logs = juju.ssh("otelcol/0", command=f"tail -5000 {INTERNAL_TELEMETRY_LOG_FILE}")
     if re.search(pattern, otelcol_logs):
         raise Exception(f"Pattern {pattern} found in the otelcol logs")
     return True

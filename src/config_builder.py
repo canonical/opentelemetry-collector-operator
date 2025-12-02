@@ -177,7 +177,7 @@ class ConfigBuilder:
             {
                 "level": "WARN",
                 "disable_stacktrace": True,
-                # We want a designated log file for internal telemetry logs
+                # Write to a designated log file for internal telemetry logs
                 # otherwise they go to stderr and syslog by default
                 "output_paths": [INTERNAL_TELEMETRY_LOG_FILE],
             },
