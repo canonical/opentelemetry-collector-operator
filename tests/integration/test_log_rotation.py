@@ -38,12 +38,12 @@ async def test_log_rotation(juju: jubilant.Juju):
         f'sudo logrotate --verbose /etc/logrotate.conf 2>&1 | grep "{INTERNAL_TELEMETRY_LOG_FILE}"',
     ).strip()
     assert f"considering log {INTERNAL_TELEMETRY_LOG_FILE}" in logrotate_config
-    files = juju.ssh("otelcol/0", f"ls {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("  ")
+    files = juju.ssh("otelcol/0", f"ls {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("\n")
     assert files == [INTERNAL_TELEMETRY_LOG_FILE]
 
     # WHEN the log rotation is run manually
     juju.ssh("otelcol/0", "sudo logrotate -f /etc/logrotate.d/otelcol").strip()
 
-    # THEN the log file is rotated
-    files = juju.ssh("otelcol/0", f"ls {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("  ")
+    # THEN the log file is rotated e.g. [otelcol.log, otelcol.log.1]
+    files = juju.ssh("otelcol/0", f"ls {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("\n")
     assert files == [INTERNAL_TELEMETRY_LOG_FILE, f"{INTERNAL_TELEMETRY_LOG_FILE}.1"]
