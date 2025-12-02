@@ -34,13 +34,20 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
 
 
 async def test_log_rotation(juju: jubilant.Juju):
-    # GIVEN the log file is present on disk
-    files = juju.ssh("otelcol/0", f"ls {LOG_DIR}").strip().split("  ")
-    assert files == ["otelcol.log"]
+    # GIVEN the log file is present and is configured for log rotation
+    breakpoint()
+    logrotate_config = juju.ssh(
+        "otelcol/0",
+        f'sudo logrotate --verbose /etc/logrotate.conf 2>&1 | grep "{INTERNAL_TELEMETRY_LOG_FILE}"',
+    ).strip()
+    assert f"considering log {INTERNAL_TELEMETRY_LOG_FILE}" in logrotate_config
+
+    files = juju.ssh("otelcol/0", f"ls {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("  ")
+    assert files == [INTERNAL_TELEMETRY_LOG_FILE]
 
     # WHEN the log rotation is run manually
     juju.ssh("otelcol/0", "sudo logrotate -f /etc/logrotate.d/otelcol").strip()
 
     # THEN the log file is rotated
-    files = juju.ssh("otelcol/0", f"ls {LOG_DIR}").strip().split("  ")
-    assert files == ["otelcol.log", "otelcol.log.1"]
+    files = juju.ssh("otelcol/0", f"ls {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("  ")
+    assert files == [INTERNAL_TELEMETRY_LOG_FILE, f"{INTERNAL_TELEMETRY_LOG_FILE}.1"]

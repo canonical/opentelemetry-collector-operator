@@ -193,8 +193,10 @@ def mock_cos_agent_update_tracing():
 @pytest.fixture(autouse=True)
 def mock_ensure_certs_dir(request):
     """Mock the _ensure_certs_dir method to avoid PermissionError in tests."""
-    with patch("charm.OpenTelemetryCollectorCharm._ensure_certs_dir"), \
-         patch("charm.CERT_DIR", "/tmp/test_certs"):
+    with (
+        patch("charm.OpenTelemetryCollectorCharm._ensure_certs_dir"),
+        patch("charm.CERT_DIR", "/tmp/test_certs"),
+    ):
         yield
 
 
@@ -216,6 +218,7 @@ def cleanup_temp_files():
     import shutil
     import glob
     import os
+
     try:
         # Look for any directories in /tmp that match our test pattern
         for temp_dir in glob.glob("/tmp/tmp*/otelcol_*"):
