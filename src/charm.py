@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Mapping, Optional, cast
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
+from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
@@ -107,6 +108,15 @@ def is_tls_ready() -> bool:
 def refresh_certs():
     """Run `update-ca-certificates` to refresh the trusted system certs."""
     subprocess.run(["update-ca-certificates", "--fresh"], check=True)
+
+
+def ensure_logrotate_timer():
+    """Run systemctl start logrotate.timer --now to enable and start the service.
+
+    Raises:
+        SystemdError: if logrotate.timer cannot be enabled or started.
+    """
+    service_start("logrotate.timer", "--now")
 
 
 def hook() -> str:
@@ -215,7 +225,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
 
         # Self-mon logging
-        self._configure_logrotate(config_manager.config.build())
+        self._configure_logrotate()
 
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
@@ -601,16 +611,20 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
 
-    def _configure_logrotate(self, config: str):
+    def _configure_logrotate(self):
         """Configure logrotate for otelcol's internal logs.
 
         When we set `output_paths` in the internal logging config:
         https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-logs
 
         a custom logrotate configuration is needed to rotate the logs written to disk.
-
         FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/139
+
+        Raises:
+            SystemdError: if logrotate.timer cannot be enabled or started.
         """
+        ensure_logrotate_timer()
+
         config_path = LocalPath(LOGROTATE_PATH)
         if config_path.exists():
             return

@@ -109,8 +109,7 @@ def test_profiling_integration_tls(ctx, unit_name, insecure, config_folder, inse
         config={"tls_insecure_skip_verify": insecure_skip_verify},
     )
 
-    with patch("charm.refresh_certs", lambda: True):
-        ctx.run(ctx.on.update_status(), state=state_in)
+    ctx.run(ctx.on.update_status(), state=state_in)
 
     # THEN  the profiling pipeline contains an exporter to the expected url
     cfg = get_otelcol_config_file(unit_name, config_folder)

@@ -6,7 +6,7 @@
 import pathlib
 import jubilant
 from tenacity import retry, stop_after_attempt, wait_fixed
-from helpers import PATH_EXCLUDE, is_pattern_in_snap_logs
+from helpers import PATH_EXCLUDE, is_pattern_in_debug_logs
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -37,13 +37,13 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
 
 async def test_metrics_are_scraped(juju: jubilant.Juju):
     grep_filters = ["juju_application=zookeeper", f"juju_model={juju.model}"]
-    result = await is_pattern_in_snap_logs(juju, grep_filters)
+    result = await is_pattern_in_debug_logs(juju, grep_filters)
     assert result
 
 
 async def test_logs_are_scraped(juju: jubilant.Juju):
     grep_filters = ["log.file.name=zookeeper.log", "log.file.path=/snap/opentelemetry-collector"]
-    result = await is_pattern_in_snap_logs(juju, grep_filters)
+    result = await is_pattern_in_debug_logs(juju, grep_filters)
     assert result
 
 

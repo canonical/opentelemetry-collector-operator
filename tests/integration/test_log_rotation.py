@@ -3,13 +3,10 @@
 
 """Feature: Logs are rotated via logrotate.d configuration."""
 
-import pathlib
 
 import jubilant
 
 from constants import INTERNAL_TELEMETRY_LOG_FILE
-
-LOG_DIR = str(pathlib.Path(INTERNAL_TELEMETRY_LOG_FILE).parent)
 
 
 async def test_deploy(juju: jubilant.Juju, charm: str):
@@ -33,13 +30,11 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
 
 async def test_log_rotation(juju: jubilant.Juju):
     # GIVEN the log file is present and is configured for log rotation
-    logrotate_config = juju.ssh(
-        "otelcol/0",
-        f'sudo logrotate --verbose /etc/logrotate.conf 2>&1 | grep "{INTERNAL_TELEMETRY_LOG_FILE}"',
-    ).strip()
-    assert f"considering log {INTERNAL_TELEMETRY_LOG_FILE}" in logrotate_config
     files = juju.ssh("otelcol/0", f"ls {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("\n")
     assert files == [INTERNAL_TELEMETRY_LOG_FILE]
+    # NOTE: logrotate returns non-empty string if invalid config
+    # E.g. "error: otelcol:3 unknown option 'weeeekly'"
+    assert "" == juju.ssh("otelcol/0", "sudo logrotate /etc/logrotate.conf").strip()
 
     # WHEN the log rotation is run manually
     juju.ssh("otelcol/0", "sudo logrotate -f /etc/logrotate.d/otelcol").strip()

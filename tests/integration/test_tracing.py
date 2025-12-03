@@ -5,7 +5,7 @@
 
 import pathlib
 import jubilant
-from helpers import PATH_EXCLUDE, is_pattern_in_snap_logs
+from helpers import PATH_EXCLUDE, is_pattern_in_debug_logs
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -36,5 +36,5 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
 
 async def test_traces_are_scraped(juju: jubilant.Juju):
     grep_filters = ["ScopeTraces", "postgresql-charm"]
-    result = await is_pattern_in_snap_logs(juju, grep_filters)
+    result = await is_pattern_in_debug_logs(juju, grep_filters)
     assert result

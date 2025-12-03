@@ -41,7 +41,10 @@ def ctx(tmp_path, unit_id, app_name):
         source_path = CHARM_ROOT / "src" / src_dir
         target_path = tmp_path / "src" / src_dir
         copytree(source_path, target_path, dirs_exist_ok=True)
-    with patch("charm.refresh_certs", lambda: True):
+    with (
+        patch("charm.refresh_certs", lambda: True),
+        patch("charm.ensure_logrotate_timer", lambda: True),
+    ):
         yield Context(
             OpenTelemetryCollectorCharm, charm_root=tmp_path, unit_id=unit_id, app_name=app_name
         )
