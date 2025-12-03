@@ -281,7 +281,7 @@ class ConfigBuilder:
             self.add_component(
                 Component.exporter,
                 f"debug/{self._unit_name}",
-                {"verbosity": "basic", "use_internal_logger": False},
+                {"verbosity": "normal", "use_internal_logger": False},
             )
 
     def _add_tls_to_all_receivers(
