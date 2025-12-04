@@ -2,12 +2,12 @@
 
 import hashlib
 import logging
-from typing import Any, Dict, List, Literal, Optional, Union
 from enum import Enum, unique
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
 
-from constants import SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
+from constants import INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -124,14 +124,14 @@ class ConfigBuilder:
         """Build the final configuration and return it as a YAML string.
 
         This method performs several important tasks:
-        - Adds debug exporters to pipelines that don't have any exporters
+        - Adds nopexporter(s) to pipelines that don't have any exporters
         - Injects TLS configuration to all receivers if enabled
         - Configures TLS verification settings for all exporters
 
         Returns:
             str: A YAML string representing the complete configuration.
         """
-        self._add_missing_debug_exporters()
+        self._add_missing_nop_exporters()
         if self._receiver_tls:
             self._add_tls_to_all_receivers()
         self._set_prometheus_receiver_global_timeout_and_interval(
@@ -164,15 +164,25 @@ class ConfigBuilder:
                 },
             },
             pipelines=[
-                    f"logs/{self._unit_name}",
-                    f"metrics/{self._unit_name}",
-                    f"traces/{self._unit_name}",
-                ],
+                f"logs/{self._unit_name}",
+                f"metrics/{self._unit_name}",
+                f"traces/{self._unit_name}",
+            ],
         )
-        # TODO https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
+        # FIXME https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11780
         # Add TLS config to extensions
         self.add_extension("health_check", {"endpoint": f"0.0.0.0:{Port.health.value}"})
-        self.add_telemetry("logs", {"level": "WARN"})
+        self.add_telemetry(
+            "logs",
+            {
+                "level": "INFO",
+                "disable_stacktrace": True,
+                # Write to a designated log file for internal telemetry logs. Otherwise, they go to
+                # stderr and syslog by default. This is rotated by logrotate and is configured
+                # elsewhere in the _configure_logrotate method.
+                "output_paths": [INTERNAL_TELEMETRY_LOG_FILE],
+            },
+        )
         self.add_telemetry("metrics", {"level": "normal"})
 
     def add_component(
@@ -253,22 +263,22 @@ class ConfigBuilder:
             ):
                 self._config["service"]["pipelines"][pipeline][component.value].append(name)
 
-    def _add_missing_debug_exporters(self):
-        """Add debug exporters to any pipeline that has no exporters.
+    def _add_missing_nop_exporters(self):
+        """Add nopexporter(s) to any pipeline that has no exporters.
 
         Pipelines require at least one receiver and exporter, otherwise the otelcol service errors.
-        To avoid this scenario, we add the debug exporter to each pipeline that has a receiver but no
+        To avoid this scenario, we add the nopexporter to each pipeline that has a receiver but no
         exporters.
         """
-        debug_exporter_required = False
+        nop_exporter_required = False
         for name in self._config["service"]["pipelines"].keys():
             pipeline = self._config["service"]["pipelines"].get(name, {})
             if pipeline:
                 if pipeline.get("receivers", []) and not pipeline.get("exporters", []):
-                    self._add_to_pipeline(f"debug/{self._unit_name}", Component.exporter, [name])
-                    debug_exporter_required = True
-        if debug_exporter_required:
-            self.add_component(Component.exporter, f"debug/{self._unit_name}", {"verbosity": "normal"})
+                    self._add_to_pipeline(f"nop/{self._unit_name}", Component.exporter, [name])
+                    nop_exporter_required = True
+        if nop_exporter_required:
+            self.add_component(Component.exporter, f"nop/{self._unit_name}", {})
 
     def _add_tls_to_all_receivers(
         self,
@@ -297,10 +307,11 @@ class ConfigBuilder:
     def _add_exporter_insecure_skip_verify(self, insecure_skip_verify: bool):
         """Add `tls::insecure_skip_verify` to every exporter's config.
 
-        If the key already exists, the value is not updated.
+        The nopexporter is skipped. If the `insecure_skip_verify` key already exists,
+        the value is not updated.
         """
         for exporter in self._config.get("exporters", {}):
-            if exporter.split("/")[0] == "debug":
+            if exporter.split("/")[0] in ["nop", "debug"]:
                 continue
             self._config["exporters"][exporter].setdefault("tls", {}).setdefault(
                 "insecure_skip_verify", insecure_skip_verify

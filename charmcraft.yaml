@@ -260,6 +260,33 @@ config:
         Supported units: y, w, d, h, m, s.
       type: string
       default: "1m"
+    enable_debug_exporter_for_logs:
+      description: >
+        Add a debug exporter to the logs pipeline of the OpenTelemetry Collector config.
+        
+        WARNING: Using the debug exporter in a production environment is discouraged, as it will
+        write all collected telemetry to stdout, i.e. to syslog, which is likely to cause log
+        flooding. This can be avoided with the correct usage of the `path_exclude` config option.
+      type: boolean
+      default: false
+    enable_debug_exporter_for_metrics:
+      description: >
+        Add a debug exporter to the metrics pipeline of the OpenTelemetry Collector config.
+        
+        WARNING: Using the debug exporter in a production environment is discouraged, as it will
+        write all collected telemetry to stdout, i.e. to syslog, which is likely to cause log
+        flooding. This can be avoided with the correct usage of the `path_exclude` config option.
+      type: boolean
+      default: false
+    enable_debug_exporter_for_traces:
+      description: >
+        Add a debug exporter to the traces pipeline of the OpenTelemetry Collector config.
+        
+        WARNING: Using the debug exporter in a production environment is discouraged, as it will
+        write all collected telemetry to stdout, i.e. to syslog, which is likely to cause log
+        flooding. This can be avoided with the correct usage of the `path_exclude` config option.
+      type: boolean
+      default: false
 
 actions:
   reconcile:

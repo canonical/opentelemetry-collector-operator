@@ -2,7 +2,7 @@ groups:
   - name: Exporter
     rules:
       - alert: failed-logs
-        expr: sum(rate(otelcol_exporter_send_failed_log_records_total{}[1m])) > 0
+        expr: sum(rate(otelcol_exporter_send_failed_log_records_total{}[5m])) > 0
         for: 5m
         labels:
           severity: critical
@@ -10,7 +10,7 @@ groups:
           summary: Some log points failed to send by exporter
           description: Destination may have a problem or payload is incorrect
       - alert: failed-metrics
-        expr: sum(rate(otelcol_exporter_send_failed_metric_points_total{}[1m])) > 0
+        expr: sum(rate(otelcol_exporter_send_failed_metric_points_total{}[5m])) > 0
         for: 5m
         labels:
           severity: critical

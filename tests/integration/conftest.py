@@ -22,19 +22,6 @@ store = defaultdict(str)
 CONFIG_BUILDER_PATH = Path(__file__).parent.parent.parent / "src" / "config_builder.py"
 
 
-def change_text_in_file(path: Path, original_text: str, replacement_text: str):
-    with open(path, "r") as f:
-        content = f.read()
-
-    if original_text not in content:
-        raise ValueError(f"'{original_text}' not found in '{path}'")
-
-    modified_content = content.replace(original_text, replacement_text, 1)
-
-    with open(path, "w") as f:
-        f.write(modified_content)
-
-
 def timed_memoizer(func):
     """Cache the result of a function."""
 
@@ -63,10 +50,6 @@ async def charm(ops_test: OpsTest) -> str:
     When multiple charm files (i.e., for different bases) are produced by a `charmcraft pack`,
     our CI will currently set the variable to the highest-base one.
     """
-    original_text = '"level": "WARN"'
-    modified_text = '"level": "INFO"'
-    change_text_in_file(CONFIG_BUILDER_PATH, original_text, modified_text)
-
     # FIXME: Avoid passing the charm file path as an environment variable,
     #        so every time a test is executed a new charm is packed with the modification
     #        in the internal telemetry level. This comment should be removed when then itest
@@ -76,7 +59,6 @@ async def charm(ops_test: OpsTest) -> str:
 
     charm = await ops_test.build_charm(".")
     charm = str(charm).replace("24.04", "22.04")
-    change_text_in_file(CONFIG_BUILDER_PATH, modified_text, original_text)
     assert charm
     return charm
 

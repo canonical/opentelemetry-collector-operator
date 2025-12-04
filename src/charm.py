@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Mapping, Optional, cast
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
+from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
@@ -28,13 +29,15 @@ from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
+    LOGROTATE_PATH,
+    LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
-    SERVER_CERT_PATH,
     SERVER_CA_CERT_PATH,
+    SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager, SnapRegistrationFile
@@ -105,6 +108,15 @@ def is_tls_ready() -> bool:
 def refresh_certs():
     """Run `update-ca-certificates` to refresh the trusted system certs."""
     subprocess.run(["update-ca-certificates", "--fresh"], check=True)
+
+
+def ensure_logrotate_timer():
+    """Run systemctl start logrotate.timer --now to enable and start the service.
+
+    Raises:
+        SystemdError: if logrotate.timer cannot be enabled or started.
+    """
+    service_start("logrotate.timer", "--now")
 
 
 def hook() -> str:
@@ -212,6 +224,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
         )
 
+        # Self-mon logging
+        self._configure_logrotate()
+
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
         config_manager.add_traces_ingestion(requested_tracing_protocols)
@@ -230,7 +245,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self,
             # NOTE: We pass True because the COS Agent library silently enforces the presence of
             # an outgoing traces relation; the collector instead can always receive traces, due
-            # to our use of the debug exporter.
+            # to our use of the nopexporter.
             is_tracing_ready=lambda: True,
         )
         cos_agent_relations = self.model.relations.get("cos-agent", [])
@@ -409,7 +424,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         try:
             self._ensure_certs_dir()
             cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
-            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(metrics_consumer_jobs, cert_paths)
+            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
+                metrics_consumer_jobs, cert_paths
+            )
         except Exception as e:
             logger.warning(f"Certificate processing failed, continuing without certs: {e}")
             # Continue without certificate functionality
@@ -437,6 +454,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             prometheus_url=cloud_integrator_data.prometheus_url,
             loki_url=cloud_integrator_data.loki_url,
             tempo_url=cloud_integrator_data.tempo_url,
+        )
+
+        # Add debug exporters from Juju config
+        config_manager.add_debug_exporters(
+            [
+                ("logs", cast(bool, self.config.get("enable_debug_exporter_for_logs"))),
+                ("metrics", cast(bool, self.config.get("enable_debug_exporter_for_metrics"))),
+                ("traces", cast(bool, self.config.get("enable_debug_exporter_for_traces"))),
+            ]
         )
 
         # Add custom processors from Juju config
@@ -594,6 +620,29 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
 
+    def _configure_logrotate(self):
+        """Configure logrotate for otelcol's internal logs.
+
+        When we set `output_paths` in the internal logging config:
+        https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-logs
+
+        a custom logrotate configuration is needed to rotate the logs written to disk.
+        FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/139
+
+        Raises:
+            SystemdError: if logrotate.timer cannot be enabled or started.
+        """
+        ensure_logrotate_timer()
+
+        config_path = LocalPath(LOGROTATE_PATH)
+        if config_path.exists():
+            return
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        charm_root = self.charm_dir.absolute()
+        with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), "r") as f:
+            config_path.write_text(f.read())
+
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
@@ -617,7 +666,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         cert_dir = Path(CERT_DIR)
         cert_dir.mkdir(parents=True, exist_ok=True)
         cert_dir.chmod(0o755)
-
 
     def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
         """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
@@ -674,7 +722,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         unit_cert_dir = Path(CERT_DIR) / unit_identifier
 
         if not unit_cert_dir.exists():
-            logger.debug(f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up")
+            logger.debug(
+                f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up"
+            )
             return
 
         try:
