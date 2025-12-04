@@ -35,7 +35,6 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
 
 
 async def test_traces_are_scraped(juju: jubilant.Juju):
-    breakpoint()
     grep_filters = ["ScopeTraces", "postgresql-charm"]
     result = await is_pattern_in_debug_logs(juju, grep_filters)
     assert result
