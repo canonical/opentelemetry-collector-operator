@@ -1,13 +1,13 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
 import logging
-from typing import Any, Optional, Dict, List, Literal, Set
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 import yaml
 
 from config_builder import Component, ConfigBuilder, Port
-from integrations import ProfilingEndpoint
 from constants import FILE_STORAGE_DIRECTORY
+from integrations import ProfilingEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -568,7 +568,9 @@ class ConfigManager:
                 ],
             )
 
-    def update_jobs_with_ca_paths(self, metrics_consumer_jobs: List[Dict], cert_paths: Dict[str, str]) -> List[Dict]:
+    def update_jobs_with_ca_paths(
+        self, metrics_consumer_jobs: List[Dict], cert_paths: Dict[str, str]
+    ) -> List[Dict]:
         """Update jobs to use certificate file paths instead of certificate content.
 
         This method updates the TLS configuration of Prometheus scrape jobs to
@@ -594,6 +596,22 @@ class ConfigManager:
             if "ca" in tls_config:
                 tls_config.pop("ca")
             job["tls_config"] = tls_config
-            logger.debug(f"Updated job '{job_name}' to use certificate path: {cert_paths[job_name]}")
+            logger.debug(
+                f"Updated job '{job_name}' to use certificate path: {cert_paths[job_name]}"
+            )
 
         return metrics_consumer_jobs
+
+    def add_debug_exporters(self, enabled_pipelines: List[Tuple[str, bool]]):
+        """Add debug exporters for enabled pipelines.
+
+        We set `use_internal_logger` to False to keep the debug output separate from the
+        collector's internal logs.
+        """
+        if any(enabled for _, enabled in enabled_pipelines):
+            self.config.add_component(
+                Component.exporter,
+                "debug/juju-config-enabled",
+                {"verbosity": "normal", "use_internal_logger": False},
+                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in enabled_pipelines if enabled],
+            )

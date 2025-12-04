@@ -3,6 +3,8 @@
 
 """Feature: Opentelemetry-collector config builder."""
 
+import copy
+import pytest
 from config_manager import ConfigManager
 
 
@@ -141,3 +143,42 @@ def test_add_prometheus_scrape():
         ]["config"]["scrape_configs"]
     ]
     assert job_names == ["second_job", "third_job"]
+
+
+@pytest.mark.parametrize(
+    "enabled_pipelines",
+    [
+        [],
+        [("logs", True)],
+        [("logs", True), ("traces", False)],
+        [("logs", False), ("metrics", False)],
+        [("logs", True), ("metrics", True), ("traces", True)],
+    ],
+)
+def test_add_debug_exporters_(enabled_pipelines):
+    # GIVEN an empty config
+    config_manager = ConfigManager("otelcol/0", "", "")
+    initial_cfg = copy.copy(config_manager.config._config)
+
+    # WHEN a debug exporters are added to the config
+    config_manager.add_debug_exporters(enabled_pipelines)
+
+    # THEN the config remains unchanged if no pipelines are enabled
+    if not any(enabled for _, enabled in enabled_pipelines):
+        assert initial_cfg == config_manager.config._config
+        return
+
+    # AND only one debug exporter is added to the list of exporters
+    assert 1 == sum(
+        "debug/juju-config-enabled" in key for key in config_manager.config._config["exporters"]
+    )
+    # AND there are no additional pipelines configured
+    assert ["logs/otelcol/0", "metrics/otelcol/0", "traces/otelcol/0"] == list(
+        config_manager.config._config["service"]["pipelines"].keys()
+    )
+    # AND the debug exporter is only attached to the enabled pipelines
+    for pipeline, enabled in enabled_pipelines:
+        exporter_exists = "debug/juju-config-enabled" in config_manager.config._config["service"][
+            "pipelines"
+        ][f"{pipeline}/otelcol/0"].get("exporters", [])
+        assert exporter_exists if enabled else not exporter_exists
