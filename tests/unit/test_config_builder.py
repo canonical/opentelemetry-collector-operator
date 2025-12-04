@@ -248,12 +248,14 @@ def test_insecure_skip_verify():
     assert config._config["exporters"]["bar"]["tls"]["insecure_skip_verify"] is True
 
 
-def test_nop_exporter_no_tls_config():
+def test_some_exporters_exclude_tls_config():
     # GIVEN an empty config without exporters
     config = ConfigBuilder("", "", "")
     # WHEN multiple nop exporters are added
     config.add_component(Component.exporter, "nop", {"config": {"foo": "bar"}})
     config.add_component(Component.exporter, "nop/descriptor", {"config": {"foo": "bar"}})
+    config.add_component(Component.exporter, "debug", {"config": {"foo": "bar"}})
+    config.add_component(Component.exporter, "debug/juju-config-enabled", {"config": {"foo": "bar"}})
     # AND the tls::insecure_skip_verify configuration is added
     config._add_exporter_insecure_skip_verify(True)
     # THEN tls::insecure_skip_verify is not set for nop exporters

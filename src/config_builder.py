@@ -268,9 +268,7 @@ class ConfigBuilder:
                     self._add_to_pipeline(f"nop/{self._unit_name}", Component.exporter, [name])
                     nop_exporter_required = True
         if nop_exporter_required:
-            self.add_component(
-                Component.exporter, f"nop/{self._unit_name}", {"verbosity": "normal"}
-            )
+            self.add_component(Component.exporter, f"nop/{self._unit_name}", {})
 
     def _add_tls_to_all_receivers(
         self,
@@ -303,7 +301,7 @@ class ConfigBuilder:
         the value is not updated.
         """
         for exporter in self._config.get("exporters", {}):
-            if exporter.split("/")[0] == "nop":
+            if exporter.split("/")[0] in ["nop", "debug"]:
                 continue
             self._config["exporters"][exporter].setdefault("tls", {}).setdefault(
                 "insecure_skip_verify", insecure_skip_verify
