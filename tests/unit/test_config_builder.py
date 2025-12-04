@@ -99,7 +99,7 @@ def test_rendered_default_is_valid():
     config = ConfigBuilder("", "", "")
     config.add_default_config()
     config_yaml = yaml.safe_load(config.build())
-    # THEN a debug exporter is added for each pipeline missing one
+    # THEN a nop exporter is added for each pipeline missing one
     pipelines = [
         config_yaml["service"]["pipelines"][p] for p in config_yaml["service"]["pipelines"]
     ]
@@ -248,15 +248,17 @@ def test_insecure_skip_verify():
     assert config._config["exporters"]["bar"]["tls"]["insecure_skip_verify"] is True
 
 
-def test_debug_exporter_no_tls_config():
+def test_some_exporters_exclude_tls_config():
     # GIVEN an empty config without exporters
     config = ConfigBuilder("", "", "")
-    # WHEN multiple debug exporters are added
+    # WHEN multiple nop exporters are added
+    config.add_component(Component.exporter, "nop", {"config": {"foo": "bar"}})
+    config.add_component(Component.exporter, "nop/descriptor", {"config": {"foo": "bar"}})
     config.add_component(Component.exporter, "debug", {"config": {"foo": "bar"}})
-    config.add_component(Component.exporter, "debug/descriptor", {"config": {"foo": "bar"}})
+    config.add_component(Component.exporter, "debug/juju-config-enabled", {"config": {"foo": "bar"}})
     # AND the tls::insecure_skip_verify configuration is added
     config._add_exporter_insecure_skip_verify(True)
-    # THEN tls::insecure_skip_verify is not set for debug exporters
+    # THEN tls::insecure_skip_verify is not set for nop exporters
     assert all("tls" not in exp.keys() for exp in config._config["exporters"].values())
 
 

@@ -4,13 +4,17 @@
 """Integration tests helpers."""
 
 import re
-from typing import Final
-
+from typing import Dict, Final
 import jubilant
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 PATH_EXCLUDE: Final[str] = "/var/log/**/{cloud-init-output.log,syslog,auth.log};/var/log/juju/**"
+# Configure debug exporters for all pipelines to inspect / assert against the OTLP data
+ENABLE_BASIC_DEBUG_EXPORTERS: Final[Dict[str, str]] = {
+    "enable_debug_exporter_for_logs": "true",
+    "enable_debug_exporter_for_metrics": "true",
+}
 
 
 @retry(stop=stop_after_attempt(20), wait=wait_fixed(10))

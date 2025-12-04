@@ -245,7 +245,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self,
             # NOTE: We pass True because the COS Agent library silently enforces the presence of
             # an outgoing traces relation; the collector instead can always receive traces, due
-            # to our use of the debug exporter.
+            # to our use of the nopexporter.
             is_tracing_ready=lambda: True,
         )
         cos_agent_relations = self.model.relations.get("cos-agent", [])
@@ -454,6 +454,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             prometheus_url=cloud_integrator_data.prometheus_url,
             loki_url=cloud_integrator_data.loki_url,
             tempo_url=cloud_integrator_data.tempo_url,
+        )
+
+        # Add debug exporters from Juju config
+        config_manager.add_debug_exporters(
+            [
+                ("logs", cast(bool, self.config.get("enable_debug_exporter_for_logs"))),
+                ("metrics", cast(bool, self.config.get("enable_debug_exporter_for_metrics"))),
+                ("traces", cast(bool, self.config.get("enable_debug_exporter_for_traces"))),
+            ]
         )
 
         # Add custom processors from Juju config
