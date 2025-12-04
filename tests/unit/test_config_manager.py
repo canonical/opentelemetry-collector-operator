@@ -155,7 +155,7 @@ def test_add_prometheus_scrape():
         [("logs", True), ("metrics", True), ("traces", True)],
     ],
 )
-def test_add_debug_exporters_(enabled_pipelines):
+def test_add_debug_exporters(enabled_pipelines):
     # GIVEN an empty config
     config_manager = ConfigManager("otelcol/0", "", "")
     initial_cfg = copy.copy(config_manager.config._config)
