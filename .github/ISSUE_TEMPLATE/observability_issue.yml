@@ -1,0 +1,88 @@
+name: Observability issue
+description: File an issue about telemetry, alert rules or dashboards.
+labels: ["Type: Bug", "Status: Triage"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for taking the time to report an observability issue!
+        Before submitting your issue, please make sure you are using the latest version of the charm,
+        to make sure it's not already solved.
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: >
+        What signal/alert you expected to see and under what conditions
+        (metric, log pattern, trace span, threshold, duration),
+        why/how an alert should have fired sooner, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: >
+        What happened? What symptoms did you observe? Root cause discovered?
+        Did the probelm happen in particular time windows? What was the impact?
+        Were there false positives? What telemetry is missing?
+    validations:
+      required: true
+  - type: textarea
+    id: telemetry-available
+    attributes:
+      label: Relevant telemetry available
+      description: >
+        Please copy and paste any relevant log, metrics, screenshots of timeseries.
+    validations:
+      required: true
+  - type: textarea
+    id: telemetry-missing
+    attributes:
+      label: Missing or insufficient telemetry
+      description: >
+        Specific metrics / labels missing (e.g. per-endpoint latency, per-replica memory usage),
+        log fields missing or unstructured, missing span attributes, missing dashboards / alert rules, etc.
+        Do you have a fix suggestion?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: To Reproduce
+      description: >
+        An ideal reproducer would include a minimal bundle, indicating how to reproduce, which are the
+        affected alerts/dashboards/metrics/etc., and which PromQL/LogQL queries to inspect.
+      placeholder: |
+        1. `juju deploy ...`
+        2. Look at the graph for `node_cpu_seconds_total`...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >
+        We need to know a bit more about the context in which you run into the problem.
+        - What kind of an envirnment is it (substrate, components, constraints).
+        - What channel and revision you deployed the affected charm(s) from (e.g. rev123 from `latest/edge`).
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: A detailed report could be resolved quicker!
+      options:
+        - label: All relevant metrics are identified.
+          required: true
+        - label: All relevant alert rules are identified.
+          required: true
+        - label: Logs covering the incident window are attached / linked.
+          required: true
+        - Screenshots of time‑series are attached.
+          required: true
