@@ -24,7 +24,7 @@ body:
       label: Actual Behavior
       description: >
         What happened? What symptoms did you observe? Root cause discovered?
-        Did the probelm happen in particular time windows? What was the impact?
+        Did the problem happen in particular time windows? What was the impact?
         Were there false positives? What telemetry is missing?
     validations:
       required: true
@@ -64,7 +64,7 @@ body:
       label: Environment
       description: >
         We need to know a bit more about the context in which you run into the problem.
-        - What kind of an envirnment is it (substrate, components, constraints).
+        - What kind of an environment is it (substrate, components, constraints).
         - What channel and revision you deployed the affected charm(s) from (e.g. rev123 from `latest/edge`).
     validations:
       required: true
