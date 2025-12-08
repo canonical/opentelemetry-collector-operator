@@ -31,7 +31,7 @@ body:
   - type: textarea
     id: telemetry-available
     attributes:
-      label: Relevant telemetry available
+      label: Relevant telemetry / alerts available
       description: >
         Please copy and paste any relevant log, metrics, screenshots of timeseries.
     validations:
@@ -39,7 +39,7 @@ body:
   - type: textarea
     id: telemetry-missing
     attributes:
-      label: Missing or insufficient telemetry
+      label: Missing or insufficient telemetry / alerts
       description: >
         Specific metrics / labels missing (e.g. per-endpoint latency, per-replica memory usage),
         log fields missing or unstructured, missing span attributes, missing dashboards / alert rules, etc.
@@ -85,4 +85,4 @@ body:
         - label: Logs covering the incident window are attached / linked.
           required: true
         - label: Screenshots of time‑series are attached.
-          required: true
+          required: false
