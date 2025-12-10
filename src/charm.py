@@ -451,7 +451,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
-        hash_file = LocalPath("/opt/otelcol_reload")
+        hash_file = self.charm_dir.absolute()/"config_hash"
         old_hash = ""
         if hash_file.exists():
             old_hash = hash_file.read_text()
