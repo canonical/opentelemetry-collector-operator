@@ -185,7 +185,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Refresh system certs
         # This must be run after receive_ca_cert and/or receive_server_cert because they update
         # certs in the /usr/local/share/ca-certificates directory
-        refresh_certs()
+        # Only refresh certs when they actually change (upgrade-charm or cert relation changes)
+        current_hook = hook()
+        if current_hook in (
+            "upgrade-charm",
+            "receive_ca_cert-relation-changed",
+            "receive_server_cert-relation-changed",
+        ):
+            refresh_certs()
 
         # Global scrape configs
         global_configs = {
