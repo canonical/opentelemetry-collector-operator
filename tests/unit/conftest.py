@@ -92,6 +92,10 @@ def tls_mock(cert_obj, private_key):
 def juju_hook_name(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("JUJU_HOOK_NAME", "fake")
 
+@pytest.fixture(autouse=True)
+def juju_machine_name(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("JUJU_MACHINE_ID", "0")
+
 
 @pytest.fixture(autouse=True)
 def otelcol_version():
@@ -257,6 +261,7 @@ def config_manager():
     """Create a ConfigManager instance for testing."""
     return ConfigManager(
         unit_name="test/0",
+        machine_id="0",
         global_scrape_interval="15s",
         global_scrape_timeout="",
         insecure_skip_verify=True,
