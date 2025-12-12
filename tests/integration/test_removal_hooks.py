@@ -11,11 +11,12 @@ from constants import CONFIG_FOLDER
 from singleton_snap import SnapRegistrationFile
 import os
 
-from helpers import PATH_EXCLUDE
+from helpers import PATH_EXCLUDE, is_snap_active, ssh_and_execute_command_in_machine
+
+SNAP_STATUS_COMMAND = "sudo snap services opentelemetry-collector"
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
-
 
 async def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
@@ -35,6 +36,11 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
         error=jubilant.any_error,
         timeout=420,
     )
+
+    juju.wait(lambda status: jubilant.all_agents_idle(status, "ubuntu", "otelcol"))
+
+    snap_status = ssh_and_execute_command_in_machine(juju, "ubuntu/0", SNAP_STATUS_COMMAND)
+    assert is_snap_active(snap_status)
 
 
 async def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
@@ -75,6 +81,11 @@ async def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
         error=jubilant.any_error,
         timeout=240,
     )
+
+    # The snap must be active (meaning it has successfully started, showing the configs are valid)
+    snap_status = ssh_and_execute_command_in_machine(juju, "ubuntu/0", SNAP_STATUS_COMMAND)
+    assert is_snap_active(snap_status)
+
     # WHEN the relation is removed
     juju.remove_unit("ubuntu/1")
     juju.wait(
@@ -93,9 +104,10 @@ async def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
         error=jubilant.any_error,
         timeout=240,
     )
-    # AND a scale of 1
+    # AND otelcol has a scale of 1
     assert juju.status().get_units("otelcol").keys() == {"otelcol/1"}
-    # AND the otelcol config file is removed from disk
+
+    # AND the otelcol config file for the second otelcol unit is now removed from disk
     config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/2')}.yaml"
     otelcol_config = juju.ssh(
         "ubuntu/0",
@@ -108,6 +120,9 @@ async def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     )
     assert otelcol_config_dir.strip() != "does not exist"
 
+    # AND the snap is still active in the machine
+    snap_status = ssh_and_execute_command_in_machine(juju, "ubuntu/0", SNAP_STATUS_COMMAND)
+    assert is_snap_active(snap_status)
 
 async def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     # GIVEN otelcol has 2 subordinate units on different machines
@@ -145,3 +160,4 @@ async def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     )
     assert otelcol_config_0.strip() == "does not exist"
     assert otelcol_config_1.strip() == "does not exist"
+

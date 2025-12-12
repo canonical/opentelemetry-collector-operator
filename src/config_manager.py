@@ -107,6 +107,7 @@ class ConfigManager:
     def __init__(
         self,
         unit_name: str,
+        machine_id: str,
         global_scrape_interval: str,
         global_scrape_timeout: str,
         receiver_tls: bool = False,
@@ -120,6 +121,7 @@ class ConfigManager:
 
         Args:
             unit_name: the name of the unit
+            machine_id: ID of the machine hosting this charm e.g. juju 264c76-19
             global_scrape_interval: set a global scrape interval for all prometheus receivers on build
             global_scrape_timeout: set a global scrape timeout for all prometheus receivers on build
             receiver_tls: whether to inject TLS config in all receivers on build
@@ -128,6 +130,7 @@ class ConfigManager:
             max_elapsed_time_min: maximum elapsed time for retrying failed requests in minutes
         """
         self._unit_name = unit_name
+        self._machine_id = machine_id
         self._insecure_skip_verify = insecure_skip_verify
         self._queue_size = queue_size
         self._max_elapsed_time_min = max_elapsed_time_min
@@ -176,7 +179,9 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.receiver,
-            f"loki/receive-loki-logs/{self._unit_name}",
+            # Receivers that bind to ports need to have the same name across different units of Otelcol so that the binary can deduplicate them.
+            # We'll rely on the machine_id to set the common name.
+            f"loki/receive-loki-logs/{self._machine_id}",
             {
                 "protocols": {
                     "http": {

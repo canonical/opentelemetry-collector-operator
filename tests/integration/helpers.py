@@ -32,3 +32,25 @@ async def is_pattern_not_in_logs(juju: jubilant.Juju, pattern: str):
     if re.search(pattern, otelcol_logs):
         raise Exception(f"Pattern {pattern} found in the otelcol logs")
     return True
+
+
+def ssh_and_execute_command_in_machine(juju: jubilant.Juju, machine: str, command: str):
+    return juju.ssh(machine, command)
+
+
+def is_snap_active(snap_service_output: str) -> bool:
+    """Check if a snap service is active based on the output of `snap services <snap>`. This function assumes that the snap is installed.
+
+    Example output:
+    Service                                          Startup  Current  Notes
+    opentelemetry-collector.opentelemetry-collector  enabled  active   -
+    """
+    lines = snap_service_output.strip().splitlines()
+
+    for line in lines[1:]:
+        parts = line.split()
+        if len(parts) >= 3:
+            current = parts[2]
+            if current.lower() == "active":
+                return True
+    return False

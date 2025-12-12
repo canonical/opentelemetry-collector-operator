@@ -111,6 +111,9 @@ def hook() -> str:
     """Return Juju hook name."""
     return os.environ["JUJU_HOOK_NAME"]
 
+def machine_id() -> str:
+    """Return the ID of the machine hosting this charm."""
+    return os.environ["JUJU_MACHINE_ID"]
 
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """Check whether mandatory relations are in place.
@@ -204,6 +207,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Create the config manager
         config_manager = ConfigManager(
             unit_name=self.unit.name,
+            machine_id=machine_id(),
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
