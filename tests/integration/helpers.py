@@ -6,6 +6,7 @@
 import re
 from typing import Final
 import jubilant
+import yaml
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Exclude some logs to avoid circular ingestion during tests
@@ -54,3 +55,12 @@ def is_snap_active(snap_service_output: str) -> bool:
             if current.lower() == "active":
                 return True
     return False
+
+def assert_correct_loki_receiver_name(juju: jubilant.Juju, ubuntu_unit: str, otelcol_config_file: str, expected_machine_number: str) -> None:
+    config_file = ssh_and_execute_command_in_machine(juju, f"ubuntu/{ubuntu_unit}", f"cat {otelcol_config_file}")
+    cfg = yaml.safe_load(config_file)
+
+    receivers = cfg.get("receivers", {})
+    for name in receivers.keys():
+        if "loki/receive-loki-logs" in name:
+            assert name == f"loki/receive-loki-logs/{expected_machine_number}"

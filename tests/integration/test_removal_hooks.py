@@ -11,9 +11,10 @@ from constants import CONFIG_FOLDER
 from singleton_snap import SnapRegistrationFile
 import os
 
-from helpers import PATH_EXCLUDE, is_snap_active, ssh_and_execute_command_in_machine
+from helpers import PATH_EXCLUDE, is_snap_active, ssh_and_execute_command_in_machine, assert_correct_loki_receiver_name
 
 SNAP_STATUS_COMMAND = "sudo snap services opentelemetry-collector"
+CONFIG_FILE_PATH = "/etc/otelcol/config.d"
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -42,6 +43,9 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
     snap_status = ssh_and_execute_command_in_machine(juju, "ubuntu/0", SNAP_STATUS_COMMAND)
     assert is_snap_active(snap_status)
 
+    # AND the name of the Loki receiver defined in the config file should include the machine number which is 0
+    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/0')}.yaml"
+    assert_correct_loki_receiver_name(juju, "0", os.path.join(CONFIG_FOLDER, config_filename), "0")
 
 async def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     # GIVEN only 1 unit of the otelcol charm
@@ -82,9 +86,16 @@ async def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
         timeout=240,
     )
 
-    # The snap must be active (meaning it has successfully started, showing the configs are valid)
+    # THEN snap must be active (meaning it has successfully started, showing the configs are valid)
     snap_status = ssh_and_execute_command_in_machine(juju, "ubuntu/0", SNAP_STATUS_COMMAND)
     assert is_snap_active(snap_status)
+
+    # AND the configs for both units should have a Loki receiver which only includes the machine number
+    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/1')}.yaml"
+    assert_correct_loki_receiver_name(juju, "0", os.path.join(CONFIG_FOLDER, config_filename), "0")
+
+    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/2')}.yaml"
+    assert_correct_loki_receiver_name(juju, "0", os.path.join(CONFIG_FOLDER, config_filename), "0")
 
     # WHEN the relation is removed
     juju.remove_unit("ubuntu/1")
@@ -137,6 +148,14 @@ async def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
         error=jubilant.any_error,
         timeout=240,
     )
+
+    # AND the configs for both units should have a Loki receiver which only includes the machine number
+    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/1')}.yaml"
+    assert_correct_loki_receiver_name(juju, "0", os.path.join(CONFIG_FOLDER, config_filename), "0")
+
+    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/4')}.yaml"
+    assert_correct_loki_receiver_name(juju, "2", os.path.join(CONFIG_FOLDER, config_filename), "1")
+
     # WHEN the relation is removed
     juju.remove_relation("otelcol:juju-info", "ubuntu:juju-info")
     juju.wait(
