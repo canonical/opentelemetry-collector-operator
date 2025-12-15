@@ -216,6 +216,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Create the config manager
         config_manager = ConfigManager(
             unit_name=self.unit.name,
+            hostname=socket.gethostname(),
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
@@ -458,11 +459,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # Add debug exporters from Juju config
         config_manager.add_debug_exporters(
-            [
-                ("logs", cast(bool, self.config.get("enable_debug_exporter_for_logs"))),
-                ("metrics", cast(bool, self.config.get("enable_debug_exporter_for_metrics"))),
-                ("traces", cast(bool, self.config.get("enable_debug_exporter_for_traces"))),
-            ]
+            cast(bool, self.config.get("debug_exporter_for_logs")),
+            cast(bool, self.config.get("debug_exporter_for_metrics")),
+            cast(bool, self.config.get("debug_exporter_for_traces")),
         )
 
         # Add custom processors from Juju config
@@ -477,7 +476,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
-        hash_file = LocalPath("/opt/otelcol_reload")
+        hash_file = self.charm_dir.absolute()/"config_hash"
         old_hash = ""
         if hash_file.exists():
             old_hash = hash_file.read_text()

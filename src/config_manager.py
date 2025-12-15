@@ -1,7 +1,7 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
 import logging
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set
 
 import yaml
 
@@ -107,6 +107,7 @@ class ConfigManager:
     def __init__(
         self,
         unit_name: str,
+        hostname: str,
         global_scrape_interval: str,
         global_scrape_timeout: str,
         receiver_tls: bool = False,
@@ -120,6 +121,7 @@ class ConfigManager:
 
         Args:
             unit_name: the name of the unit
+            hostname: instance ID of the machine hosting this charm e.g. juju 264c76-19
             global_scrape_interval: set a global scrape interval for all prometheus receivers on build
             global_scrape_timeout: set a global scrape timeout for all prometheus receivers on build
             receiver_tls: whether to inject TLS config in all receivers on build
@@ -128,11 +130,13 @@ class ConfigManager:
             max_elapsed_time_min: maximum elapsed time for retrying failed requests in minutes
         """
         self._unit_name = unit_name
+        self._hostname = hostname
         self._insecure_skip_verify = insecure_skip_verify
         self._queue_size = queue_size
         self._max_elapsed_time_min = max_elapsed_time_min
         self.config = ConfigBuilder(
             unit_name=self._unit_name,
+            hostname=self._hostname,
             global_scrape_interval=global_scrape_interval,
             global_scrape_timeout=global_scrape_timeout,
             receiver_tls=receiver_tls,
@@ -176,7 +180,10 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.receiver,
-            f"loki/receive-loki-logs/{self._unit_name}",
+            # Receivers that bind to ports need to have the same name across different units of Otelcol on the same machine
+            # so that the binary can deduplicate them.
+            # We'll rely on the LXC instance ID to set the common name.
+            f"loki/receive-loki-logs/{self._hostname}",
             {
                 "protocols": {
                     "http": {
@@ -251,7 +258,7 @@ class ConfigManager:
         """Configure ingesting profiles."""
         self.config.add_component(
             Component.receiver,
-            "otlp",
+            f"otlp/{self._hostname}",
             {
                 "protocols": {
                     "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
@@ -602,16 +609,17 @@ class ConfigManager:
 
         return metrics_consumer_jobs
 
-    def add_debug_exporters(self, enabled_pipelines: List[Tuple[str, bool]]):
+    def add_debug_exporters(self, logs: bool=False, metrics: bool=False, traces: bool=False):
         """Add debug exporters for enabled pipelines.
 
         We set `use_internal_logger` to False to keep the debug output separate from the
         collector's internal logs.
         """
-        if any(enabled for _, enabled in enabled_pipelines):
+        pipelines = {"logs": logs, "metrics": metrics, "traces": traces}
+        if any(pipelines.values()):
             self.config.add_component(
                 Component.exporter,
                 "debug/juju-config-enabled",
                 {"verbosity": "normal", "use_internal_logger": False},
-                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in enabled_pipelines if enabled],
+                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in pipelines.items() if enabled],
             )
