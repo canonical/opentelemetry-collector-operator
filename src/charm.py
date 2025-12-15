@@ -204,6 +204,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Create the config manager
         config_manager = ConfigManager(
             unit_name=self.unit.name,
+            hostname=socket.gethostname(),
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),

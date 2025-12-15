@@ -92,7 +92,7 @@ def test_transitioned_from_http_to_https_to_http(
     assert ca_cert == get_otelcol_file(server_cert_paths[2])
     otelcol_config = get_otelcol_config_file(unit_name, config_folder)
     # AND config file includes "key_file" and "cert_file" for receivers with a "protocols" section
-    protocols = otelcol_config["receivers"]["otlp"]["protocols"]
+    protocols = otelcol_config["receivers"]["otlp/juju-abcde-0"]["protocols"]
     for protocol in protocols:
         assert protocols[protocol]["tls"]["cert_file"] == SERVER_CERT_PATH
         assert protocols[protocol]["tls"]["key_file"] == SERVER_CERT_PRIVATE_KEY_PATH
