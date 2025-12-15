@@ -14,14 +14,14 @@ $ juju deploy opentelemetry-collector
 ```
 The `opentelemetry-collector` operator for machines is a subordinate charm.
 
-It needs to be related to a principal charm. The principal charm needs to support relations through the `cost-agent` or `juju-info` interfaces.
+It needs to be related to a principal charm. The principal charm needs to support relations through the `cos-agent` or `juju-info` interfaces.
 For example, if you have the `ubuntu` principal, you can relate it to this charm:
 
 ```bash
 $ juju integrate ubuntu opentelemetry-collector
 ```
 
-Given that this charm is a subordinate, it scales up and down with its principal. As a result, if the `Ubuntu` principal is scaled up to 2, a new machine is spun up and the `opentelemetry-collector` charm will be deployed in it and related to `Ubuntu`.
+Given that this charm is a subordinate, it scales up and down with its principal. As a result, if the `ubuntu` principal is scaled up to 2, a new machine is spun up and the `opentelemetry-collector` charm will be deployed in it and related to `ubuntu`.
 
 ## Snap
 
