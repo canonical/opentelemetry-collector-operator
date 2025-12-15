@@ -10,7 +10,7 @@ from config_manager import ConfigManager
 
 def test_add_log_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a loki exporter is added to the config
     expected_loki_forwarding_cfg = {
@@ -41,7 +41,7 @@ def test_add_log_forwarding():
 
 def test_add_traces_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a traces exporter is added to the config
     expected_traces_forwarding_cfg = {
@@ -64,7 +64,7 @@ def test_add_traces_forwarding():
 
 def test_add_remote_write():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a remote write exporter is added to the config
     expected_remote_write_cfg = {
@@ -90,7 +90,7 @@ def test_add_remote_write():
 
 def test_add_prometheus_scrape():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a scrape job is added to the config
     first_job = [
@@ -151,24 +151,24 @@ def test_add_prometheus_scrape():
         (
             {"logs": False, "metrics": False, "traces": False},
             {
-                "logs/otelcol/0": {"receivers": ["otlp"], "exporters": []},
-                "metrics/otelcol/0": {"receivers": ["otlp"], "exporters": []},
-                "traces/otelcol/0": {"receivers": ["otlp"], "exporters": []},
+                "logs/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
+                "metrics/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
+                "traces/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
             },
         ),
         (
             {"logs": True, "metrics": True, "traces": True},
             {
                 "logs/otelcol/0": {
-                    "receivers": ["otlp"],
+                    "receivers": ["otlp/foo"],
                     "exporters": ["debug/juju-config-enabled"],
                 },
                 "metrics/otelcol/0": {
-                    "receivers": ["otlp"],
+                    "receivers": ["otlp/foo"],
                     "exporters": ["debug/juju-config-enabled"],
                 },
                 "traces/otelcol/0": {
-                    "receivers": ["otlp"],
+                    "receivers": ["otlp/foo"],
                     "exporters": ["debug/juju-config-enabled"],
                 },
             },
@@ -177,12 +177,12 @@ def test_add_prometheus_scrape():
             {"logs": True, "metrics": False, "traces": True},
             {
                 "logs/otelcol/0": {
-                    "receivers": ["otlp"],
+                    "receivers": ["otlp/foo"],
                     "exporters": ["debug/juju-config-enabled"],
                 },
-                "metrics/otelcol/0": {"receivers": ["otlp"]},
+                "metrics/otelcol/0": {"receivers": ["otlp/foo"]},
                 "traces/otelcol/0": {
-                    "receivers": ["otlp"],
+                    "receivers": ["otlp/foo"],
                     "exporters": ["debug/juju-config-enabled"],
                 },
             },
@@ -191,7 +191,7 @@ def test_add_prometheus_scrape():
 )
 def test_add_debug_exporters(enabled_pipelines, expected_pipelines):
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "")
+    config_manager = ConfigManager("otelcol/0", "foo", "", "")
     initial_cfg = copy.copy(config_manager.config._config)
 
     # WHEN a debug exporters are added to the config

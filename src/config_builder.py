@@ -88,6 +88,7 @@ class ConfigBuilder:
     def __init__(
         self,
         unit_name: str,
+        hostname: str,
         global_scrape_interval: str,
         global_scrape_timeout: str,
         receiver_tls: bool = False,
@@ -97,6 +98,7 @@ class ConfigBuilder:
 
         Args:
             unit_name: the name of the unit
+            hostname: instance ID of the machine hosting this charm e.g. juju 264c76-19
             global_scrape_interval: value for `scrape_interval` in all prometheus receivers
             global_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
             receiver_tls: whether to inject TLS config in all receivers on build
@@ -115,6 +117,7 @@ class ConfigBuilder:
             },
         }
         self._unit_name = unit_name
+        self._hostname = hostname
         self._receiver_tls = receiver_tls
         self._exporter_skip_verify = exporter_skip_verify
         self._scrape_interval = global_scrape_interval
@@ -151,12 +154,16 @@ class ConfigBuilder:
 
         We always include the OTLP receiver to ensure the config is valid, i.e. there must be at
         least one pipeline, and it must have a valid receiver exporter pair.
+
+        Since otlp is a receiver which needs to bind to ports, we need to ensure that its name
+        is unique across multiple co-located units so that the snap
+        can successfully deduplicate them.
         """
         # NOTE: We omit the unit identifier in the receiver name to avoid duplicate OTLP receivers
         #       fighting for port bindings. This is only for relevant for the vm charm
         self.add_component(
             Component.receiver,
-            "otlp",
+            f"otlp/{self._hostname}",
             {
                 "protocols": {
                     "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
@@ -185,6 +192,11 @@ class ConfigBuilder:
         """Add a component to the configuration.
 
         Components are enabled when added to the appropriate "pipelines" within the service section.
+
+        Note: if the component you are adding, is a receiver which needs to bind to ports,
+        ensure that it uses the LXC instance ID (e.g. socket.gethostname())
+        as a suffix. The naming would then be `receiver-name/juju-abcde-0`
+        See https://github.com/canonical/opentelemetry-collector-operator/pull/162 for more details
 
         Args:
             component: The type of component to add (receiver, processor, etc.)

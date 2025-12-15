@@ -61,7 +61,7 @@ from tests.unit.conftest import (
 def test_update_jobs_with_ca_paths_variations(scrape_jobs, cert_paths, expected_update_count):
     """Test various scenarios for updating jobs with certificate paths."""
     # GIVEN a ConfigManager and scrape jobs
-    config_manager = ConfigManager("otelcol/0", "60s", "30s")
+    config_manager = ConfigManager("otelcol/0", "0", "60s", "30s")
 
     # WHEN jobs are updated
     updated_jobs = config_manager.update_jobs_with_ca_paths(scrape_jobs, cert_paths)
