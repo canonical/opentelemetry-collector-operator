@@ -443,11 +443,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # Add debug exporters from Juju config
         config_manager.add_debug_exporters(
-            [
-                ("logs", cast(bool, self.config.get("enable_debug_exporter_for_logs"))),
-                ("metrics", cast(bool, self.config.get("enable_debug_exporter_for_metrics"))),
-                ("traces", cast(bool, self.config.get("enable_debug_exporter_for_traces"))),
-            ]
+            cast(bool, self.config.get("debug_exporter_for_logs")),
+            cast(bool, self.config.get("debug_exporter_for_metrics")),
+            cast(bool, self.config.get("debug_exporter_for_traces")),
         )
 
         # Add custom processors from Juju config

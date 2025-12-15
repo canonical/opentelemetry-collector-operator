@@ -1,7 +1,7 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
 import logging
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set
 
 import yaml
 
@@ -602,16 +602,17 @@ class ConfigManager:
 
         return metrics_consumer_jobs
 
-    def add_debug_exporters(self, enabled_pipelines: List[Tuple[str, bool]]):
+    def add_debug_exporters(self, logs: bool=False, metrics: bool=False, traces: bool=False):
         """Add debug exporters for enabled pipelines.
 
         We set `use_internal_logger` to False to keep the debug output separate from the
         collector's internal logs.
         """
-        if any(enabled for _, enabled in enabled_pipelines):
+        pipelines = {"logs": logs, "metrics": metrics, "traces": traces}
+        if any(pipelines.values()):
             self.config.add_component(
                 Component.exporter,
                 "debug/juju-config-enabled",
                 {"verbosity": "normal", "use_internal_logger": False},
-                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in enabled_pipelines if enabled],
+                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in pipelines.items() if enabled],
             )
