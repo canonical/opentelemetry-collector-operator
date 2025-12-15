@@ -16,7 +16,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.deploy(
         charm_22_04,
         app="otelcol",
-        config={"path_exclude": PATH_EXCLUDE},
+        config={"path_exclude": PATH_EXCLUDE, "debug_exporter_for_traces": "true"},
     )
     juju.deploy("postgresql", channel="14/stable")
     # WHEN they are related
