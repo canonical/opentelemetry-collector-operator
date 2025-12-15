@@ -257,7 +257,13 @@ def config_manager():
     """Create a ConfigManager instance for testing."""
     return ConfigManager(
         unit_name="test/0",
+        hostname="juju-abcde-0",
         global_scrape_interval="15s",
         global_scrape_timeout="",
         insecure_skip_verify=True,
     )
+
+@pytest.fixture(autouse=True)
+def patch_hostname():
+    with patch("socket.gethostname", return_value="juju-abcde-0"):
+        yield
