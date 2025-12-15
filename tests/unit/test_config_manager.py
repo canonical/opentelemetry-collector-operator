@@ -8,7 +8,7 @@ from config_manager import ConfigManager
 
 def test_add_log_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a loki exporter is added to the config
     expected_loki_forwarding_cfg = {
@@ -39,7 +39,7 @@ def test_add_log_forwarding():
 
 def test_add_traces_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a traces exporter is added to the config
     expected_traces_forwarding_cfg = {
@@ -62,7 +62,7 @@ def test_add_traces_forwarding():
 
 def test_add_remote_write():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a remote write exporter is added to the config
     expected_remote_write_cfg = {
@@ -88,7 +88,7 @@ def test_add_remote_write():
 
 def test_add_prometheus_scrape():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a scrape job is added to the config
     first_job = [
