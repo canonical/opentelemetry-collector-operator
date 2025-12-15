@@ -261,7 +261,7 @@ def config_manager():
     """Create a ConfigManager instance for testing."""
     return ConfigManager(
         unit_name="test/0",
-        machine_id="0",
+        hostname="juju-abcde-0",
         global_scrape_interval="15s",
         global_scrape_timeout="",
         insecure_skip_verify=True,

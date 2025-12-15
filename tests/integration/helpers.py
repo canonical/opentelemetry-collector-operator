@@ -11,7 +11,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Exclude some logs to avoid circular ingestion during tests
 PATH_EXCLUDE: Final[str] = "/var/log/**/{cloud-init-output.log,syslog,auth.log};/var/log/juju/**"
-
+SNAP_STATUS_COMMAND = "sudo snap services opentelemetry-collector"
 
 @retry(stop=stop_after_attempt(10), wait=wait_fixed(10))
 async def is_pattern_in_snap_logs(juju: jubilant.Juju, grep_filters: list):
@@ -35,32 +35,29 @@ async def is_pattern_not_in_logs(juju: jubilant.Juju, pattern: str):
     return True
 
 
-def ssh_and_execute_command_in_machine(juju: jubilant.Juju, machine: str, command: str):
-    return juju.ssh(machine, command)
+def get_hostname(juju: jubilant.Juju, machine: str) -> str:
+    return juju.ssh(f"ubuntu/{machine}", "hostname").strip()
 
 
-def is_snap_active(snap_service_output: str) -> bool:
-    """Check if a snap service is active based on the output of `snap services <snap>`. This function assumes that the snap is installed.
+def get_snap_service_status(juju: jubilant.Juju, machine:str) -> str:
+    """Gets the status of the otelcol snap using `snap services opentelemetry-collector`. This function assumes that the snap is already installed.
 
     Example output:
     Service                                          Startup  Current  Notes
     opentelemetry-collector.opentelemetry-collector  enabled  active   -
     """
-    lines = snap_service_output.strip().splitlines()
+    snap_status = juju.ssh(f"ubuntu/{machine}", SNAP_STATUS_COMMAND)
+    lines = snap_status.strip().splitlines()
 
-    for line in lines[1:]:
-        parts = line.split()
-        if len(parts) >= 3:
-            current = parts[2]
-            if current.lower() == "active":
-                return True
-    return False
+    parts = lines[1].split()
+    return parts[2].lower()
 
-def assert_correct_loki_receiver_name(juju: jubilant.Juju, ubuntu_unit: str, otelcol_config_file: str, expected_machine_number: str) -> None:
-    config_file = ssh_and_execute_command_in_machine(juju, f"ubuntu/{ubuntu_unit}", f"cat {otelcol_config_file}")
+def get_loki_receiver_name(juju: jubilant.Juju, ubuntu_unit: str, otelcol_config_file: str) -> str:
+    config_file = juju.ssh(f"ubuntu/{ubuntu_unit}", f"cat {otelcol_config_file}")
     cfg = yaml.safe_load(config_file)
 
     receivers = cfg.get("receivers", {})
     for name in receivers.keys():
         if "loki/receive-loki-logs" in name:
-            assert name == f"loki/receive-loki-logs/{expected_machine_number}"
+            return name
+    return ""
