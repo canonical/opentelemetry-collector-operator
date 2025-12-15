@@ -7,7 +7,7 @@ import pathlib
 import re
 
 import jubilant
-from helpers import PATH_EXCLUDE, is_pattern_in_snap_logs, is_pattern_not_in_logs
+from helpers import ENABLE_BASIC_DEBUG_EXPORTERS, PATH_EXCLUDE, is_pattern_in_snap_logs, is_pattern_not_in_logs
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
@@ -28,7 +28,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.deploy(
         charm_22_04,
         app="otelcol",
-        config={"path_exclude": PATH_EXCLUDE},
+        config={"path_exclude": PATH_EXCLUDE, **ENABLE_BASIC_DEBUG_EXPORTERS},
     )
     juju.deploy("zookeeper", channel="3/stable")
     # WHEN they are related
