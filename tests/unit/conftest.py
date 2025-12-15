@@ -92,10 +92,6 @@ def tls_mock(cert_obj, private_key):
 def juju_hook_name(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("JUJU_HOOK_NAME", "fake")
 
-@pytest.fixture(autouse=True)
-def juju_machine_name(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("JUJU_MACHINE_ID", "0")
-
 
 @pytest.fixture(autouse=True)
 def otelcol_version():
