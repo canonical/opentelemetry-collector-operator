@@ -256,7 +256,7 @@ class ConfigManager:
         """Configure ingesting profiles."""
         self.config.add_component(
             Component.receiver,
-            "otlp",
+            f"otlp/{self._hostname}",
             {
                 "protocols": {
                     "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},

@@ -34,6 +34,7 @@ def test_send_profiles_integration(ctx, insecure_skip_verify, insecure, unit_nam
             "insecure": json.dumps(insecure),
         },
     )
+
     state_in = State(
         relations=[send_profiles], config={"tls_insecure_skip_verify": insecure_skip_verify}
     )
@@ -42,7 +43,7 @@ def test_send_profiles_integration(ctx, insecure_skip_verify, insecure, unit_nam
     # THEN the profiling pipeline contains an exporter to the expected url
     cfg = get_otelcol_config_file(unit_name, config_folder)
     assert cfg["service"]["pipelines"]["profiles"]["exporters"][0] == "otlp/profiling/0"
-    assert cfg["service"]["pipelines"]["profiles"]["receivers"][0] == "otlp"
+    assert cfg["service"]["pipelines"]["profiles"]["receivers"][0] == "otlp/juju-abcde-0"
     assert cfg["exporters"]["otlp/profiling/0"]["endpoint"] == pyro_url
     tls_config = cfg["exporters"]["otlp/profiling/0"]["tls"]
     assert tls_config["insecure"] is insecure

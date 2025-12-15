@@ -266,3 +266,8 @@ def config_manager():
         global_scrape_timeout="",
         insecure_skip_verify=True,
     )
+
+@pytest.fixture(autouse=True)
+def patch_hostname():
+    with patch("socket.gethostname", return_value="juju-abcde-0"):
+        yield
