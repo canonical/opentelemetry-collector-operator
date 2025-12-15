@@ -13,8 +13,8 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 PATH_EXCLUDE: Final[str] = "/var/log/**/{cloud-init-output.log,syslog,auth.log};/var/log/juju/**"
 # Configure debug exporters for all pipelines to inspect / assert against the OTLP data
 ENABLE_BASIC_DEBUG_EXPORTERS: Final[Dict[str, str]] = {
-    "enable_debug_exporter_for_logs": "true",
-    "enable_debug_exporter_for_metrics": "true",
+    "debug_exporter_for_logs": "true",
+    "debug_exporter_for_metrics": "true",
 }
 SNAP_STATUS_COMMAND: Final[str] = "sudo snap services opentelemetry-collector"
 
