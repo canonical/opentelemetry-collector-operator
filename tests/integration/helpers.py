@@ -52,12 +52,12 @@ def get_snap_service_status(juju: jubilant.Juju, machine:str) -> str:
     parts = lines[1].split()
     return parts[2].lower()
 
-def get_loki_receiver_name(juju: jubilant.Juju, ubuntu_unit: str, otelcol_config_file: str) -> str:
-    config_file = juju.ssh(f"ubuntu/{ubuntu_unit}", f"cat {otelcol_config_file}")
+def get_receiver_config(juju: jubilant.Juju, unit: str, receiver_name: str, otelcol_config_file: str) -> str:
+    config_file = juju.ssh(unit, f"cat {otelcol_config_file}")
     cfg = yaml.safe_load(config_file)
 
     receivers = cfg.get("receivers", {})
     for name in receivers.keys():
-        if "loki/receive-loki-logs" in name:
+        if receiver_name in name:
             return name
     return ""

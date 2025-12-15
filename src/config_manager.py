@@ -136,6 +136,7 @@ class ConfigManager:
         self._max_elapsed_time_min = max_elapsed_time_min
         self.config = ConfigBuilder(
             unit_name=self._unit_name,
+            hostname=self._hostname,
             global_scrape_interval=global_scrape_interval,
             global_scrape_timeout=global_scrape_timeout,
             receiver_tls=receiver_tls,
@@ -179,7 +180,8 @@ class ConfigManager:
         """
         self.config.add_component(
             Component.receiver,
-            # Receivers that bind to ports need to have the same name across different units of Otelcol on the same machine so that the binary can deduplicate them.
+            # Receivers that bind to ports need to have the same name across different units of Otelcol on the same machine
+            # so that the binary can deduplicate them.
             # We'll rely on the LXC instance ID to set the common name.
             f"loki/receive-loki-logs/{self._hostname}",
             {
