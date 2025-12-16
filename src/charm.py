@@ -119,13 +119,14 @@ def ensure_logrotate_timer():
     service_start("logrotate.timer", "--now")
 
 
-def hook() -> str:
-    """Return Juju hook name."""
-    return os.environ.get("JUJU_HOOK_NAME", "")
+def event() -> str:
+    """Return Juju hook|action name.
 
-def action() -> str:
-    """Return Juju action name."""
-    return os.environ.get("JUJU_ACTION_NAME", "")
+    Refs:
+    - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/action.md?plain=1#L55
+    - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/hook.md?plain=1#L1088
+    """
+    return os.environ.get("JUJU_HOOK_NAME") or os.environ.get("JUJU_ACTION_NAME", "")
 
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """Check whether mandatory relations are in place.
@@ -163,9 +164,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "install" or hook() == "upgrade":
+        if event() in ("install", "upgrade"):
             self._install_snaps()
-        elif hook() == "remove":
+        elif event() == "remove":
             # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
             # on the stop hook, then it will be reverted by the reconciler on `peer_relation_*`
             # hooks. Instead of filtering out these hooks, we do everything in the remove hook.
@@ -201,14 +202,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # This must be run after receive_ca_cert and/or receive_server_cert because they update
         # certs in the /usr/local/share/ca-certificates directory
         # Only refresh certs when they actually change (upgrade-charm or cert relation changes)
-        current_hook = hook()
-        current_action = action()
+        current_event = event()
 
-        if current_hook in (
+        if current_event in (
             "upgrade-charm",
             "receive_ca_cert-relation-changed",
             "receive_server_cert-relation-changed",
-        ) or current_action == "reconcile":
+            "reconcile",
+        ):
             refresh_certs()
 
         # Global scrape configs
