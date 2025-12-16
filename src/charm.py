@@ -109,7 +109,11 @@ def refresh_certs():
 
 def hook() -> str:
     """Return Juju hook name."""
-    return os.environ["JUJU_HOOK_NAME"]
+    return os.environ.get("JUJU_HOOK_NAME") or ""
+
+def action() -> str:
+    """Return Juju action name."""
+    return os.environ.get("JUJU_ACTION_NAME") or ""
 
 
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
@@ -187,11 +191,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # certs in the /usr/local/share/ca-certificates directory
         # Only refresh certs when they actually change (upgrade-charm or cert relation changes)
         current_hook = hook()
+        current_action = action()
         if current_hook in (
             "upgrade-charm",
             "receive_ca_cert-relation-changed",
             "receive_server_cert-relation-changed",
-        ):
+        ) or current_action == "reconcile":
             refresh_certs()
 
         # Global scrape configs
@@ -238,7 +243,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self,
             # NOTE: We pass True because the COS Agent library silently enforces the presence of
             # an outgoing traces relation; the collector instead can always receive traces, due
-            # to our use of the nopexporter.
+            # to our use of the debug exporter.
             is_tracing_ready=lambda: True,
         )
         cos_agent_relations = self.model.relations.get("cos-agent", [])
@@ -417,9 +422,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         try:
             self._ensure_certs_dir()
             cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
-            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
-                metrics_consumer_jobs, cert_paths
-            )
+            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(metrics_consumer_jobs, cert_paths)
         except Exception as e:
             logger.warning(f"Certificate processing failed, continuing without certs: {e}")
             # Continue without certificate functionality
@@ -447,13 +450,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             prometheus_url=cloud_integrator_data.prometheus_url,
             loki_url=cloud_integrator_data.loki_url,
             tempo_url=cloud_integrator_data.tempo_url,
-        )
-
-        # Add debug exporters from Juju config
-        config_manager.add_debug_exporters(
-            cast(bool, self.config.get("debug_exporter_for_logs")),
-            cast(bool, self.config.get("debug_exporter_for_metrics")),
-            cast(bool, self.config.get("debug_exporter_for_traces")),
         )
 
         # Add custom processors from Juju config
@@ -636,6 +632,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         cert_dir.mkdir(parents=True, exist_ok=True)
         cert_dir.chmod(0o755)
 
+
     def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
         """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
 
@@ -691,9 +688,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         unit_cert_dir = Path(CERT_DIR) / unit_identifier
 
         if not unit_cert_dir.exists():
-            logger.debug(
-                f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up"
-            )
+            logger.debug(f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up")
             return
 
         try:
