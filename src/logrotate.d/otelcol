@@ -1,0 +1,21 @@
+# /var/snap/opentelemetry-collector/common/otelcol.log is not rotated by default.
+# https://github.com/open-telemetry/opentelemetry-collector/issues/10768
+# This file configures the log rotation for the OpenTelemetry Collector log file.
+# It rotates the log file weekly, keeping four weeks of logs, plus the current log.
+# https://linux.die.net/man/8/logrotate
+
+/var/snap/opentelemetry-collector/common/otelcol.log
+{
+    rotate 4
+    weekly
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        if [ -d /run/systemd/system ]; then
+            kill -HUP $(pidof otelcol)
+        fi
+    endscript
+}
