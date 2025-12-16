@@ -2,12 +2,12 @@
 
 import hashlib
 import logging
-from typing import Any, Dict, List, Literal, Optional, Union
 from enum import Enum, unique
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
 
-from constants import SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
+from constants import INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -176,10 +176,20 @@ class ConfigBuilder:
                 f"traces/{self._unit_name}",
             ],
         )
-        # TODO https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
+        # FIXME https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11780
         # Add TLS config to extensions
         self.add_extension("health_check", {"endpoint": f"0.0.0.0:{Port.health.value}"})
-        self.add_telemetry("logs", {"level": "WARN"})
+        self.add_telemetry(
+            "logs",
+            {
+                "level": "INFO",
+                "disable_stacktrace": True,
+                # Write to a designated log file for internal telemetry logs. Otherwise, they go to
+                # stderr and syslog by default. This is rotated by logrotate and is configured
+                # elsewhere in the _configure_logrotate method.
+                "output_paths": [INTERNAL_TELEMETRY_LOG_FILE],
+            },
+        )
         self.add_telemetry("metrics", {"level": "normal"})
 
     def add_component(
