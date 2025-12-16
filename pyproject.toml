@@ -41,6 +41,7 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
+omit = ["lib/*", "tests/*"]
 
 # Linting tools configuration
 [tool.ruff]
@@ -60,7 +61,7 @@ convention = "google"
 
 [tool.pyright]
 extraPaths = ["src", "lib"]
-pythonVersion = "3.8"
+pythonVersion = "3.10"
 pythonPlatform = "All"
 
 [tool.pytest.ini_options]
