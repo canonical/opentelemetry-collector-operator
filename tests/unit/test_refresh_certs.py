@@ -35,13 +35,13 @@ def test_refresh_certs_called_on_cert_relation_changed(ctx, relation_name, remot
 
 
 @pytest.mark.parametrize(
-    "hook_name,event_method",
+    "event_method",
     [
-        ("update-status", "update_status"),
-        ("config-changed", "config_changed"),
+        "update_status",
+        "config_changed"
     ],
 )
-def test_refresh_certs_not_called_on_non_cert_hooks(ctx, hook_name, event_method):
+def test_refresh_certs_not_called_on_non_cert_hooks(ctx, event_method):
     """Test that refresh_certs is NOT called on non-certificate hooks."""
     # GIVEN a non-certificate hook is being executed
     state = State(leader=True)
@@ -55,3 +55,18 @@ def test_refresh_certs_not_called_on_non_cert_hooks(ctx, hook_name, event_method
 
         # THEN refresh_certs should NOT be called
         mock_refresh_certs.assert_not_called()
+
+def test_refresh_certs_on_reconcile_action_event(ctx):
+    # GIVEN the charm
+    state = State(leader=True)
+
+    # WHEN the `reconcile` action is executed
+    with patch("charm.refresh_certs") as mock_refresh_certs, \
+         patch("integrations._add_alerts"):
+            ctx.run(
+                ctx.on.action('reconcile'),
+                state,
+            )
+
+            # THEN the refresh_certs function MUST have been called once
+            mock_refresh_certs.assert_called_once()
