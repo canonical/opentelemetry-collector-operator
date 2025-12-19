@@ -13,9 +13,7 @@ body:
     attributes:
       label: Expected Behavior
       description: >
-        What signal/alert you expected to see and under what conditions
-        (metric, log pattern, trace span, threshold, duration),
-        why/how an alert should have fired sooner, etc.
+        A bried description of the desired experience.
     validations:
       required: true
   - type: textarea
@@ -41,6 +39,9 @@ body:
     attributes:
       label: Missing or insufficient telemetry / alerts
       description: >
+        Please indicate what signal/alert you expected to see and under what conditions
+        (metric, log pattern, trace span, threshold, duration),
+        why/how an alert should have fired sooner,
         Specific metrics / labels missing (e.g. per-endpoint latency, per-replica memory usage),
         log fields missing or unstructured, missing span attributes, missing dashboards / alert rules, etc.
         Do you have a fix suggestion?
@@ -72,17 +73,3 @@ body:
     id: additional-context
     attributes:
       label: Additional context
-  - type: checkboxes
-    id: checklist
-    attributes:
-      label: Checklist
-      description: A detailed report could be resolved quicker!
-      options:
-        - label: All relevant metrics are identified.
-          required: true
-        - label: All relevant alert rules are identified.
-          required: true
-        - label: Logs covering the incident window are attached / linked.
-          required: true
-        - label: Screenshots of time‑series are attached.
-          required: false
