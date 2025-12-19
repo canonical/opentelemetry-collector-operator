@@ -34,6 +34,7 @@ def test_send_profiles_integration(ctx, insecure_skip_verify, insecure, unit_nam
             "insecure": json.dumps(insecure),
         },
     )
+
     state_in = State(
         relations=[send_profiles], config={"tls_insecure_skip_verify": insecure_skip_verify}
     )
@@ -42,7 +43,7 @@ def test_send_profiles_integration(ctx, insecure_skip_verify, insecure, unit_nam
     # THEN the profiling pipeline contains an exporter to the expected url
     cfg = get_otelcol_config_file(unit_name, config_folder)
     assert cfg["service"]["pipelines"]["profiles"]["exporters"][0] == "otlp/profiling/0"
-    assert cfg["service"]["pipelines"]["profiles"]["receivers"][0] == "otlp"
+    assert cfg["service"]["pipelines"]["profiles"]["receivers"][0] == "otlp/juju-abcde-0"
     assert cfg["exporters"]["otlp/profiling/0"]["endpoint"] == pyro_url
     tls_config = cfg["exporters"]["otlp/profiling/0"]["tls"]
     assert tls_config["insecure"] is insecure
@@ -65,9 +66,9 @@ def test_receive_profiles_integration(
     )
     state_out = ctx.run(ctx.on.update_status(), state=state_in)
 
-    # THEN the profiling pipeline contains a profiling pipeline, but no exporters other than debug
+    # THEN the profiling pipeline contains a profiling pipeline, but no exporters other than nop
     cfg = get_otelcol_config_file(unit_name, config_folder)
-    assert cfg["service"]["pipelines"]["profiles"]["exporters"] == ["debug/otelcol/0"]
+    assert cfg["service"]["pipelines"]["profiles"]["exporters"] == ["nop/otelcol/0"]
 
     # AND we publish to app databag our profile ingestion endpoints for otlp_http and otlp_grpc
     receive_profiles_app_data = state_out.get_relation(receive_profiles.id).local_app_data
@@ -109,8 +110,7 @@ def test_profiling_integration_tls(ctx, unit_name, insecure, config_folder, inse
         config={"tls_insecure_skip_verify": insecure_skip_verify},
     )
 
-    with patch("charm.refresh_certs", lambda: True):
-        ctx.run(ctx.on.update_status(), state=state_in)
+    ctx.run(ctx.on.update_status(), state=state_in)
 
     # THEN  the profiling pipeline contains an exporter to the expected url
     cfg = get_otelcol_config_file(unit_name, config_folder)

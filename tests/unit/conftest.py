@@ -34,14 +34,17 @@ def unit_name(unit_id, app_name):
 
 @pytest.fixture
 def ctx(tmp_path, unit_id, app_name):
-    src_dirs = ["grafana_dashboards", "loki_alert_rules", "prometheus_alert_rules"]
+    src_dirs = ["grafana_dashboards", "loki_alert_rules", "prometheus_alert_rules", "logrotate.d"]
     # Create a virtual charm_root so Scenario respects the `src_dirs`
     # Related to https://github.com/canonical/operator/issues/1673
     for src_dir in src_dirs:
         source_path = CHARM_ROOT / "src" / src_dir
         target_path = tmp_path / "src" / src_dir
         copytree(source_path, target_path, dirs_exist_ok=True)
-    with patch("charm.refresh_certs", lambda: True):
+    with (
+        patch("charm.refresh_certs", lambda: True),
+        patch("charm.ensure_logrotate_timer", lambda: True),
+    ):
         yield Context(
             OpenTelemetryCollectorCharm, charm_root=tmp_path, unit_id=unit_id, app_name=app_name
         )
@@ -80,11 +83,15 @@ def cert_obj(server_cert, ca_cert):
 
 @pytest.fixture
 def tls_mock(cert_obj, private_key):
-    with patch.object(
-        TLSCertificatesRequiresV4, "_find_available_certificates", return_value=None
-    ), patch.object(
-        TLSCertificatesRequiresV4, "get_assigned_certificate", return_value=(cert_obj, private_key)
-    ), patch.object(Certificate, "from_string", return_value=cert_obj):
+    with (
+        patch.object(TLSCertificatesRequiresV4, "_find_available_certificates", return_value=None),
+        patch.object(
+            TLSCertificatesRequiresV4,
+            "get_assigned_certificate",
+            return_value=(cert_obj, private_key),
+        ),
+        patch.object(Certificate, "from_string", return_value=cert_obj),
+    ):
         yield
 
 
@@ -112,6 +119,20 @@ def config_folder(tmp_path):
     config_file = tmp_path / "config.d"
     with patch("charm.CONFIG_FOLDER", config_file):
         yield config_file
+
+
+@pytest.fixture(autouse=True)
+def otelcol_log_file(tmp_path):
+    config_file = str(tmp_path / "otelcol.log")
+    with patch("config_builder.INTERNAL_TELEMETRY_LOG_FILE", config_file):
+        yield config_file
+
+
+@pytest.fixture(autouse=True)
+def logrotate_file(tmp_path):
+    """Mock the logrotate file path and ensure it exists."""
+    with patch("charm.LOGROTATE_PATH", tmp_path / "logrotate.d/otelcol") as logrotate_file:
+        yield logrotate_file
 
 
 @pytest.fixture
@@ -175,8 +196,10 @@ def mock_cos_agent_update_tracing():
 @pytest.fixture(autouse=True)
 def mock_ensure_certs_dir(request):
     """Mock the _ensure_certs_dir method to avoid PermissionError in tests."""
-    with patch("charm.OpenTelemetryCollectorCharm._ensure_certs_dir"), \
-         patch("charm.CERT_DIR", "/tmp/test_certs"):
+    with (
+        patch("charm.OpenTelemetryCollectorCharm._ensure_certs_dir"),
+        patch("charm.CERT_DIR", "/tmp/test_certs"),
+    ):
         yield
 
 
@@ -198,6 +221,7 @@ def cleanup_temp_files():
     import shutil
     import glob
     import os
+
     try:
         # Look for any directories in /tmp that match our test pattern
         for temp_dir in glob.glob("/tmp/tmp*/otelcol_*"):
@@ -214,26 +238,6 @@ def sample_ca_cert():
     return dedent("""\
         -----BEGIN CERTIFICATE-----
         MIIEEzCCAnugAwIBAgIVAO/E0PkhzNYw2zOnc1gUphCXMIbvMA0GCSqGSIb3DQEB
-        CwUAMCExDTALBgNVBAoTBEp1anUxEDAOBgNVBAMTB2p1anUtY2EwHhcNMjUxMDE2
-        MTM1NzE5WhcNMzUxMDE2MTQwMjE5WjAhMQ0wCwYDVQQKEwRKdWp1MRAwDgYDVQQD
-        EwdqdWp1LWNhMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAzpvU/8aa
-        RacEOYQkAL1Pi3Ag8wgcSlr3dFyFKfBHJbRDio+kX5W0OWsF2A6BHW7qJB9OuwD3
-        4Jk6qMo31HzP7ESNQ9RV2GqANmtz7ykzEBUR29Ql+lcut6LUH9ghCMgnSnY8HuYc
-        ez1UhjhvXK86nidlBdf7lP7CamyyJio+q7vgaLjMaz+FQvitB16bvGUcDGaCtD3a
-        ZDZPEu5Anzz7IPC3fuH5WdCgzrgi5R+up5H29UaYzCH9yUDiYU286gOowyH4MDgS
-        2Kn3BU2+PXrOFtRfmTPxQ6kX0EWEhpNTTU2fnfe6TfZ8OyBT6yGAj6gsbnmSldDa
-        KuzqkJWiOlrgYkvTYaYJsa0SAZxyHKOPkF5aah/PNsigi2WdM7BoxcjdjH8MvMYp
-        qYwiVrwPDFDa5nzdp6cW9olJ/cdloZW6bVdgKDs3gJIh2dHiV2pW02ulGzg4eqru
-        9ib94W1sR+3ELo0M9GrIr3na1G6GSpRLN1kFLP2+daBC6YBI/HzYcepZAgMBAAGj
-        QjBAMA4GA1UdDwEB/wQEAwICpDAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR3
-        8+e1gq/izCNuacdsUjt78PnfpjANBgkqhkiG9w0BAQsFAAOCAYEAp4OXlO6WyGXy
-        clts452ujuYuq11EdXUMiYxB8XEfqjoGuhplcLxXeE5nWIU8X7enLSa3TqyqS4F/
-        /WnC5SAPu0wPPwOYX5i4Ng9KcBo6vpsBom2TEoeLRRQd9CY4kX2F0+FQQQogtRpy
-        yq7WuT0TOloHjN1AVFJZPlGPcxkm7SnqF4a3CwfTKmGrYmjStSHQXYH8A2m+2o6T
-        0ilzLSaVKVuKuYfSqgUR2xlJ/3FHb5yvi9Aw0EdneGU+mpAFYlXExxd+qgs1KYTX
-        AODWGeScvD+6D8pKsYAkBx2lWMlkLnoJKmohyz0tvdpvXm/paCGeFFiO/5tHd49r
-        njnHoRZnhu5yvadsu0kXiEFsLswWj9xe9ONcg9SjMSOQ7q/ucnSAtur3MKSAN/Ub
-        boS+t/C7s/Xn9HfNcpM0J0rgrOEWgj+t6YuYTDWEsOXCgnsOTCI4BWSCEpAPwWWN
         6vqscXomNMAY8BLg5W+QVWDIsEwWcgul7zi2EN0CyiLWkuWvTlY5
         -----END CERTIFICATE-----
         """).strip()
@@ -257,7 +261,13 @@ def config_manager():
     """Create a ConfigManager instance for testing."""
     return ConfigManager(
         unit_name="test/0",
+        hostname="juju-abcde-0",
         global_scrape_interval="15s",
         global_scrape_timeout="",
         insecure_skip_verify=True,
     )
+
+@pytest.fixture(autouse=True)
+def patch_hostname():
+    with patch("socket.gethostname", return_value="juju-abcde-0"):
+        yield

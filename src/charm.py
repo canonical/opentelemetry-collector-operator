@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Mapping, Optional, cast
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
+from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
@@ -28,13 +29,15 @@ from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
+    LOGROTATE_PATH,
+    LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
-    SERVER_CERT_PATH,
     SERVER_CA_CERT_PATH,
+    SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager, SnapRegistrationFile
@@ -107,10 +110,23 @@ def refresh_certs():
     subprocess.run(["update-ca-certificates", "--fresh"], check=True)
 
 
-def hook() -> str:
-    """Return Juju hook name."""
-    return os.environ["JUJU_HOOK_NAME"]
+def ensure_logrotate_timer():
+    """Run systemctl start logrotate.timer --now to enable and start the service.
 
+    Raises:
+        SystemdError: if logrotate.timer cannot be enabled or started.
+    """
+    service_start("logrotate.timer", "--now")
+
+
+def event() -> str:
+    """Return Juju hook|action name.
+
+    Refs:
+    - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/action.md?plain=1#L55
+    - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/hook.md?plain=1#L1088
+    """
+    return os.environ.get("JUJU_HOOK_NAME") or os.environ.get("JUJU_ACTION_NAME", "")
 
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """Check whether mandatory relations are in place.
@@ -148,9 +164,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "install" or hook() == "upgrade":
+        if event() in ("install", "upgrade"):
             self._install_snaps()
-        elif hook() == "remove":
+        elif event() == "remove":
             # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
             # on the stop hook, then it will be reverted by the reconciler on `peer_relation_*`
             # hooks. Instead of filtering out these hooks, we do everything in the remove hook.
@@ -185,7 +201,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Refresh system certs
         # This must be run after receive_ca_cert and/or receive_server_cert because they update
         # certs in the /usr/local/share/ca-certificates directory
-        refresh_certs()
+        # Only refresh certs when they actually change (upgrade-charm or cert relation changes)
+        current_event = event()
+
+        if current_event in (
+            "upgrade-charm",
+            "receive_ca_cert-relation-changed",
+            "receive_server_cert-relation-changed",
+            "reconcile",
+        ):
+            refresh_certs()
 
         # Global scrape configs
         global_configs = {
@@ -204,6 +229,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Create the config manager
         config_manager = ConfigManager(
             unit_name=self.unit.name,
+            hostname=socket.gethostname(),
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
@@ -211,6 +237,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             queue_size=cast(int, self.config.get("queue_size")),
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
         )
+
+        # Self-mon logging
+        self._configure_logrotate()
 
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
@@ -230,7 +259,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self,
             # NOTE: We pass True because the COS Agent library silently enforces the presence of
             # an outgoing traces relation; the collector instead can always receive traces, due
-            # to our use of the debug exporter.
+            # to our use of the nopexporter.
             is_tracing_ready=lambda: True,
         )
         cos_agent_relations = self.model.relations.get("cos-agent", [])
@@ -409,7 +438,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         try:
             self._ensure_certs_dir()
             cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
-            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(metrics_consumer_jobs, cert_paths)
+            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
+                metrics_consumer_jobs, cert_paths
+            )
         except Exception as e:
             logger.warning(f"Certificate processing failed, continuing without certs: {e}")
             # Continue without certificate functionality
@@ -439,6 +470,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             tempo_url=cloud_integrator_data.tempo_url,
         )
 
+        # Add debug exporters from Juju config
+        config_manager.add_debug_exporters(
+            cast(bool, self.config.get("debug_exporter_for_logs")),
+            cast(bool, self.config.get("debug_exporter_for_metrics")),
+            cast(bool, self.config.get("debug_exporter_for_traces")),
+        )
+
         # Add custom processors from Juju config
         if custom_processors := cast(str, self.config.get("processors")):
             config_manager.add_custom_processors(custom_processors)
@@ -451,7 +489,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
-        hash_file = LocalPath("/opt/otelcol_reload")
+        hash_file = self.charm_dir.absolute()/"config_hash"
         old_hash = ""
         if hash_file.exists():
             old_hash = hash_file.read_text()
@@ -461,6 +499,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if current_hash != old_hash:
             for snap_name in SnapMap.snaps():
                 self._restart_snap(self.snap(snap_name))
+            hash_file.write_text(current_hash)
 
         # Set status
         if self._has_server_cert_relation and not is_tls_ready():
@@ -594,6 +633,29 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
 
+    def _configure_logrotate(self):
+        """Configure logrotate for otelcol's internal logs.
+
+        When we set `output_paths` in the internal logging config:
+        https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-logs
+
+        a custom logrotate configuration is needed to rotate the logs written to disk.
+        FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/139
+
+        Raises:
+            SystemdError: if logrotate.timer cannot be enabled or started.
+        """
+        ensure_logrotate_timer()
+
+        config_path = LocalPath(LOGROTATE_PATH)
+        if config_path.exists():
+            return
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        charm_root = self.charm_dir.absolute()
+        with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), "r") as f:
+            config_path.write_text(f.read())
+
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
@@ -617,7 +679,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         cert_dir = Path(CERT_DIR)
         cert_dir.mkdir(parents=True, exist_ok=True)
         cert_dir.chmod(0o755)
-
 
     def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
         """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
@@ -674,7 +735,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         unit_cert_dir = Path(CERT_DIR) / unit_identifier
 
         if not unit_cert_dir.exists():
-            logger.debug(f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up")
+            logger.debug(
+                f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up"
+            )
             return
 
         try:
