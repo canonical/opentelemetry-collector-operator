@@ -25,7 +25,7 @@ def test_add_pipeline_component(pipelines, component):
     https://opentelemetry.io/docs/collector/configuration/#basics
     """
     # GIVEN an empty config
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     # WHEN adding a pipeline component with a nested config
     sample_config = {"a": {"b": "c"}}
     config.add_component(
@@ -56,7 +56,7 @@ def test_add_to_pipeline(pipelines, component):
     https://opentelemetry.io/docs/collector/configuration/#basics
     """
     # GIVEN an empty config
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     # WHEN adding a pipeline component
     config._add_to_pipeline("foo", component, pipelines)
     # THEN the pipeline component is added to the pipeline config
@@ -68,7 +68,7 @@ def test_add_to_pipeline(pipelines, component):
 
 def test_add_extension():
     # GIVEN an empty config
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     # WHEN adding a pipeline with a config
     sample_config = {"a": {"b": "c"}}
     config.add_extension("foo", sample_config)
@@ -80,7 +80,7 @@ def test_add_extension():
 
 def test_add_telemetry():
     # GIVEN an empty config
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     # WHEN adding a pipeline with a config
     sample_config = [{"a": {"b": "c"}}]
     config.add_telemetry("logs", {"level": "INFO"})
@@ -96,10 +96,10 @@ def test_add_telemetry():
 def test_rendered_default_is_valid():
     # GIVEN a default config
     # WHEN the config is rendered
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     config.add_default_config()
     config_yaml = yaml.safe_load(config.build())
-    # THEN a debug exporter is added for each pipeline missing one
+    # THEN a nop exporter is added for each pipeline missing one
     pipelines = [
         config_yaml["service"]["pipelines"][p] for p in config_yaml["service"]["pipelines"]
     ]
@@ -110,16 +110,16 @@ def test_rendered_default_is_valid():
 
 def test_receivers_tls_empty_config():
     # GIVEN an "empty" config
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     # WHEN tls is enabled
     config._add_tls_to_all_receivers("/some/cert.crt", "/some/private.key")
     # THEN it has no effect on the rendered config
-    assert config.build() == ConfigBuilder("", "", "").build()
+    assert config.build() == ConfigBuilder("", "", "", "").build()
 
 
 def test_receivers_tls_no_protocols():
     # GIVEN a config without any protocols
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     config.add_component(
         Component.receiver, "prometheus", {"config": {"foo": "bar"}}, pipelines=["metrics"]
     )
@@ -138,7 +138,7 @@ def test_receivers_tls_no_protocols():
 
 def test_receivers_tls_unknown_protocols():
     # GIVEN a config with an unknown protocols
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     config.add_component(
         Component.receiver,
         "some_receiver",
@@ -156,7 +156,7 @@ def test_receivers_tls_unknown_protocols():
 
 def test_receivers_tls_known_protocols():
     # GIVEN a config with known protocols (http, grpc)
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     config.add_component(
         Component.receiver,
         "some-http-receiver",
@@ -224,7 +224,7 @@ def test_receivers_tls_known_protocols():
 
 def test_insecure_skip_verify():
     # GIVEN an empty config without exporters
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     config_copy = deepcopy(config)
     # WHEN updating the tls::insecure_skip_verify exporter configuration
     config._add_exporter_insecure_skip_verify(False)
@@ -248,21 +248,24 @@ def test_insecure_skip_verify():
     assert config._config["exporters"]["bar"]["tls"]["insecure_skip_verify"] is True
 
 
-def test_debug_exporter_no_tls_config():
+def test_some_exporters_exclude_tls_config():
     # GIVEN an empty config without exporters
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
+    # WHEN multiple nop exporters are added
+    config.add_component(Component.exporter, "nop", {"config": {"foo": "bar"}})
+    config.add_component(Component.exporter, "nop/descriptor", {"config": {"foo": "bar"}})
     # WHEN multiple debug exporters are added
     config.add_component(Component.exporter, "debug", {"config": {"foo": "bar"}})
     config.add_component(Component.exporter, "debug/descriptor", {"config": {"foo": "bar"}})
     # AND the tls::insecure_skip_verify configuration is added
     config._add_exporter_insecure_skip_verify(True)
-    # THEN tls::insecure_skip_verify is not set for debug exporters
+    # THEN tls::insecure_skip_verify is not set for nop exporters
     assert all("tls" not in exp.keys() for exp in config._config["exporters"].values())
 
 
 def test_global_scrape_timeout_and_interval():
     # GIVEN a config with multiple prometheus receivers
-    config = ConfigBuilder("", "", "")
+    config = ConfigBuilder("", "", "", "")
     config.add_component(Component.receiver, name="prometheus", config={"config": {}})
     config.add_component(
         Component.receiver, name="prometheus/empty-cfgs", config={"config": {"scrape_configs": []}}

@@ -3,12 +3,14 @@
 
 """Feature: Opentelemetry-collector config builder."""
 
+import copy
+import pytest
 from config_manager import ConfigManager
 
 
 def test_add_log_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a loki exporter is added to the config
     expected_loki_forwarding_cfg = {
@@ -39,7 +41,7 @@ def test_add_log_forwarding():
 
 def test_add_traces_forwarding():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a traces exporter is added to the config
     expected_traces_forwarding_cfg = {
@@ -62,7 +64,7 @@ def test_add_traces_forwarding():
 
 def test_add_remote_write():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a remote write exporter is added to the config
     expected_remote_write_cfg = {
@@ -88,7 +90,7 @@ def test_add_remote_write():
 
 def test_add_prometheus_scrape():
     # GIVEN an empty config
-    config_manager = ConfigManager("otelcol/0", "", "", insecure_skip_verify=True)
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
 
     # WHEN a scrape job is added to the config
     first_job = [
@@ -141,3 +143,74 @@ def test_add_prometheus_scrape():
         ]["config"]["scrape_configs"]
     ]
     assert job_names == ["second_job", "third_job"]
+
+
+@pytest.mark.parametrize(
+    "enabled_pipelines,expected_pipelines",
+    [
+        (
+            {"logs": False, "metrics": False, "traces": False},
+            {
+                "logs/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
+                "metrics/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
+                "traces/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
+            },
+        ),
+        (
+            {"logs": True, "metrics": True, "traces": True},
+            {
+                "logs/otelcol/0": {
+                    "receivers": ["otlp/foo"],
+                    "exporters": ["debug/juju-config-enabled"],
+                },
+                "metrics/otelcol/0": {
+                    "receivers": ["otlp/foo"],
+                    "exporters": ["debug/juju-config-enabled"],
+                },
+                "traces/otelcol/0": {
+                    "receivers": ["otlp/foo"],
+                    "exporters": ["debug/juju-config-enabled"],
+                },
+            },
+        ),
+        (
+            {"logs": True, "metrics": False, "traces": True},
+            {
+                "logs/otelcol/0": {
+                    "receivers": ["otlp/foo"],
+                    "exporters": ["debug/juju-config-enabled"],
+                },
+                "metrics/otelcol/0": {"receivers": ["otlp/foo"]},
+                "traces/otelcol/0": {
+                    "receivers": ["otlp/foo"],
+                    "exporters": ["debug/juju-config-enabled"],
+                },
+            },
+        ),
+    ],
+)
+def test_add_debug_exporters(enabled_pipelines, expected_pipelines):
+    # GIVEN an empty config
+    config_manager = ConfigManager("otelcol/0", "foo", "", "")
+    initial_cfg = copy.copy(config_manager.config._config)
+
+    # WHEN a debug exporters are added to the config
+    config_manager.add_debug_exporters(**enabled_pipelines)
+
+    # THEN the config remains unchanged if no pipelines are enabled
+    if not any(enabled_pipelines.values()):
+        assert initial_cfg == config_manager.config._config
+        return
+
+    # AND only one debug exporter is added to the list of exporters
+    assert 1 == sum(
+        "debug/juju-config-enabled" in key for key in config_manager.config._config["exporters"]
+    )
+    # AND there are no additional pipelines configured
+    assert list(config_manager.config._config["service"]["pipelines"].keys()) == [
+        "logs/otelcol/0",
+        "metrics/otelcol/0",
+        "traces/otelcol/0",
+    ]
+    # AND the debug exporter is only attached to the enabled pipelines
+    assert expected_pipelines == config_manager.config._config["service"]["pipelines"]

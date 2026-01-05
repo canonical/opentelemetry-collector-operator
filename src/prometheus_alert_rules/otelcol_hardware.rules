@@ -2,7 +2,7 @@ groups:
   - name: Hardware
     rules:
       - alert: high-cpu-usage
-        expr: max(rate(otelcol_process_cpu_seconds_total{}[1m])*100) > 90
+        expr: max(rate(otelcol_process_cpu_seconds_total{}[5m])*100) > 90
         for: 5m
         labels:
           severity: critical

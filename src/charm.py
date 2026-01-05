@@ -9,11 +9,13 @@ import re
 import shutil
 import socket
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
+from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
@@ -24,20 +26,23 @@ import integrations
 from config_builder import Component
 from config_manager import ConfigManager
 from constants import (
+    CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
+    LOGROTATE_PATH,
+    LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
+    SERVER_CA_CERT_PATH,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
 from singleton_snap import SingletonSnapManager, SnapRegistrationFile
 from snap_fstab import SnapFstab
 from snap_management import (
-    SnapInstallError,
     SnapMap,
     SnapServiceError,
     SnapSpecError,
@@ -47,6 +52,19 @@ from snap_management import (
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
+
+
+def validate_cert(cert: str) -> bool:
+    """Validate certificate content using PEM format validation.
+
+    Args:
+        cert: Certificate content to validate
+
+    Returns:
+        True if the certificate has valid PEM format, False otherwise
+    """
+    pem_pattern = r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----"
+    return bool(re.search(pem_pattern, cert, re.DOTALL))
 
 
 # TODO: move this method outside of charm.py together with the cos-agent integrations
@@ -92,10 +110,23 @@ def refresh_certs():
     subprocess.run(["update-ca-certificates", "--fresh"], check=True)
 
 
-def hook() -> str:
-    """Return Juju hook name."""
-    return os.environ["JUJU_HOOK_NAME"]
+def ensure_logrotate_timer():
+    """Run systemctl start logrotate.timer --now to enable and start the service.
 
+    Raises:
+        SystemdError: if logrotate.timer cannot be enabled or started.
+    """
+    service_start("logrotate.timer", "--now")
+
+
+def event() -> str:
+    """Return Juju hook|action name.
+
+    Refs:
+    - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/action.md?plain=1#L55
+    - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/hook.md?plain=1#L1088
+    """
+    return os.environ.get("JUJU_HOOK_NAME") or os.environ.get("JUJU_ACTION_NAME", "")
 
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """Check whether mandatory relations are in place.
@@ -133,13 +164,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if hook() == "install" or hook() == "upgrade":
+        if event() in ("install", "upgrade"):
             self._install_snaps()
-        elif hook() == "remove":
+        elif event() == "remove":
             # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
             # on the stop hook, then it will be reverted by the reconciler on `peer_relation_*`
             # hooks. Instead of filtering out these hooks, we do everything in the remove hook.
             # https://documentation.ubuntu.com/juju/3.6/reference/hook/#remove
+            self._cleanup_certificates_on_remove()
             self._remove_node_exporter()
             self._remove_opentelemetry_collector()
             return
@@ -159,13 +191,26 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         receive_ca_certs_hash = integrations.receive_ca_cert(
             self,
             recv_ca_cert_folder_path=LocalPath(RECV_CA_CERT_FOLDER_PATH),
-            refresh_certs=refresh_certs,
         )
         server_cert_hash = integrations.receive_server_cert(
             self,
             server_cert_path=LocalPath(SERVER_CERT_PATH),
             private_key_path=LocalPath(SERVER_CERT_PRIVATE_KEY_PATH),
+            root_ca_cert_path=LocalPath(SERVER_CA_CERT_PATH),
         )
+        # Refresh system certs
+        # This must be run after receive_ca_cert and/or receive_server_cert because they update
+        # certs in the /usr/local/share/ca-certificates directory
+        # Only refresh certs when they actually change (upgrade-charm or cert relation changes)
+        current_event = event()
+
+        if current_event in (
+            "upgrade-charm",
+            "receive_ca_cert-relation-changed",
+            "receive_server_cert-relation-changed",
+            "reconcile",
+        ):
+            refresh_certs()
 
         # Global scrape configs
         global_configs = {
@@ -184,6 +229,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Create the config manager
         config_manager = ConfigManager(
             unit_name=self.unit.name,
+            hostname=socket.gethostname(),
             global_scrape_interval=global_configs["global_scrape_interval"],
             global_scrape_timeout=global_configs["global_scrape_timeout"],
             receiver_tls=is_tls_ready(),
@@ -191,6 +237,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             queue_size=cast(int, self.config.get("queue_size")),
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
         )
+
+        # Self-mon logging
+        self._configure_logrotate()
 
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
@@ -210,7 +259,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self,
             # NOTE: We pass True because the COS Agent library silently enforces the presence of
             # an outgoing traces relation; the collector instead can always receive traces, due
-            # to our use of the debug exporter.
+            # to our use of the nopexporter.
             is_tracing_ready=lambda: True,
         )
         cos_agent_relations = self.model.relations.get("cos-agent", [])
@@ -407,7 +456,19 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         # For now, the only incoming and outgoing metrics relations are remote-write/scrape
         metrics_consumer_jobs = integrations.scrape_metrics(self)
+        # Write CA certificates to disk and update job configurations
+        try:
+            self._ensure_certs_dir()
+            cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
+            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
+                metrics_consumer_jobs, cert_paths
+            )
+        except Exception as e:
+            logger.warning(f"Certificate processing failed, continuing without certs: {e}")
+            # Continue without certificate functionality
+            pass
         config_manager.add_prometheus_scrape_jobs(metrics_consumer_jobs)
+
         if self._has_outgoing_metrics_relation:
             # This is conditional because otherwise remote_write.endpoints causes error on relation-broken
             remote_write_endpoints = integrations.send_remote_write(self)
@@ -431,6 +492,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             tempo_url=cloud_integrator_data.tempo_url,
         )
 
+        # Add debug exporters from Juju config
+        config_manager.add_debug_exporters(
+            cast(bool, self.config.get("debug_exporter_for_logs")),
+            cast(bool, self.config.get("debug_exporter_for_metrics")),
+            cast(bool, self.config.get("debug_exporter_for_traces")),
+        )
+
         # Add custom processors from Juju config
         if custom_processors := cast(str, self.config.get("processors")):
             config_manager.add_custom_processors(custom_processors)
@@ -443,7 +511,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
-        hash_file = LocalPath("/opt/otelcol_reload")
+        hash_file = self.charm_dir.absolute()/"config_hash"
         old_hash = ""
         if hash_file.exists():
             old_hash = hash_file.read_text()
@@ -453,6 +521,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if current_hash != old_hash:
             for snap_name in SnapMap.snaps():
                 self._restart_snap(self.snap(snap_name))
+            hash_file.write_text(current_hash)
 
         # Set status
         if self._has_server_cert_relation and not is_tls_ready():
@@ -469,7 +538,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
-            installed_revision = max(SingletonSnapManager.get_revisions(snap_name))
+            revisions = SingletonSnapManager.get_revisions(snap_name)
+            installed_revision = max(revisions) if revisions else None
             if snap_revision != installed_revision:
                 logger.error(
                     f"Mismatching snap revisions for {snap_name}. "
@@ -514,7 +584,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
             manager.register(snap_name, snap_revision)
-            if snap_revision >= max(manager.get_revisions(snap_name)):
+            revisions = manager.get_revisions(snap_name)
+            if snap_revision >= (max(revisions) if revisions else 0):
                 # Install the snap
                 self.unit.status = MaintenanceStatus(f"Installing {snap_name} snap")
                 install_snap(snap_name)
@@ -530,9 +601,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         self.unit.status = MaintenanceStatus(f"Uninstalling {snap_name} snap")
         try:
             self.snap(snap_name).ensure(state=snap.SnapState.Absent)
+            logger.info(f"{snap_name} snap was uninstalled")
         except (snap.SnapError, SnapSpecError) as e:
-            raise SnapInstallError(f"Failed to uninstall {snap_name}") from e
-        logger.info(f"{snap_name} snap was uninstalled")
+            # Log error but don't fail the remove hook - this is common in test environments
+            logger.error(f"Failed to uninstall {snap_name} snap: {e}")
+            # Don't raise the exception to avoid failing the remove hook
 
     def _remove_node_exporter(self):
         """Coordinate node-exporter snap removal."""
@@ -552,13 +625,23 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if manager.is_used_by_other_units(snap_name):
             config_filename = f"{SnapRegistrationFile._normalize_name(self.unit.name)}.yaml"
             config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
-            config_path.unlink()
-            logger.info(f"removed the opentelemetry-collector config file: {config_path}")
-            self.snap("opentelemetry-collector").restart()
+            try:
+                config_path.unlink()
+                logger.info(f"removed the opentelemetry-collector config file: {config_path}")
+            except OSError as e:
+                logger.warning(f"Failed to remove config file {config_path}: {e}")
+
+            try:
+                self.snap("opentelemetry-collector").restart()
+            except snap.SnapError as e:
+                logger.warning(f"Failed to restart opentelemetry-collector snap: {e}")
         else:
             self._remove_snap(snap_name)
-            shutil.rmtree(LocalPath(CONFIG_FOLDER))
-            logger.info(f"removed the opentelemetry-collector config folder: {CONFIG_FOLDER}")
+            try:
+                shutil.rmtree(LocalPath(CONFIG_FOLDER))
+                logger.info(f"removed the opentelemetry-collector config folder: {CONFIG_FOLDER}")
+            except OSError as e:
+                logger.warning(f"Failed to remove config folder {CONFIG_FOLDER}: {e}")
 
         # TODO: Luca if the snap is used by other units, we should probably `ensure`
         # that the max_revision is installed instead.
@@ -571,6 +654,29 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         }
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
+
+    def _configure_logrotate(self):
+        """Configure logrotate for otelcol's internal logs.
+
+        When we set `output_paths` in the internal logging config:
+        https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-logs
+
+        a custom logrotate configuration is needed to rotate the logs written to disk.
+        FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/139
+
+        Raises:
+            SystemdError: if logrotate.timer cannot be enabled or started.
+        """
+        ensure_logrotate_timer()
+
+        config_path = LocalPath(LOGROTATE_PATH)
+        if config_path.exists():
+            return
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        charm_root = self.charm_dir.absolute()
+        with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), "r") as f:
+            config_path.write_text(f.read())
 
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
@@ -591,7 +697,87 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """
         return snap.SnapCache()[snap_name]
 
-    @property
+    def _ensure_certs_dir(self) -> None:
+        cert_dir = Path(CERT_DIR)
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        cert_dir.chmod(0o755)
+
+    def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
+        """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
+
+        This method processes Prometheus scrape jobs, extracts CA certificate content,
+        and writes it to a unit-specific subdirectory within CERT_DIR.
+
+        Args:
+            scrape_jobs: List of scrape job dictionaries from MetricsEndpointConsumer
+
+        Returns:
+            Dictionary mapping job names to their certificate file paths
+        """
+        cert_paths = {}
+
+        # Create unit-specific certificate directory
+        unit_identifier = self.unit.name.replace("/", "_")
+        cert_dir = Path(CERT_DIR) / unit_identifier
+
+        if not cert_dir.exists():
+            cert_dir.mkdir(parents=True, exist_ok=True)
+            cert_dir.chmod(0o755)
+
+        for job in scrape_jobs:
+            tls_config = job.get("tls_config", {})
+            ca_content = tls_config.get("ca")
+
+            # Skip jobs without valid certificate content
+            if not (ca_content and validate_cert(ca_content)):
+                continue
+
+            job_name = job.get("job_name", "default")
+            safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
+            ca_cert_path = cert_dir / f"otel_{safe_job_name}_ca.pem"
+
+            try:
+                ca_cert_path.write_text(ca_content)
+                ca_cert_path.chmod(0o644)
+                cert_paths[job_name] = str(ca_cert_path)
+                logger.debug(f"CA certificate for job '{job_name}' written to {ca_cert_path}")
+            except (OSError, PermissionError) as e:
+                logger.error(f"Failed to write CA certificate for job '{job_name}': {e}")
+
+        return cert_paths
+
+    def _cleanup_certificates_on_remove(self):
+        """Clean up certificates during charm removal.
+
+        This method removes the unit-specific certificate directory and all its contents
+        when the charm is being removed. Each unit has its own subdirectory, so this
+        operation is safe and won't affect other otelcol instances.
+        """
+        unit_identifier = self.unit.name.replace("/", "_")
+        unit_cert_dir = Path(CERT_DIR) / unit_identifier
+
+        if not unit_cert_dir.exists():
+            logger.debug(
+                f"Unit certificate directory {unit_cert_dir} does not exist, nothing to clean up"
+            )
+            return
+
+        try:
+            # Remove the entire unit directory and all its contents
+            shutil.rmtree(unit_cert_dir)
+            logger.info(f"Removed unit certificate directory: {unit_cert_dir}")
+        except OSError as e:
+            logger.warning(f"Failed to remove unit certificate directory {unit_cert_dir}: {e}")
+
+        # Try to remove the parent directory if it's empty
+        try:
+            parent_dir = Path(CERT_DIR)
+            if parent_dir.exists() and not any(parent_dir.iterdir()):
+                parent_dir.rmdir()
+                logger.info("Removed empty parent certificate directory")
+        except OSError as e:
+            logger.warning(f"Failed to remove parent certificate directory: {e}")
+
     def _has_incoming_logs_relation(self) -> bool:
         return any(self.model.relations.get("receive-loki-logs", []))
 

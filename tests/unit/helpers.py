@@ -9,9 +9,16 @@ from charmlibs.pathops import LocalPath
 from singleton_snap import SnapRegistrationFile
 
 
-def get_otelcol_file(unit_name: str, config_folder:str) -> dict:
+def get_otelcol_config_file(unit_name: str, config_folder:str) -> dict:
     config_filename = f"{SnapRegistrationFile._normalize_name(unit_name)}.yaml"
     config_path = LocalPath(Path(config_folder)/config_filename)
+    assert config_path.exists(), "file does not exist"
+    cfg = yaml.safe_load(config_path.read_text())
+    return cfg
+
+
+def get_otelcol_file(file:str) -> dict:
+    config_path = LocalPath(Path(file))
     assert config_path.exists(), "file does not exist"
     cfg = yaml.safe_load(config_path.read_text())
     return cfg
