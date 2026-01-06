@@ -67,6 +67,7 @@ body:
         We need to know a bit more about the context in which you run into the problem.
         - What kind of an environment is it.
         - What channel and revision you deployed the affected charm(s) from (e.g. rev123 from `latest/edge`).
+        - Juju controller/client versions.
     validations:
       required: true
   - type: textarea
