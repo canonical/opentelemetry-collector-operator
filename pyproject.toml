@@ -12,7 +12,7 @@ dependencies = [
   "jsonschema",
   "cryptography",
   "lightkube>=0.11",
-  "cosl @ git+https://github.com/canonical/cos-lib.git@feat/add-action-to-all-events",
+  "cosl",
   "pydantic",
   "charmlibs-pathops",
   "sh",
