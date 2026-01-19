@@ -18,6 +18,7 @@ from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
+from cosl.reconciler import all_events, observe_events
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -119,7 +120,7 @@ def ensure_logrotate_timer():
     service_start("logrotate.timer", "--now")
 
 
-def event() -> str:
+def event_var() -> str:
     """Return Juju hook|action name.
 
     Refs:
@@ -127,6 +128,7 @@ def event() -> str:
     - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/hook.md?plain=1#L1088
     """
     return os.environ.get("JUJU_HOOK_NAME") or os.environ.get("JUJU_ACTION_NAME", "")
+
 
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """Check whether mandatory relations are in place.
@@ -164,9 +166,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
-        if event() in ("install", "upgrade"):
+        if event_var() in ("install", "upgrade"):
             self._install_snaps()
-        elif event() == "remove":
+        elif event_var() == "remove":
             # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
             # on the stop hook, then it will be reverted by the reconciler on `peer_relation_*`
             # hooks. Instead of filtering out these hooks, we do everything in the remove hook.
@@ -176,9 +178,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self._remove_opentelemetry_collector()
             return
 
-        self._reconcile()
+        # self._reconcile()
+        observe_events(self, all_events, self._reconcile)
 
-    def _reconcile(self):
+    def _reconcile(self, event):
+    # def _reconcile(self):
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
         # NOTE: Only the leader aggregates alerts, to prevent duplication. COS Agent alerts
@@ -202,7 +206,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # This must be run after receive_ca_cert and/or receive_server_cert because they update
         # certs in the /usr/local/share/ca-certificates directory
         # Only refresh certs when they actually change (upgrade-charm or cert relation changes)
-        current_event = event()
+        current_event = event_var()
 
         if current_event in (
             "upgrade-charm",
@@ -489,7 +493,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
-        hash_file = self.charm_dir.absolute()/"config_hash"
+        hash_file = self.charm_dir.absolute() / "config_hash"
         old_hash = ""
         if hash_file.exists():
             old_hash = hash_file.read_text()
