@@ -178,8 +178,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self._remove_opentelemetry_collector()
             return
 
-        # self._reconcile()
         observe_events(self, all_events, self._reconcile)
+        observe_events(self, [ops.charm.ActionEvent], self._reconcile)
 
     def _reconcile(self, event):
     # def _reconcile(self):
