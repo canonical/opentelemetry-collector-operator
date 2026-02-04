@@ -63,20 +63,6 @@ provides:
     interface: profiling
     optional: true
     description: Receive profiles from other charms.
-  receive-otlp:
-    interface: otlp
-    optional: true
-    description: |
-      Receive OTLP data with an OTLP server.
-      
-      Supported telemetries:
-        - metrics
-      
-      Supported protocols:
-        - HTTP
-        - gRPC
-
-      Provide all OTLP endpoints for the supported protocols and telemetries of this server.
 
 requires:
   juju-info:

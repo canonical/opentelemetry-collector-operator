@@ -420,6 +420,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_log_ingestion()
         config_manager.add_log_forwarding(loki_endpoints, insecure_skip_verify)
 
+        # OTLP setup
+        otlp_endpoints = integrations.send_otlp(self)
+        config_manager.add_otlp_forwarding(otlp_endpoints)
+
         # Metrics setup
         config_manager.add_self_scrape(
             identifier=topology.identifier,

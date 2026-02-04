@@ -72,7 +72,7 @@ class OtlpEndpoint(BaseModel):
     telemetries: List[TelemetryType]
 
 
-class OtlpProviderUnitData(BaseModel):
+class OtlpProviderAppData(BaseModel):
     """A pydantic model for the OTLP provider's unit databag."""
 
     KEY: ClassVar[str] = "otlp"
@@ -98,8 +98,7 @@ class OtlpConsumer(Object):
 
         self.topology = JujuTopology.from_charm(charm)
 
-    def _get_unit_databag(self, endpoints: List[Dict[str, Any]]) -> Optional[OtlpProviderUnitData]:
-        # TODO: This can be a method of the OtlpProviderUnitData class
+    def _get_app_databag(self, endpoints: List[Dict[str, Any]]) -> Optional[OtlpProviderAppData]:
         otlp_endpoints = []
         for endpoint in endpoints:
             # Filter out any unsupported telemetry types before validation
@@ -112,7 +111,7 @@ class OtlpConsumer(Object):
                 logger.error(f"OTLP endpoint failed validation: {e}")
 
         try:
-            databag = OtlpProviderUnitData(endpoints=otlp_endpoints)
+            databag = OtlpProviderAppData(endpoints=otlp_endpoints)
         except ValidationError as e:
             logger.error(f"OTLP endpoint failed validation: {e}")
             return None
@@ -120,7 +119,7 @@ class OtlpConsumer(Object):
         return databag
 
     def get_remote_otlp_endpoints(self) -> Dict[int, Dict[str, OtlpEndpoint]]:
-        """Return a mapping of relation ID to a mapping of unit name to OtlpProviderUnitData.
+        """Return a mapping of relation ID to a mapping of unit name to OtlpProviderAppData.
 
         For each remote unit's list of OtlpEndpoints:
             - If a telemetry type is not supported, then the endpoint is accepted, but the
@@ -129,22 +128,17 @@ class OtlpConsumer(Object):
             - The first available (and supported) endpoint is returned.
 
         The returned structure is as follows:
-        {
-            rel-n: {
-                unit-n: OtlpProviderUnitData([OtlpEndpoint, ...])
-            },
-        }
+        {rel-n: OtlpProviderAppData([OtlpEndpoint, ...]), ...}
         """
         aggregate = {}
         for rel in self.model.relations[self._relation_name]:
             unit_databags = {}
-            for remote_unit in list(rel.units):
-                otlp = json.loads(rel.data[remote_unit].get(OtlpProviderUnitData.KEY, "{}"))
-                if unit_databag := self._get_unit_databag(otlp.get("endpoints", [])):
-                    if endpoint_choice := next(
-                        (e for e in unit_databag.endpoints if e.protocol in self._protocols), None
-                    ):
-                        unit_databags[remote_unit.name] = endpoint_choice
+            otlp = json.loads(rel.data[rel.app].get(OtlpProviderAppData.KEY, "{}"))
+            if app_databag := self._get_app_databag(otlp.get("endpoints", [])):
+                if endpoint_choice := next(
+                    (e for e in app_databag.endpoints if e.protocol in self._protocols), None
+                ):
+                    unit_databags[rel.app.name] = endpoint_choice
 
             aggregate[rel.id] = unit_databags
 
@@ -152,12 +146,20 @@ class OtlpConsumer(Object):
 
 
 class OtlpProvider(Object):
-    """A class for publishing all supported OTLP endpoints."""
+    """A class for publishing all supported OTLP endpoints.
+
+    Args:
+        charm: The charm instance.
+        protocol_ports: A dictionary mapping ProtocolType to port number.
+        relation_name: The name of the relation to use.
+        path: An optional path to append to the endpoint URLs.
+        supported_telemetries: A list of supported telemetry types.
+    """
 
     def __init__(
         self,
         charm: CharmBase,
-        # TODO: Should we accept a ProtocolType instead?
+        # TODO: Should we accept a ProtocolType instead? Otherwise allow string for supported_telemetries
         protocol_ports: Dict[str, int],
         relation_name: str = DEFAULT_PROVIDER_RELATION_NAME,
         path: str = "",
@@ -166,6 +168,7 @@ class OtlpProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
+        # TODO: model_validate the protocol_ports keys?
         self._protocol_ports = ProtocolPort(**protocol_ports)
         self._path = path
         self._supported_telemetries = supported_telemetries
@@ -215,9 +218,8 @@ class OtlpProvider(Object):
 
         for relation in relations:
             otlp = {
-                OtlpProviderUnitData.KEY: OtlpProviderUnitData(
+                OtlpProviderAppData.KEY: OtlpProviderAppData(
                     endpoints=self._get_otlp_endpoints(url)
                 ).model_dump(exclude_none=True)
             }
-            relation.data[self._charm.unit].update({k: json.dumps(v) for k, v in otlp.items()})
-
+            relation.data[self._charm.app].update({k: json.dumps(v) for k, v in otlp.items()})
