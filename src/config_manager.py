@@ -2,12 +2,14 @@
 
 import logging
 from typing import Any, Dict, List, Literal, Optional, Set
+from urllib.parse import urlparse
 
 import yaml
 
 from config_builder import Component, ConfigBuilder, Port
 from constants import FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
+from otlp import OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -378,6 +380,56 @@ class ConfigManager:
         # TODO Receive alert rules via remote write
         # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
 
+    def add_otlp_forwarding(
+        self,
+        relation_map: Dict[int, Dict[str, OtlpEndpoint]],
+    ):
+        """Configure sending OTLP telemetry to an OTLP endpoint.
+
+        There are 2 different OTLP exporters for their respective protocols: gRPC and HTTP. If a
+        gRPC endpoint is provided, it is preferred over the HTTP equivalent.
+
+        Telemetry is sent to all pipelines since OTLP supports all and its computationally
+        inexpensive unless a receiver is connected and receiving telemetry.
+
+        Args:
+            relation_map: a mapping of relation ID to a mapping of unit name to OtlpEndpoint
+        """
+        # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
+        # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter
+
+        if not relation_map:
+            return
+
+        # Exporter config
+        for rel_id, unit_data in relation_map.items():
+            for unit, otlp_endpoint in unit_data.items():
+                insecure = urlparse(otlp_endpoint.endpoint).scheme == "http"
+                tls_config: Dict[str, Any] = {
+                    "insecure": insecure,
+                    "insecure_skip_verify": self._insecure_skip_verify,
+                }
+                if otlp_endpoint.protocol == "grpc":
+                    self.config.add_component(
+                        Component.exporter,
+                        f"otlp/rel-{rel_id}/{unit}",
+                        {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
+                        pipelines=[
+                            f"{_type.value}/{self._unit_name}"
+                            for _type in otlp_endpoint.telemetries
+                        ],
+                    )
+                elif otlp_endpoint.protocol == "http":
+                    self.config.add_component(
+                        Component.exporter,
+                        f"otlphttp/rel-{rel_id}/{unit}",
+                        {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
+                        pipelines=[
+                            f"{_type.value}/{self._unit_name}"
+                            for _type in otlp_endpoint.telemetries
+                        ],
+                    )
+
     def add_traces_ingestion(
         self,
         requested_tracing_protocols: Set[Literal["zipkin", "jaeger_grpc", "jaeger_thrift_http"]],
@@ -609,7 +661,7 @@ class ConfigManager:
 
         return metrics_consumer_jobs
 
-    def add_debug_exporters(self, logs: bool=False, metrics: bool=False, traces: bool=False):
+    def add_debug_exporters(self, logs: bool = False, metrics: bool = False, traces: bool = False):
         """Add debug exporters for enabled pipelines.
 
         We set `use_internal_logger` to False to keep the debug output separate from the
@@ -621,5 +673,9 @@ class ConfigManager:
                 Component.exporter,
                 "debug/juju-config-enabled",
                 {"verbosity": "normal", "use_internal_logger": False},
-                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in pipelines.items() if enabled],
+                pipelines=[
+                    f"{pipeline}/{self._unit_name}"
+                    for pipeline, enabled in pipelines.items()
+                    if enabled
+                ],
             )

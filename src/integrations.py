@@ -28,8 +28,8 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from charms.pyroscope_coordinator_k8s.v0.profiling import (
-    ProfilingEndpointRequirer,
     ProfilingEndpointProvider,
+    ProfilingEndpointRequirer,
 )
 from charms.tempo_coordinator_k8s.v0.tracing import (
     ReceiverProtocol,
@@ -55,7 +55,10 @@ from constants import (
     LOKI_RULES_SRC_PATH,
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
+    RECEIVE_OTLP_ENDPOINT,
+    SEND_OTLP_ENDPOINT,
 )
+from otlp import OtlpConsumer, OtlpEndpoint, OtlpProvider, ProtocolType, TelemetryType
 
 logger = logging.getLogger(__name__)
 
@@ -442,6 +445,54 @@ def forward_dashboards(charm: CharmBase):
     # TODO: Do we need to implement dashboard status changed logic?
     #   This propagates Grafana's errors to the charm which provided the dashboard
     # grafana_dashboards_provider._reinitialize_dashboard_data(inject_dropdowns=False)
+
+
+def cyclic_otlp_relations_exist(charm: CharmBase) -> bool:
+    """Check if any application is related on both send-otlp and receive-otlp.
+
+    This function only checks relations for the current charm, i.e. one level deep. If there is
+    another charm in between these applications, but is still cyclic, then it will not be caught.
+    """
+    receive_relations = charm.model.relations.get(RECEIVE_OTLP_ENDPOINT, [])
+    send_relations = charm.model.relations.get(SEND_OTLP_ENDPOINT, [])
+
+    if not receive_relations or not send_relations:
+        return False
+
+    receive_apps = {rel.app.name for rel in receive_relations if rel.app}
+    send_apps = {rel.app.name for rel in send_relations if rel.app}
+
+    return not receive_apps.isdisjoint(send_apps)
+
+
+def receive_otlp(charm: CharmBase, resolved_url: str) -> None:
+    """Instantiate the OtlpProvider.
+
+    Supports:
+        protocols: gRPC, HTTP
+        telemetries: metrics
+    """
+    otlp_provider = OtlpProvider(
+        charm,
+        protocol_ports={"grpc": Port.otlp_grpc.value, "http": Port.otlp_http.value},
+        relation_name=RECEIVE_OTLP_ENDPOINT,
+        # TODO: Add more telemetries here once tested/supported
+        supported_telemetries=[TelemetryType.metric],
+    )
+    charm.__setattr__("otlp_provider", otlp_provider)
+    otlp_provider.update_endpoints(url=resolved_url)
+
+
+def send_otlp(charm: CharmBase) -> Dict[int, Dict[str, OtlpEndpoint]]:
+    """Instantiate the OtlpConsumer.
+
+    The gRPC protocol is preferred over HTTP.
+    """
+    otlp_consumer = OtlpConsumer(
+        charm, relation_name=SEND_OTLP_ENDPOINT, protocols=list(ProtocolType)
+    )
+    charm.__setattr__("otlp_consumer", otlp_consumer)
+    return otlp_consumer.get_remote_otlp_endpoints()
 
 
 # TODO: Luca: move this into the GrafanCloudIntegrator library
