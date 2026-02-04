@@ -55,10 +55,9 @@ from constants import (
     LOKI_RULES_SRC_PATH,
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
-    RECEIVE_OTLP_ENDPOINT,
     SEND_OTLP_ENDPOINT,
 )
-from otlp import OtlpConsumer, OtlpEndpoint, OtlpProvider, ProtocolType, TelemetryType
+from otlp import OtlpConsumer, OtlpEndpoint, ProtocolType
 
 logger = logging.getLogger(__name__)
 
