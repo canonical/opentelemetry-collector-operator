@@ -132,15 +132,16 @@ class OtlpConsumer(Object):
         """
         aggregate = {}
         for rel in self.model.relations[self._relation_name]:
-            unit_databags = {}
+            app_databags = {}
             otlp = json.loads(rel.data[rel.app].get(OtlpProviderAppData.KEY, "{}"))
             if app_databag := self._get_app_databag(otlp.get("endpoints", [])):
+                # Choose the first valid endpoint in list
                 if endpoint_choice := next(
                     (e for e in app_databag.endpoints if e.protocol in self._protocols), None
                 ):
-                    unit_databags[rel.app.name] = endpoint_choice
+                    app_databags[rel.app.name] = endpoint_choice
 
-            aggregate[rel.id] = unit_databags
+            aggregate[rel.id] = app_databags
 
         return aggregate
 
@@ -208,14 +209,18 @@ class OtlpProvider(Object):
         e.g., in case of a host address change because the charmed operator becomes connected to
         an Ingress after the `otlp` relation is established.
 
+        Only the leader unit can write to app data.
+
         Args:
             url: An optional URL to use instead of the internal URL.
             relation: An optional instance of `class:ops.model.Relation` to update.
                 If not provided, all instances of the `otlp`
                 relation are updated.
         """
-        relations = [relation] if relation else self.model.relations[self._relation_name]
+        if not self._charm.unit.is_leader():
+            return
 
+        relations = [relation] if relation else self.model.relations[self._relation_name]
         for relation in relations:
             otlp = {
                 OtlpProviderAppData.KEY: OtlpProviderAppData(
