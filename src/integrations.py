@@ -449,7 +449,11 @@ def forward_dashboards(charm: CharmBase):
 def send_otlp(charm: CharmBase) -> Dict[int, Dict[str, OtlpEndpoint]]:
     """Instantiate the OtlpConsumer.
 
-    The gRPC protocol is preferred over HTTP.
+    Supports:
+        protocols: gRPC, HTTP
+        telemetries: logs, metrics, traces
+
+    This provides otelcol with the remote's OTLP endpoint for each relation.
     """
     otlp_consumer = OtlpConsumer(
         charm, relation_name=SEND_OTLP_ENDPOINT, protocols=list(ProtocolType)
