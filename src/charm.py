@@ -146,6 +146,7 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
                 {"send-remote-write"},  # or
                 {"send-loki-logs"},  # or
                 {"grafana-dashboards-provider"},
+                {"send-otlp"},
             ],
             "juju-info": [  # must be paired with:
                 {"cloud-config"},  # or

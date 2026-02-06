@@ -169,8 +169,7 @@ class OtlpProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        # TODO: model_validate the protocol_ports keys?
-        self._protocol_ports = ProtocolPort(**protocol_ports)
+        self._protocol_ports = ProtocolPort.model_validate(protocol_ports)
         self._path = path
         self._supported_telemetries = supported_telemetries
 
