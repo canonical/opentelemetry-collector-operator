@@ -57,7 +57,7 @@ from constants import (
     METRICS_RULES_SRC_PATH,
     SEND_OTLP_ENDPOINT,
 )
-from otlp import OtlpConsumer, OtlpEndpoint, ProtocolType
+from otlp import OtlpConsumer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -456,8 +456,9 @@ def send_otlp(charm: CharmBase) -> Dict[int, Dict[str, OtlpEndpoint]]:
     This provides otelcol with the remote's OTLP endpoint for each relation.
     """
     otlp_consumer = OtlpConsumer(
-        charm, relation_name=SEND_OTLP_ENDPOINT, protocols=list(ProtocolType)
+        charm, relation_name=SEND_OTLP_ENDPOINT, protocols=["http", "grpc"]
     )
+    # TODO: We can remove this since the lib doesn't observe events
     charm.__setattr__("otlp_consumer", otlp_consumer)
     return otlp_consumer.get_remote_otlp_endpoints()
 

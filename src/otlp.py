@@ -45,11 +45,11 @@ class ProtocolType(str, Enum):
 class TelemetryType(str, Enum):
     """OTLP telemetries used by the OpenTelemetry Collector."""
 
-    log = "logs"
+    logs = "logs"
     """OTLP logs data."""
-    metric = "metrics"
+    metrics = "metrics"
     """OTLP metrics data."""
-    trace = "traces"
+    traces = "traces"
     """OTLP traces data."""
 
 
@@ -89,12 +89,12 @@ class OtlpConsumer(Object):
         self,
         charm: CharmBase,
         relation_name: str = DEFAULT_CONSUMER_RELATION_NAME,
-        protocols: Optional[Sequence[ProtocolType]] = None,
+        protocols: Optional[Sequence[str]] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._protocols = list(protocols) if protocols is not None else []
+        self._protocols = [ProtocolType(p) for p in protocols] if protocols is not None else []
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -160,18 +160,19 @@ class OtlpProvider(Object):
     def __init__(
         self,
         charm: CharmBase,
-        # TODO: Should we accept a ProtocolType instead? Otherwise allow string for supported_telemetries
         protocol_ports: Dict[str, int],
         relation_name: str = DEFAULT_PROVIDER_RELATION_NAME,
         path: str = "",
-        supported_telemetries: List[TelemetryType] = list(TelemetryType),
+        supported_telemetries: Optional[Sequence[str]] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self._protocol_ports = ProtocolPort.model_validate(protocol_ports)
         self._path = path
-        self._supported_telemetries = supported_telemetries
+        self._supported_telemetries = (
+            [TelemetryType(t) for t in supported_telemetries] if supported_telemetries else []
+        )
 
         self._reconcile()
 
