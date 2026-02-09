@@ -17,7 +17,7 @@ import json
 import logging
 import socket
 from enum import Enum, unique
-from typing import Any, ClassVar, Dict, List, Optional, Sequence
+from typing import ClassVar, Dict, List, Optional, Sequence
 
 from cosl.juju_topology import JujuTopology
 from ops import CharmBase, Relation
@@ -51,6 +51,9 @@ class TelemetryType(str, Enum):
     """OTLP metrics data."""
     traces = "traces"
     """OTLP traces data."""
+
+
+_TELEMETRY_TYPES = {t.value for t in TelemetryType}
 
 
 class ProtocolPort(BaseModel):
@@ -98,28 +101,38 @@ class OtlpConsumer(Object):
 
         self.topology = JujuTopology.from_charm(charm)
 
-    def _get_app_databag(self, endpoints: List[Dict[str, Any]]) -> Optional[OtlpProviderAppData]:
-        otlp_endpoints = []
-        for endpoint in endpoints:
-            # Filter out any unsupported telemetry types before validation
-            endpoint["telemetries"] = [
-                t for t in endpoint.get("telemetries", []) if t in set(TelemetryType)
-            ]
-            try:
-                otlp_endpoints.append(OtlpEndpoint.model_validate(endpoint))
-            except ValidationError as e:
-                logger.error(f"OTLP endpoint failed validation: {e}")
+    def _get_app_databag(self, otlp_databag: str) -> Optional[OtlpProviderAppData]:
+        """Load the OtlpProviderAppData from the given databag string.
 
+        For each endpoint in the databag, if it contains unsupported telemetry types, those
+        telemetries are filtered out before validation. If an endpoint contains an unsupported
+        protocol, it is skipped entirely.
+        """
         try:
-            databag = OtlpProviderAppData(endpoints=otlp_endpoints)
-        except ValidationError as e:
-            logger.error(f"OTLP endpoint failed validation: {e}")
+            data = json.loads(otlp_databag)
+            endpoints_data = data.get("endpoints", [])
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OTLP databag: {e}")
             return None
 
-        return databag
+        valid_endpoints = []
+        for endpoint_data in endpoints_data:
+            endpoint_data["telemetries"] = [
+                t for t in endpoint_data.get("telemetries", []) if t in _TELEMETRY_TYPES
+            ]
+            try:
+                endpoint = OtlpEndpoint.model_validate(endpoint_data)
+            except ValidationError:
+                continue
+            valid_endpoints.append(endpoint)
+        try:
+            return OtlpProviderAppData(endpoints=valid_endpoints)
+        except ValidationError as e:
+            logger.error(f"OTLP databag failed validation: {e}")
+            return None
 
     def get_remote_otlp_endpoints(self) -> Dict[int, Dict[str, OtlpEndpoint]]:
-        """Return a mapping of relation ID to a mapping of unit name to OtlpProviderAppData.
+        """Return a mapping of relation ID to app name to OTLP endpoint.
 
         For each remote unit's list of OtlpEndpoints:
             - If a telemetry type is not supported, then the endpoint is accepted, but the
@@ -127,19 +140,22 @@ class OtlpConsumer(Object):
             - If the endpoint contains an unsupported protocol it is ignored.
             - The first available (and supported) endpoint is returned.
 
-        The returned structure is as follows:
-        {rel-n: OtlpProviderAppData([OtlpEndpoint, ...]), ...}
+        Returns:
+            Dict mapping relation ID -> {app_name -> OtlpEndpoint}
         """
         aggregate = {}
         for rel in self.model.relations[self._relation_name]:
             app_databags = {}
-            otlp = json.loads(rel.data[rel.app].get(OtlpProviderAppData.KEY, "{}"))
-            if app_databag := self._get_app_databag(otlp.get("endpoints", [])):
-                # Choose the first valid endpoint in list
-                if endpoint_choice := next(
-                    (e for e in app_databag.endpoints if e.protocol in self._protocols), None
-                ):
-                    app_databags[rel.app.name] = endpoint_choice
+            if not (otlp := rel.data[rel.app].get(OtlpProviderAppData.KEY)):
+                continue
+            if not (app_databag := self._get_app_databag(otlp)):
+                continue
+
+            # Choose the first valid endpoint in list
+            if endpoint_choice := next(
+                (e for e in app_databag.endpoints if e.protocol in self._protocols), None
+            ):
+                app_databags[rel.app.name] = endpoint_choice
 
             aggregate[rel.id] = app_databags
 

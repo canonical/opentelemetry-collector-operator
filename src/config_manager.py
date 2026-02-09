@@ -415,7 +415,7 @@ class ConfigManager:
                     f"{exporter_type}/rel-{rel_id}/{unit}",
                     {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
                     pipelines=[
-                        f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries
+                        f"{_type.value}/{self._unit_name}" for _type in otlp_endpoint.telemetries
                     ],
                 )
 
