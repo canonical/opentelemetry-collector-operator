@@ -33,5 +33,3 @@ NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
     "processes",
     "sysctl",
 }
-SEND_OTLP_ENDPOINT: Final[str] = "send-otlp"
-RECEIVE_OTLP_ENDPOINT: Final[str] = "receive-otlp"

@@ -131,8 +131,8 @@ class OtlpConsumer(Object):
             logger.error(f"OTLP databag failed validation: {e}")
             return None
 
-    def get_remote_otlp_endpoints(self) -> Dict[int, Dict[str, OtlpEndpoint]]:
-        """Return a mapping of relation ID to app name to OTLP endpoint.
+    def get_remote_otlp_endpoints(self) -> Dict[int, OtlpEndpoint]:
+        """Return a mapping of relation ID to OTLP endpoint.
 
         For each remote unit's list of OtlpEndpoints:
             - If a telemetry type is not supported, then the endpoint is accepted, but the
@@ -141,11 +141,10 @@ class OtlpConsumer(Object):
             - The first available (and supported) endpoint is returned.
 
         Returns:
-            Dict mapping relation ID -> {app_name -> OtlpEndpoint}
+            Dict mapping relation ID -> OtlpEndpoint
         """
-        aggregate = {}
+        endpoints = {}
         for rel in self.model.relations[self._relation_name]:
-            app_databags = {}
             if not (otlp := rel.data[rel.app].get(OtlpProviderAppData.KEY)):
                 continue
             if not (app_databag := self._get_app_databag(otlp)):
@@ -155,11 +154,9 @@ class OtlpConsumer(Object):
             if endpoint_choice := next(
                 (e for e in app_databag.endpoints if e.protocol in self._protocols), None
             ):
-                app_databags[rel.app.name] = endpoint_choice
+                endpoints[rel.id] = endpoint_choice
 
-            aggregate[rel.id] = app_databags
-
-        return aggregate
+        return endpoints
 
 
 class OtlpProvider(Object):

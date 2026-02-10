@@ -380,10 +380,7 @@ class ConfigManager:
         # TODO Receive alert rules via remote write
         # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
 
-    def add_otlp_forwarding(
-        self,
-        relation_map: Dict[int, Dict[str, OtlpEndpoint]],
-    ):
+    def add_otlp_forwarding(self, relation_map: Dict[int, OtlpEndpoint]):
         """Configure sending OTLP telemetry to an OTLP endpoint.
 
         There are 2 different OTLP exporters for their respective protocols: gRPC and HTTP. If a
@@ -402,22 +399,21 @@ class ConfigManager:
             return
 
         # Exporter config
-        for rel_id, unit_data in relation_map.items():
-            for unit, otlp_endpoint in unit_data.items():
-                insecure = urlparse(otlp_endpoint.endpoint).scheme == "http"
-                tls_config: Dict[str, Any] = {
-                    "insecure": insecure,
-                    "insecure_skip_verify": self._insecure_skip_verify,
-                }
-                exporter_type = 'otlp' if otlp_endpoint.protocol.value == 'grpc' else 'otlphttp'
-                self.config.add_component(
-                    Component.exporter,
-                    f"{exporter_type}/rel-{rel_id}/{unit}",
-                    {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
-                    pipelines=[
-                        f"{_type.value}/{self._unit_name}" for _type in otlp_endpoint.telemetries
-                    ],
-                )
+        for rel_id, otlp_endpoint in relation_map.items():
+            insecure = urlparse(otlp_endpoint.endpoint).scheme == "http"
+            tls_config: Dict[str, Any] = {
+                "insecure": insecure,
+                "insecure_skip_verify": self._insecure_skip_verify,
+            }
+            exporter_type = 'otlp' if otlp_endpoint.protocol.value == 'grpc' else 'otlphttp'
+            self.config.add_component(
+                Component.exporter,
+                f"{exporter_type}/rel-{rel_id}/{self._unit_name}",
+                {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
+                pipelines=[
+                    f"{_type.value}/{self._unit_name}" for _type in otlp_endpoint.telemetries
+                ],
+            )
 
     def add_traces_ingestion(
         self,
