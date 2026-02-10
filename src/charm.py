@@ -362,6 +362,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         "juju_model": topology.model,
                         "juju_model_uuid": topology.model_uuid,
                         "snap_name": fstab_entry.owner,
+                        "instance": socket.getfqdn(),
                     },
                 ),
                 pipelines=[f"logs/{self.unit.name}"],
