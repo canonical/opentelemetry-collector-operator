@@ -1,3 +1,4 @@
+"""Miscellaneous ops-independent utilities."""
 
 class InfoGauge:
     """Helper class for rendering info gauges."""
@@ -8,9 +9,11 @@ class InfoGauge:
         self.series: list[dict[str, str]] = []
 
     def add(self, labels: dict[str, str]):
+        """Append another timeseries (specified by labels) under the same TYPE and HELP."""
         self.series.append(labels)
 
     def __str__(self):
+        """Returns a /metrics-compatible multiline str."""
         help_ = f"HELP {self.name} {self.help_}"
         type_ = f"TYPE {self.name} gauge"
 

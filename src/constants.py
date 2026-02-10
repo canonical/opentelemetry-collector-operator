@@ -38,6 +38,6 @@ NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
     "mountstats",
     "processes",
     "sysctl",
-	"textfile",
-	f"textfile.directory={NODE_EXPORTER_TEXTFILE_DIR}",
+    "textfile",
+    f"textfile.directory={NODE_EXPORTER_TEXTFILE_DIR}",
 }
