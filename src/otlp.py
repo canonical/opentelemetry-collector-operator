@@ -53,9 +53,6 @@ class TelemetryType(str, Enum):
     """OTLP traces data."""
 
 
-_TELEMETRY_TYPES = {t.value for t in TelemetryType}
-
-
 class ProtocolPort(BaseModel):
     """A pydantic model for OTLP protocols and their associated port."""
 
@@ -93,12 +90,15 @@ class OtlpConsumer(Object):
         charm: CharmBase,
         relation_name: str = DEFAULT_CONSUMER_RELATION_NAME,
         protocols: Optional[Sequence[str]] = None,
+        telemetries: Optional[Sequence[str]] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self._protocols = [ProtocolType(p) for p in protocols] if protocols is not None else []
-
+        self._telemetries = (
+            [TelemetryType(t) for t in telemetries] if telemetries is not None else []
+        )
         self.topology = JujuTopology.from_charm(charm)
 
     def _get_app_databag(self, otlp_databag: str) -> Optional[OtlpProviderAppData]:
@@ -106,7 +106,7 @@ class OtlpConsumer(Object):
 
         For each endpoint in the databag, if it contains unsupported telemetry types, those
         telemetries are filtered out before validation. If an endpoint contains an unsupported
-        protocol, it is skipped entirely.
+        protocol, or has no supported telemetries, it is skipped entirely.
         """
         try:
             data = json.loads(otlp_databag)
@@ -116,10 +116,15 @@ class OtlpConsumer(Object):
             return None
 
         valid_endpoints = []
+        supported_telemetries = {t.value for t in self._telemetries}
         for endpoint_data in endpoints_data:
-            endpoint_data["telemetries"] = [
-                t for t in endpoint_data.get("telemetries", []) if t in _TELEMETRY_TYPES
-            ]
+            if filtered_telemetries := [
+                t for t in endpoint_data.get("telemetries", []) if t in supported_telemetries
+            ]:
+                endpoint_data["telemetries"] = filtered_telemetries
+            else:
+                # If there are no supported telemetries for this endpoint, skip it entirely
+                continue
             try:
                 endpoint = OtlpEndpoint.model_validate(endpoint_data)
             except ValidationError:
@@ -176,16 +181,14 @@ class OtlpProvider(Object):
         protocol_ports: Dict[str, int],
         relation_name: str = DEFAULT_PROVIDER_RELATION_NAME,
         path: str = "",
-        supported_telemetries: Optional[Sequence[str]] = None,
+        telemetries: Optional[Sequence[str]] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self._protocol_ports = ProtocolPort.model_validate(protocol_ports)
         self._path = path
-        self._supported_telemetries = (
-            [TelemetryType(t) for t in supported_telemetries] if supported_telemetries else []
-        )
+        self._telemetries = [TelemetryType(t) for t in telemetries] if telemetries else []
 
         self._reconcile()
 
@@ -209,7 +212,7 @@ class OtlpProvider(Object):
                 OtlpEndpoint(
                     protocol=ProtocolType(protocol),
                     endpoint=endpoint,
-                    telemetries=self._supported_telemetries,
+                    telemetries=self._telemetries,
                 )
             )
         return endpoints
