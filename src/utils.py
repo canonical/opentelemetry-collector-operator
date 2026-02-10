@@ -14,8 +14,8 @@ class InfoGauge:
 
     def __str__(self):
         """Returns a /metrics-compatible multiline str."""
-        help_ = f"HELP {self.name} {self.help_}"
-        type_ = f"TYPE {self.name} gauge"
+        help_ = f"# HELP {self.name} {self.help_}"
+        type_ = f"# TYPE {self.name} gauge"
 
         metric_lines: list[str] = []
 

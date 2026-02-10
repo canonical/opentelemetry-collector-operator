@@ -685,8 +685,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         for principal in sorted(self._get_principal_unit_names()):
             infogauge.add({
-                    "subordinate_unit": self.unit.name,
-                    "principal_unit": principal,
+                    "collector_unit": self.unit.name,
+                    "related_unit": principal,
                     "juju_model": topology.model,
                     "juju_model_uuid": topology.model_uuid,
                 }
