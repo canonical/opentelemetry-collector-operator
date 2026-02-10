@@ -31,7 +31,7 @@ NODE_EXPORTER_TEXTFILE_DIR: Final[str] = "/var/snap/node-exporter/common/textfil
 
 # Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
 NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
-NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {"drm", "logind", "systemd", "mountstats", "processes", "sysctl"}
+NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
     "drm",
     "logind",
     "systemd",

@@ -28,6 +28,7 @@ dev = [
   "pyright",
   # Unit
   "pytest",
+  "pytest-bdd",
   "coverage[toml]",
   # Integration
   "pytest-operator",

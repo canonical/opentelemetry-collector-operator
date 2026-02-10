@@ -11,7 +11,7 @@ import socket
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, cast
-
+from utils import InfoGauge
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
@@ -660,6 +660,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), "r") as f:
             config_path.write_text(f.read())
 
+    def _get_principal_unit_names(self) -> set[str]:
+        # Gather principal units from cos-agent and juju-info relations
+        principals = set()
+        for rel_name in ("cos-agent", "juju-info"):
+            for rel in self.model.relations.get(rel_name, []):
+                for unit in rel.units:
+                    principals.add(unit.name)
+        return principals
+
     def _write_node_exporter_textfile(self) -> None:
         """Write a per-unit metrics file for node-exporter's textfile collector.
 
@@ -669,33 +678,25 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """
         topology = JujuTopology.from_charm(self)
 
-        # Gather principal units from cos-agent and juju-info relations
-        principals = set()
-        for rel_name in ("cos-agent", "juju-info"):
-            for rel in self.model.relations.get(rel_name, []):
-                for unit in rel.units:
-                    principals.add(unit.name)
-
         # Build metric lines
-        lines = [
-            "# HELP subordinate_charm_info An info metric for correlating between principal charms and the corresponding node-exporter metrics.",
-            "# TYPE subordinate_charm_info gauge",
-        ]
-        for principal in sorted(principals):
-            labels = {
-                "subordinate_unit": self.unit.name,
-                "principal_unit": principal,
-                "juju_model": topology.model,
-                "juju_model_uuid": topology.model_uuid,
-            }
-            # Format labels as key="value"
-            label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
-            lines.append(f"subordinate_charm_info{{{label_str}}} 1")
+        infogauge = InfoGauge(
+            name="subordinate_charm_info",
+            help_ = "An info metric for correlating between principal charms and the corresponding node-exporter metrics.",
+        )
+        for principal in sorted(self._get_principal_unit_names()):
+            infogauge.add({
+                    "subordinate_unit": self.unit.name,
+                    "principal_unit": principal,
+                    "juju_model": topology.model,
+                    "juju_model_uuid": topology.model_uuid,
+                }
+            )
 
         LocalPath(NODE_EXPORTER_TEXTFILE_DIR).mkdir(parents=True, exist_ok=True)
         # Filename must match the glob `*.prom` used by node-exporter's textfile collector
         # Ref: https://github.com/prometheus/node_exporter/tree/master?tab=readme-ov-file#textfile-collector
-        LocalPath(os.path.join(NODE_EXPORTER_TEXTFILE_DIR, f'{self.unit.name.replace("/", "_")}.prom')).write_text("\n".join(lines) + ("\n" if lines else ""))
+        filename = os.path.join(NODE_EXPORTER_TEXTFILE_DIR, f'{self.unit.name.replace("/", "_")}.prom')
+        LocalPath(filename).write_text(str(infogauge))
 
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
