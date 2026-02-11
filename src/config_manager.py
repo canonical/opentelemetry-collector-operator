@@ -377,9 +377,6 @@ class ConfigManager:
                 pipelines=[f"metrics/{self._unit_name}"],
             )
 
-        # TODO Receive alert rules via remote write
-        # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
-
     def add_otlp_forwarding(self, relation_map: Dict[int, OtlpEndpoint]):
         """Configure sending OTLP telemetry to an OTLP endpoint.
 
@@ -405,13 +402,13 @@ class ConfigManager:
                 "insecure": insecure,
                 "insecure_skip_verify": self._insecure_skip_verify,
             }
-            exporter_type = 'otlp' if otlp_endpoint.protocol.value == 'grpc' else 'otlphttp'
+            exporter_type = 'otlp' if otlp_endpoint.protocol == 'grpc' else 'otlphttp'
             self.config.add_component(
                 Component.exporter,
                 f"{exporter_type}/rel-{rel_id}/{self._unit_name}",
                 {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
                 pipelines=[
-                    f"{_type.value}/{self._unit_name}" for _type in otlp_endpoint.telemetries
+                    f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries
                 ],
             )
 

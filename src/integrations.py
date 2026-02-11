@@ -56,15 +56,9 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
-from otlp import (
-    OtlpConsumer,
-    OtlpEndpoint,
-    ProtocolType,
-    TelemetryType,
-)
+from otlp import OtlpConsumer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
-SEND_OTLP_SUPPORTED_PROTOCOLS = [p.value for p in ProtocolType]
 
 ProfilingEndpoint = namedtuple("ProfilingEndpoint", "endpoint, insecure")
 
@@ -238,8 +232,6 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
         peer_relation_name="peers",
     )
     charm.__setattr__("remote_write", remote_write)
-    # TODO: add alerts from remote write
-    # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
     # TODO: Luca: probably don't need this anymore
     remote_write.reload_alerts()
     return remote_write.endpoints
@@ -454,16 +446,12 @@ def forward_dashboards(charm: CharmBase):
 def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
     """Instantiate the OtlpConsumer.
 
-    Supports:
-        protocols: gRPC, HTTP
-        telemetries: logs, metrics, traces
-
     This provides otelcol with the remote's OTLP endpoint for each relation.
     """
     otlp_consumer = OtlpConsumer(
         charm,
-        protocols=[p.value for p in ProtocolType],
-        telemetries=[TelemetryType.metrics.value],
+        protocols=["grpc", "http"],
+        telemetries=["logs", "metrics"],
     )
     # TODO: We can remove this since the lib doesn't observe events
     charm.__setattr__("otlp_consumer", otlp_consumer)

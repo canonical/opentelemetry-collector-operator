@@ -136,18 +136,12 @@ requires:
     interface: otlp
     optional: true
     description: |
-      Send OTLP data to an OTLP server.
+      Send OTLP data to an OTLP server by agregating all supported OTLP endpoints offered by an
+      OTLP server. If multiple endpoints are supported, then the first supported one is chosen.
       
-      Supported telemetries:
-        - metrics
-      
-      Supported protocols:
-        - HTTP
-        - gRPC
-
-      Obtain all OTLP endpoints offered by an OTLP server. If the server provides multiple
-      endpoints (e.g. different protocols), then the first, supported one is chosen. If the server
-      offers unsupported telemetries, then those will be ignored.
+      This endpoint currently supports:
+        - gRPC for ["logs", "metrics"]
+        - HTTP for ["logs", "metrics"]
 
 peers:
   peers:
