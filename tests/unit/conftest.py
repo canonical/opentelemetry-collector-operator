@@ -271,3 +271,25 @@ def config_manager():
 def patch_hostname():
     with patch("socket.gethostname", return_value="juju-abcde-0"):
         yield
+
+
+@pytest.fixture
+def mock_socket_with_occupied_ports():
+    """Factory fixture to create a mock socket that simulates occupied ports.
+
+    Returns a function that takes a list of occupied ports and returns a configured mock.
+    """
+    def _create_mock(occupied_ports):
+        """Create a mock socket that raises OSError for occupied ports."""
+        def mock_bind(address):
+            if address[1] in occupied_ports:
+                raise OSError(f"[Errno 98] Address already in use")
+
+        mock_sock = MagicMock()
+        mock_sock.bind = MagicMock(side_effect=mock_bind)
+        mock_sock.__enter__ = MagicMock(return_value=mock_sock)
+        mock_sock.__exit__ = MagicMock(return_value=False)
+
+        return MagicMock(return_value=mock_sock)
+
+    return _create_mock

@@ -29,10 +29,12 @@ from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
+    INITIAL_PORT_NUMBER,
     LOGROTATE_PATH,
     LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
+    NODE_EXPORTER_DEFAULT_PORT,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
@@ -157,6 +159,24 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     active_relations = {name for name, relation in charm.model.relations.items() if relation}
     missing_str = relation_pairs.get_missing_as_str(*active_relations)
     return missing_str or None
+
+def find_available_port(start_port: int = INITIAL_PORT_NUMBER) -> int:
+    """Find an available port starting from the given port.
+
+    Args:
+        start_port: The port to start checking from
+
+    Returns:
+        The first available port found
+    """
+    port = start_port
+    while True:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.bind(("", port))
+                return port
+        except OSError:
+            port += 1
 
 
 class OpenTelemetryCollectorCharm(ops.CharmBase):
@@ -531,7 +551,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
                 return
 
-        self._configure_node_exporter_collectors()
+        self._configure_node_exporter()
         self.unit.status = ActiveStatus()
 
         # Mandatory relation pairs
@@ -625,11 +645,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # TODO: Luca if the snap is used by other units, we should probably `ensure`
         # that the max_revision is installed instead.
 
-    def _configure_node_exporter_collectors(self):
-        """Configure the node-exporter snap collectors."""
+    def _configure_node_exporter(self):
+        """Configure the node-exporter snap."""
+        available_port = find_available_port(start_port=NODE_EXPORTER_DEFAULT_PORT)
         configs = {
             "collectors": " ".join(list(NODE_EXPORTER_ENABLED_COLLECTORS)),
             "no-collectors": " ".join(list(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "web.listen-address": f":{available_port}",
         }
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
