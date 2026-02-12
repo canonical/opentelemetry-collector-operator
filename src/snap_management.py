@@ -48,7 +48,7 @@ class SnapMap:
         "node-exporter": {
             # (confinement, arch): revision
             ("strict", "amd64"): 2116,  # v1.10.2
-            ("strict", "arm64"): 1908,  # v1.9.1
+            ("strict", "arm64"): 1908,  # FIXME: change revision when arm64 build is available for v1.10.2
         },
     }
 
