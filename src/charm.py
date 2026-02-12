@@ -656,8 +656,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """Configure the node-exporter snap."""
         available_port = find_available_port(start_port=NODE_EXPORTER_DEFAULT_PORT)
         configs = {
-            "collectors": " ".join(list(NODE_EXPORTER_ENABLED_COLLECTORS)),
-            "no-collectors": " ".join(list(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "collectors": " ".join(sorted(NODE_EXPORTER_ENABLED_COLLECTORS)),
+            "no-collectors": " ".join(sorted(NODE_EXPORTER_DISABLED_COLLECTORS)),
             "web.listen-address": f":{available_port}",
         }
         ne_snap = self.snap("node-exporter")
