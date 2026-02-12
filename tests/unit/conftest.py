@@ -283,7 +283,7 @@ def mock_socket_with_occupied_ports():
         """Create a mock socket that raises OSError for occupied ports."""
         def mock_bind(address):
             if address[1] in occupied_ports:
-                raise OSError(f"[Errno 98] Address already in use")
+                raise OSError("[Errno 98] Address already in use")
 
         mock_sock = MagicMock()
         mock_sock.bind = MagicMock(side_effect=mock_bind)

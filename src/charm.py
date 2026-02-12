@@ -29,7 +29,7 @@ from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
-    INITIAL_PORT_NUMBER,
+    DEFAULT_PORT_SEARCH_START,
     LOGROTATE_PATH,
     LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
@@ -160,7 +160,7 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     missing_str = relation_pairs.get_missing_as_str(*active_relations)
     return missing_str or None
 
-def find_available_port(start_port: int = INITIAL_PORT_NUMBER) -> int:
+def find_available_port(start_port: int = DEFAULT_PORT_SEARCH_START) -> int:
     """Find an available port starting from the given port.
 
     Args:

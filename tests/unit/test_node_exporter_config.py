@@ -19,7 +19,6 @@ from constants import NODE_EXPORTER_DEFAULT_PORT
 )
 def test_node_exporter_port_selection(occupied_ports, expected_port, monkeypatch, mock_socket_with_occupied_ports):
     """Scenario: Port selection function finds available port correctly."""
-
     # GIVEN some ports are occupied
     mock_socket_class = mock_socket_with_occupied_ports(occupied_ports)
     monkeypatch.setattr("charm.socket.socket", mock_socket_class)
