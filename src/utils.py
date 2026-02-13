@@ -29,4 +29,5 @@ class InfoGauge:
 
             metric_lines.append(f"{self.name}{labels} 1")
 
-        return "\n".join([help_, type_, '\n'.join(metric_lines)]) if metric_lines else ""
+        # Output must end with a new line, otherwise textfile collector fails
+        return ("\n".join([help_, type_, '\n'.join(metric_lines)]) if metric_lines else "") + "\n"
