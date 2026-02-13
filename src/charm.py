@@ -33,6 +33,7 @@ from constants import (
     LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
+    NODE_EXPORTER_DEFAULT_PORT,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
     RECV_CA_CERT_FOLDER_PATH,
@@ -48,6 +49,8 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+
+from utils import find_available_port
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -179,6 +182,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         self._reconcile()
 
     def _reconcile(self):
+        self._node_exporter_port = find_available_port(start_port=NODE_EXPORTER_DEFAULT_PORT)
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
         # NOTE: Only the leader aggregates alerts, to prevent duplication. COS Agent alerts
@@ -289,7 +293,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                             "static_configs": [
                                 {
                                     "targets": [
-                                        "0.0.0.0:9100"  # TODO: extract this node-exporter port somewhere
+                                        f"0.0.0.0:{self._node_exporter_port}"
                                     ],
                                     "labels": {
                                         "instance": socket.getfqdn(),
@@ -531,7 +535,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
                 return
 
-        self._configure_node_exporter_collectors()
+        self._configure_node_exporter()
         self.unit.status = ActiveStatus()
 
         # Mandatory relation pairs
@@ -625,11 +629,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # TODO: Luca if the snap is used by other units, we should probably `ensure`
         # that the max_revision is installed instead.
 
-    def _configure_node_exporter_collectors(self):
-        """Configure the node-exporter snap collectors."""
+    def _configure_node_exporter(self):
+        """Configure the node-exporter snap."""
         configs = {
-            "collectors": " ".join(list(NODE_EXPORTER_ENABLED_COLLECTORS)),
-            "no-collectors": " ".join(list(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "collectors": " ".join(sorted(NODE_EXPORTER_ENABLED_COLLECTORS)),
+            "no-collectors": " ".join(sorted(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "web.listen-address": f":{self._node_exporter_port}",
         }
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)

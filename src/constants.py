@@ -23,6 +23,8 @@ INTERNAL_TELEMETRY_LOG_FILE: Final[str] = "/var/snap/opentelemetry-collector/com
 # SNAP_COMMON dir: https://snapcraft.io/docs/data-locations#p-94053-system-data
 FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
 
+DEFAULT_PORT_SEARCH_START: Final[int] = 50000
+
 # Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
 NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
 NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
@@ -33,3 +35,4 @@ NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
     "processes",
     "sysctl",
 }
+NODE_EXPORTER_DEFAULT_PORT: Final[int] = 9100
