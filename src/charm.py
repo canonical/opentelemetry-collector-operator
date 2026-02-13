@@ -687,8 +687,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             infogauge.add({
                     "collector_unit": self.unit.name,
                     "related_unit": principal,
-                    "juju_model": topology.model,
-                    "juju_model_uuid": topology.model_uuid,
                 }
             )
 
