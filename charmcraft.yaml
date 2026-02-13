@@ -132,6 +132,16 @@ requires:
     interface: profiling
     optional: true
     description: Send any received profiling data to other charms.
+  send-otlp:
+    interface: otlp
+    optional: true
+    description: |
+      Send OTLP data to an OTLP server by agregating all supported OTLP endpoints offered by an
+      OTLP server. If multiple endpoints are supported, then the first supported one is chosen.
+      
+      This endpoint currently supports:
+        - gRPC for ["logs", "metrics"]
+        - HTTP for ["logs", "metrics"]
 
 peers:
   peers:

@@ -28,8 +28,8 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from charms.pyroscope_coordinator_k8s.v0.profiling import (
-    ProfilingEndpointRequirer,
     ProfilingEndpointProvider,
+    ProfilingEndpointRequirer,
 )
 from charms.tempo_coordinator_k8s.v0.tracing import (
     ReceiverProtocol,
@@ -56,6 +56,7 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
+from otlp import OtlpConsumer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -231,8 +232,6 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
         peer_relation_name="peers",
     )
     charm.__setattr__("remote_write", remote_write)
-    # TODO: add alerts from remote write
-    # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
     # TODO: Luca: probably don't need this anymore
     remote_write.reload_alerts()
     return remote_write.endpoints
@@ -442,6 +441,21 @@ def forward_dashboards(charm: CharmBase):
     # TODO: Do we need to implement dashboard status changed logic?
     #   This propagates Grafana's errors to the charm which provided the dashboard
     # grafana_dashboards_provider._reinitialize_dashboard_data(inject_dropdowns=False)
+
+
+def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
+    """Instantiate the OtlpConsumer.
+
+    This provides otelcol with the remote's OTLP endpoint for each relation.
+    """
+    otlp_consumer = OtlpConsumer(
+        charm,
+        protocols=["grpc", "http"],
+        telemetries=["logs", "metrics"],
+    )
+    # TODO: We can remove this since the lib doesn't observe events
+    charm.__setattr__("otlp_consumer", otlp_consumer)
+    return otlp_consumer.get_remote_otlp_endpoints()
 
 
 # TODO: Luca: move this into the GrafanCloudIntegrator library
