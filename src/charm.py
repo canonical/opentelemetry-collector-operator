@@ -29,7 +29,6 @@ from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
-    DEFAULT_PORT_SEARCH_START,
     LOGROTATE_PATH,
     LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
@@ -50,6 +49,8 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+
+from utils import find_available_port
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -159,31 +160,6 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     active_relations = {name for name, relation in charm.model.relations.items() if relation}
     missing_str = relation_pairs.get_missing_as_str(*active_relations)
     return missing_str or None
-
-def find_available_port(start_port: int = DEFAULT_PORT_SEARCH_START) -> int:
-    """Find an available port starting from the given port.
-
-    Args:
-        start_port: The port to start checking from
-
-    Returns:
-        The first available port found
-
-    Raises:
-        RuntimeError: If no available port is found up to port 65535.
-    """
-    port = start_port
-    # Port numbers must be in the range 0–65535; avoid an unbounded search.
-    while port <= 65535:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.bind(("", port))
-                return port
-        except OSError:
-            port += 1
-    raise RuntimeError(
-        f"No available port found in range [{start_port}, 65535]"
-    )
 
 
 class OpenTelemetryCollectorCharm(ops.CharmBase):
