@@ -47,7 +47,7 @@ from cosl import LZMABase64
 from ops import CharmBase, tracing
 from ops.model import Relation
 
-from config_builder import Port, sha256
+from config_builder import Port, PortMap, sha256
 from constants import (
     DASHBOARDS_DEST_PATH,
     DASHBOARDS_SRC_PATH,
@@ -88,7 +88,7 @@ def _add_alerts(alerts: Dict, dest_path: Path):
         logger.debug(f"updated alert rules file {rule_file.as_posix()}")
 
 
-def receive_loki_logs(charm: CharmBase, tls: bool):
+def receive_loki_logs(charm: CharmBase, tls: bool, otelcol_port_map: PortMap) -> None:
     """Integrate with other charms via the receive-loki-logs relation endpoint.
 
     This function must be called before `send_loki_logs`, so that the charm
@@ -97,10 +97,11 @@ def receive_loki_logs(charm: CharmBase, tls: bool):
     """
     forward_alert_rules = cast(bool, charm.config.get("forward_alert_rules"))
     charm_root = charm.charm_dir.absolute()
+    loki_port = otelcol_port_map.get(Port.loki_http, Port.loki_http.value)
     loki_provider = LokiPushApiProvider(
         charm,
         relation_name="receive-loki-logs",
-        port=Port.loki_http.value,
+        port=loki_port,
         scheme="https" if tls else "http",
     )
     charm.__setattr__("loki_provider", loki_provider)
@@ -238,13 +239,13 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
     return remote_write.endpoints
 
 
-def _get_tracing_receiver_url(protocol: ReceiverProtocol, tls_enabled: bool) -> str:
+def _get_tracing_receiver_url(protocol: ReceiverProtocol, tls_enabled: bool, otelcol_port_map: PortMap) -> str:
     """Build the endpoint URL for a tracing receiver.
 
     Args:
         protocol: The tracing protocol to build the URL for.
         tls_enabled: Whether to use HTTPS (True) or HTTP (False) for the URL.
-
+        otelcol_port_map: Dictionary mapping Port enum members to allocated port numbers.
 
     Returns:
         str: The complete URL for the tracing receiver endpoint.
@@ -260,11 +261,13 @@ def _get_tracing_receiver_url(protocol: ReceiverProtocol, tls_enabled: bool) -> 
     # The correct transport protocol is specified in the tracing library, and it's always
     # either http or grpc.
     if receiver_protocol_to_transport_protocol[protocol] == TransportProtocolType.grpc:
-        return f"{socket.getfqdn()}:{Port.otlp_grpc.value}"
-    return f"{scheme}://{socket.getfqdn()}:{Port.otlp_http.value}"
+        grpc_port = otelcol_port_map.get(Port.otlp_grpc, Port.otlp_grpc.value)
+        return f"{socket.getfqdn()}:{grpc_port}"
+    http_port = otelcol_port_map.get(Port.otlp_http, Port.otlp_http.value)
+    return f"{scheme}://{socket.getfqdn()}:{http_port}"
 
 
-def receive_traces(charm: CharmBase, tls: bool) -> Set:
+def receive_traces(charm: CharmBase, tls: bool, otelcol_port_map: PortMap) -> Set:
     """Integrate with other charms via the receive-traces relation endpoint.
 
     Returns:
@@ -291,6 +294,7 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
                     _get_tracing_receiver_url(
                         protocol=protocol,
                         tls_enabled=tls,
+                        otelcol_port_map=otelcol_port_map,
                     ),
                 )
                 for protocol in requested_tracing_protocols
@@ -299,7 +303,7 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
     return requested_tracing_protocols
 
 
-def receive_profiles(charm: CharmBase, tls: bool) -> None:
+def receive_profiles(charm: CharmBase, tls: bool, otelcol_port_map: PortMap) -> None:
     """Integrate with other charms over the receive-profiles relation endpoint."""
     if not charm.unit.is_leader():
         # TODO: leader-only because of
