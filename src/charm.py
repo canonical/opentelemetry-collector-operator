@@ -50,7 +50,7 @@ from snap_management import (
     install_snap,
 )
 
-from utils import allocate_ports, find_available_port
+from utils import get_or_allocate_ports
 from config_builder import Port
 
 # Log messages can be retrieved using juju debug-log
@@ -183,10 +183,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         self._reconcile()
 
     def _reconcile(self):
-        self._node_exporter_port = find_available_port(start_port=NODE_EXPORTER_DEFAULT_PORT)
-
-        # Allocate ports for OpenTelemetry Collector protocols
-        otelcol_port_map = allocate_ports(Port)
+        # Get or allocate ports (persists to avoid port churn)
+        otelcol_port_map, self._node_exporter_port = get_or_allocate_ports(
+            Port, NODE_EXPORTER_DEFAULT_PORT
+        )
 
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)

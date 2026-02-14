@@ -3,12 +3,19 @@
 
 """Feature: Port allocation for OpenTelemetry Collector."""
 
+import json
 import logging
 
 import pytest
 
 from config_builder import Port
-from utils import allocate_ports, find_available_port
+from utils import (
+    allocate_ports,
+    find_available_port,
+    get_or_allocate_ports,
+    load_port_map,
+    save_port_map,
+)
 
 
 @pytest.mark.parametrize(
@@ -33,7 +40,7 @@ from utils import allocate_ports, find_available_port
             [4317],
             {
                 Port.loki_http: 3500,
-                Port.otlp_grpc: 50000,
+                Port.otlp_grpc: 50000,  # Should get first available from DEFAULT_PORT_SEARCH_START
                 Port.otlp_http: 4318,
                 Port.metrics: 8888,
                 Port.health: 13133,
@@ -112,6 +119,7 @@ def test_find_available_port_no_ports_available(monkeypatch):
 @pytest.mark.parametrize(
     "start_port,expected_error_msg",
     [
+        (0, "Invalid start_port: 0"),
         (-1, "Invalid start_port: -1"),
         (-100, "Invalid start_port: -100"),
         (70000, "Invalid start_port: 70000"),
@@ -162,3 +170,219 @@ def test_find_available_port_edge_cases(start_port, monkeypatch, mock_socket_wit
     # THEN it should return the requested port within the valid range
     assert port == start_port
     assert 0 <= port <= 65535
+
+
+def test_save_and_load_port_map(tmp_path, monkeypatch):
+    """Scenario: Port map can be saved and loaded from disk."""
+    # GIVEN a temporary port map file
+    test_port_map_file = tmp_path / "port_map.json"
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    # AND a port map to save
+    otelcol_port_map = {
+        Port.otlp_grpc: 4317,
+        Port.otlp_http: 4318,
+        Port.loki_http: 3500,
+    }
+    node_exporter_port = 9100
+
+    # WHEN we save the port map
+    save_port_map(otelcol_port_map, node_exporter_port)
+
+    # THEN the file should exist
+    assert test_port_map_file.exists()
+
+    # AND we can load it back
+    loaded_map = load_port_map()
+    assert loaded_map is not None
+    assert loaded_map["node_exporter"] == 9100
+    assert loaded_map["otlp_grpc"] == 4317
+    assert loaded_map["otlp_http"] == 4318
+    assert loaded_map["loki_http"] == 3500
+
+
+@pytest.mark.parametrize(
+    "scenario,setup_file",
+    [
+        ("no_file", lambda tmp_path: None),  # Don't create file
+        ("permission_error", lambda tmp_path: _create_unreadable_file(tmp_path)),
+        ("corrupted_json", lambda tmp_path: _create_corrupted_json_file(tmp_path)),
+    ],
+)
+def test_load_port_map_error_cases(tmp_path, monkeypatch, scenario, setup_file):
+    """Scenario: load_port_map returns None when encountering various error conditions."""
+    # GIVEN a problematic port map file situation
+    test_port_map_file = tmp_path / "port_map.json"
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    if setup_file:
+        setup_file(test_port_map_file)
+
+    # WHEN we try to load the port map
+    loaded_map = load_port_map()
+
+    # THEN it should return None
+    assert loaded_map is None
+
+    # Cleanup: restore permissions if needed
+    if scenario == "permission_error" and test_port_map_file.exists():
+        test_port_map_file.chmod(0o644)
+
+
+def _create_unreadable_file(file_path):
+    """Helper: Create a file without read permissions."""
+    file_path.write_text('{"node_exporter": 9100}')
+    file_path.chmod(0o000)
+
+
+def _create_corrupted_json_file(file_path):
+    """Helper: Create a file with invalid JSON."""
+    file_path.write_text('{"node_exporter": 9100, invalid json')
+
+
+@pytest.mark.parametrize(
+    "persisted_ports,expected_node_exporter,expected_otlp_grpc,expected_otlp_http,should_persist",
+    [
+        # No persisted map - allocate new ports
+        (None, 9100, 4317, 4318, True),
+        # Persisted map with alternative ports - reuse them
+        (
+            {
+                Port.otlp_grpc: 50000,
+                Port.otlp_http: 50001,
+                Port.loki_http: 3500,
+                Port.metrics: 8888,
+                Port.health: 13133,
+                Port.jaeger_grpc: 14250,
+                Port.jaeger_thrift_http: 14268,
+                Port.zipkin: 9411,
+            },
+            50010,
+            50000,
+            50001,
+            False,
+        ),
+    ],
+)
+def test_get_or_allocate_ports_scenarios(
+    tmp_path,
+    monkeypatch,
+    mock_socket_with_occupied_ports,
+    persisted_ports,
+    expected_node_exporter,
+    expected_otlp_grpc,
+    expected_otlp_http,
+    should_persist,
+):
+    """Scenario: get_or_allocate_ports handles both new allocation and persisted reuse."""
+    # GIVEN a test port map file
+    test_port_map_file = tmp_path / "port_map.json"
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    # AND optionally a persisted port map
+    if persisted_ports:
+        save_port_map(persisted_ports, expected_node_exporter)
+    else:
+        # Mock available ports for allocation
+        mock_socket_class = mock_socket_with_occupied_ports([])
+        monkeypatch.setattr("utils.socket.socket", mock_socket_class)
+
+    # WHEN we call get_or_allocate_ports
+    otelcol_port_map, node_exporter_port = get_or_allocate_ports(Port, 9100)
+
+    # THEN it should use the expected ports
+    assert node_exporter_port == expected_node_exporter
+    assert otelcol_port_map[Port.otlp_grpc] == expected_otlp_grpc
+    assert otelcol_port_map[Port.otlp_http] == expected_otlp_http
+
+    # AND the port map should be persisted
+    if should_persist:
+        assert test_port_map_file.exists()
+        loaded_map = load_port_map()
+        assert loaded_map is not None
+        assert loaded_map["node_exporter"] == expected_node_exporter
+        assert loaded_map["otlp_grpc"] == expected_otlp_grpc
+
+
+def test_get_or_allocate_ports_with_occupied_default(tmp_path, monkeypatch, caplog, mock_socket_with_occupied_ports):
+    """Scenario: get_or_allocate_ports allocates alternative when default port is occupied."""
+    # GIVEN no persisted ports and node_exporter default port (9100) is occupied
+    test_port_map_file = tmp_path / "port_map.json"
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    # Mock socket to make port 9100 occupied
+    mock_socket_class = mock_socket_with_occupied_ports([9100])
+    monkeypatch.setattr("utils.socket.socket", mock_socket_class)
+
+    # WHEN we call get_or_allocate_ports with caplog to capture warnings
+    with caplog.at_level(logging.WARNING):
+        otelcol_port_map, node_exporter_port = get_or_allocate_ports(Port, 9100)
+
+    # THEN node_exporter should get an alternative port (50000)
+    assert node_exporter_port == 50000
+
+    # AND we should see warning log about alternative port assignment
+    assert "assigned alternative port 50000" in caplog.text
+    assert "default 9100 unavailable" in caplog.text
+
+
+def test_reconstruct_otelcol_map_with_missing_ports(tmp_path, monkeypatch, caplog):
+    """Scenario: reconstruct_otelcol_map uses defaults when ports are missing in persisted data."""
+    # GIVEN a persisted port map with only some ports (missing zipkin and jaeger_thrift_http)
+    test_port_map_file = tmp_path / "port_map.json"
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    # Create a partial port map (missing some ports)
+    partial_persisted_data = {
+        "node_exporter": 9100,
+        "otlp_grpc": 50000,
+        "otlp_http": 50001,
+        "loki_http": 3500,
+        "metrics": 8888,
+        "health": 13133,
+        "jaeger_grpc": 14250,
+        # Missing: zipkin and jaeger_thrift_http
+    }
+
+    test_port_map_file.parent.mkdir(parents=True, exist_ok=True)
+    test_port_map_file.write_text(json.dumps(partial_persisted_data))
+
+    # WHEN we call get_or_allocate_ports with caplog to capture warnings
+    with caplog.at_level(logging.WARNING):
+        otelcol_port_map, node_exporter_port = get_or_allocate_ports(Port, 9100)
+
+    # THEN it should use persisted ports for available ones
+    assert otelcol_port_map[Port.otlp_grpc] == 50000
+    assert otelcol_port_map[Port.otlp_http] == 50001
+
+    # AND it should use default values for missing ports
+    assert otelcol_port_map[Port.zipkin] == Port.zipkin.value
+    assert otelcol_port_map[Port.jaeger_thrift_http] == Port.jaeger_thrift_http.value
+
+    # AND it should log warnings for missing ports
+    assert "Port zipkin not found, using default" in caplog.text
+    assert "Port jaeger_thrift_http not found, using default" in caplog.text
+
+
+def test_save_port_map_handles_write_errors(tmp_path, monkeypatch, caplog):
+    """Scenario: save_port_map logs warning when file write fails."""
+    from unittest.mock import mock_open, patch
+
+    # GIVEN a port map to save
+    test_port_map_file = tmp_path / "port_map.json"
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    otelcol_ports = {Port.otlp_grpc: 4317, Port.otlp_http: 4318}
+    node_exporter_port = 9100
+
+    # WHEN save fails with PermissionError
+    with patch("builtins.open", mock_open()) as mock_file:
+        mock_file.side_effect = PermissionError("Permission denied")
+
+        with caplog.at_level(logging.WARNING):
+            save_port_map(otelcol_ports, node_exporter_port)
+
+    # THEN it should log a warning
+    assert "failed to save port map" in caplog.text
+    assert "Permission denied" in caplog.text
+    assert "Ports will be re-allocated" in caplog.text
