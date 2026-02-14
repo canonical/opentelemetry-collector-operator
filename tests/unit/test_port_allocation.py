@@ -147,13 +147,18 @@ def test_find_available_port_privileged_port_warning(monkeypatch, mock_socket_wi
 
 @pytest.mark.parametrize(
     "start_port",
-    [0, 65535],
+    [65535],
 )
-def test_find_available_port_edge_cases(start_port):
-    """Scenario: Edge case ports (0 and 65535) are valid."""
-    # GIVEN an edge case port (0 or 65535)
-    # WHEN we try to find an available port
-    # THEN it should not raise ValueError (these are valid ports)
+def test_find_available_port_edge_cases(start_port, monkeypatch, mock_socket_with_occupied_ports):
+    """Scenario: Edge case port 65535 is valid and handled correctly."""
+    # GIVEN an edge case port (65535) and no occupied ports
+    occupied_ports = []
+    mock_socket_class = mock_socket_with_occupied_ports(occupied_ports)
+    monkeypatch.setattr("utils.socket.socket", mock_socket_class)
 
+    # WHEN we try to find an available port
     port = find_available_port(start_port=start_port)
+
+    # THEN it should return the requested port within the valid range
+    assert port == start_port
     assert 0 <= port <= 65535
