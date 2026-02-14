@@ -50,7 +50,8 @@ from snap_management import (
     install_snap,
 )
 
-from utils import find_available_port
+from utils import get_or_allocate_ports
+from config_builder import Port
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -182,7 +183,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         self._reconcile()
 
     def _reconcile(self):
-        self._node_exporter_port = find_available_port(start_port=NODE_EXPORTER_DEFAULT_PORT)
+        # Get or allocate ports (persists to avoid port churn)
+        otelcol_port_map, self._node_exporter_port = get_or_allocate_ports(
+            Port, NODE_EXPORTER_DEFAULT_PORT
+        )
+
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
         # NOTE: Only the leader aggregates alerts, to prevent duplication. COS Agent alerts
@@ -240,13 +245,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             insecure_skip_verify=cast(bool, self.config.get("tls_insecure_skip_verify")),
             queue_size=cast(int, self.config.get("queue_size")),
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
+            otelcol_port_map=otelcol_port_map,
         )
-
         # Self-mon logging
         self._configure_logrotate()
 
         # Tracing setup
-        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
+        requested_tracing_protocols = integrations.receive_traces(
+            self, tls=is_tls_ready(), otelcol_port_map=otelcol_port_map
+        )
         config_manager.add_traces_ingestion(requested_tracing_protocols)
         # Add default processors to traces
         config_manager.add_traces_processing(
@@ -410,7 +417,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         #  making the right choice in this tradeoff.
         if self._has_incoming_profiles:
             config_manager.add_profile_ingestion()
-            integrations.receive_profiles(self, tls=is_tls_ready())
+            integrations.receive_profiles(self, tls=is_tls_ready(), otelcol_port_map=otelcol_port_map)
         if profiling_endpoints := integrations.send_profiles(self):
             config_manager.add_profile_forwarding(
                 profiling_endpoints,
@@ -419,7 +426,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             feature_gates = "service.profilesSupport"
 
         # Logs setup
-        integrations.receive_loki_logs(self, tls=is_tls_ready())
+        integrations.receive_loki_logs(self, tls=is_tls_ready(), otelcol_port_map=otelcol_port_map)
         loki_endpoints = integrations.send_loki_logs(self)
         if self._has_incoming_logs_relation:
             config_manager.add_log_ingestion()

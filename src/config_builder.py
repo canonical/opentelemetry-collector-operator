@@ -12,6 +12,10 @@ from constants import INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT
 logger = logging.getLogger(__name__)
 
 
+# Type alias for port mappings
+PortMap = Dict["Port", int]
+
+
 def sha256(hashable: Union[str, bytes]) -> str:
     """Generate a SHA-256 hash of the input.
 
@@ -93,6 +97,7 @@ class ConfigBuilder:
         global_scrape_timeout: str,
         receiver_tls: bool = False,
         exporter_skip_verify: bool = False,
+        otelcol_port_map: Optional[PortMap] = None,
     ):
         """Generate an empty OpenTelemetry collector config.
 
@@ -103,6 +108,7 @@ class ConfigBuilder:
             global_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
             receiver_tls: whether to inject TLS config in all receivers on build
             exporter_skip_verify: value for `insecure_skip_verify` in all exporters
+            otelcol_port_map: optional dictionary mapping Port enum members to allocated port numbers
         """
         self._config = {
             "extensions": {},
@@ -122,6 +128,18 @@ class ConfigBuilder:
         self._exporter_skip_verify = exporter_skip_verify
         self._scrape_interval = global_scrape_interval
         self._scrape_timeout = global_scrape_timeout
+        self._otelcol_port_map = otelcol_port_map or {}
+
+    def _get_port(self, port: Port) -> int:
+        """Get the allocated port number for a Port enum member.
+
+        Args:
+            port: The Port enum member
+
+        Returns:
+            The allocated port number, or the default port value if not in the map.
+        """
+        return self._otelcol_port_map.get(port, port.value)
 
     def build(self) -> str:
         """Build the final configuration and return it as a YAML string.
@@ -166,8 +184,8 @@ class ConfigBuilder:
             f"otlp/{self._hostname}",
             {
                 "protocols": {
-                    "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
-                    "grpc": {"endpoint": f"0.0.0.0:{Port.otlp_grpc.value}"},
+                    "http": {"endpoint": f"0.0.0.0:{self._get_port(Port.otlp_http)}"},
+                    "grpc": {"endpoint": f"0.0.0.0:{self._get_port(Port.otlp_grpc)}"},
                 },
             },
             pipelines=[
@@ -178,7 +196,7 @@ class ConfigBuilder:
         )
         # FIXME https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11780
         # Add TLS config to extensions
-        self.add_extension("health_check", {"endpoint": f"0.0.0.0:{Port.health.value}"})
+        self.add_extension("health_check", {"endpoint": f"0.0.0.0:{self._get_port(Port.health)}"})
         self.add_telemetry(
             "logs",
             {
