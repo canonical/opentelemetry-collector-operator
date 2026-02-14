@@ -112,7 +112,7 @@ def allocate_ports(port_enum_class: Type[Port]) -> Dict[Port, int]:
             )
             logger.warning(
                 f"assigned alternative port {alternative_port} for {port_enum.name} "
-                f"(default port {desired_port} was no available)"
+                f"(default port {desired_port} was not available)"
             )
             allocated_ports[port_enum] = alternative_port
             used_ports.add(alternative_port)
