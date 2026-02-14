@@ -310,7 +310,8 @@ def receive_profiles(charm: CharmBase, tls: bool, otelcol_port_map: PortMap) -> 
         #  https://github.com/canonical/opentelemetry-collector-operator/issues/71
         return
     fqdn = socket.getfqdn()
-    grpc_endpoint = f"{fqdn}:{Port.otlp_grpc.value}"
+    otlp_grpc_port = otelcol_port_map.get(Port.otlp_grpc, Port.otlp_grpc.value)
+    grpc_endpoint = f"{fqdn}:{otlp_grpc_port}"
     # this charm lib exposes a holistic API, so we don't need to bind the instance
     ProfilingEndpointProvider(
         charm.model.relations["receive-profiles"], app=charm.app
