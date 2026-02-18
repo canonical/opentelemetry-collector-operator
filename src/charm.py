@@ -149,6 +149,7 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
                 {"send-remote-write"},  # or
                 {"send-loki-logs"},  # or
                 {"grafana-dashboards-provider"},
+                {"send-otlp"},
             ],
             "juju-info": [  # must be paired with:
                 {"cloud-config"},  # or
@@ -424,6 +425,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if self._has_incoming_logs_relation:
             config_manager.add_log_ingestion()
         config_manager.add_log_forwarding(loki_endpoints, insecure_skip_verify)
+
+        # OTLP setup
+        otlp_endpoints = integrations.send_otlp(self)
+        config_manager.add_otlp_forwarding(otlp_endpoints)
 
         # Metrics setup
         config_manager.add_self_scrape(
