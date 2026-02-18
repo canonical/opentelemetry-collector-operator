@@ -9,7 +9,7 @@ import socket
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple, Type
 
-from filelock import FileLock
+from filelock import FileLock, Timeout
 
 from config_builder import Port
 from constants import DEFAULT_PORT_SEARCH_START, PORT_MAP_FILE, PORT_MAP_LOCK_TIMEOUT
@@ -51,6 +51,10 @@ def load_port_map() -> Optional[Dict[str, int]]:
             port_map = json.load(f)
             logger.info(f"loaded port map from {PORT_MAP_FILE}: {port_map}")
             return port_map
+    except Timeout:
+        logger.warning(f"timeout acquiring lock for {PORT_MAP_FILE}. "
+                      f"Another process may be allocating ports.")
+        return None
     except (OSError, PermissionError) as e:
         logger.warning(f"failed to load port map from {PORT_MAP_FILE}: {e}")
         return None
@@ -88,6 +92,9 @@ def save_port_map(otelcol_port_map: Dict[Port, int], node_exporter_port: int) ->
         with FileLock(lock_file, timeout=PORT_MAP_LOCK_TIMEOUT), open(PORT_MAP_FILE, "w") as f:
             json.dump(port_map, f, indent=2)
             logger.info(f"saved port map to {PORT_MAP_FILE}: {port_map}")
+    except Timeout:
+        logger.warning(f"timeout acquiring lock for {PORT_MAP_FILE}. "
+                      f"Another process may be saving ports. Ports will be re-allocated on next reconciliation.")
     except (OSError, PermissionError) as e:
         logger.warning(f"failed to save port map to {PORT_MAP_FILE}: {e}. "
                       f"Ports will be re-allocated on next reconciliation.")

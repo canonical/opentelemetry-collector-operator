@@ -5,8 +5,10 @@
 
 import json
 import logging
+from unittest.mock import mock_open, patch
 
 import pytest
+from filelock import Timeout
 
 from config_builder import Port
 from utils import (
@@ -364,25 +366,67 @@ def test_reconstruct_otelcol_map_with_missing_ports(tmp_path, monkeypatch, caplo
     assert "Port jaeger_thrift_http not found, using default" in caplog.text
 
 
-def test_save_port_map_handles_write_errors(tmp_path, monkeypatch, caplog):
-    """Scenario: save_port_map logs warning when file write fails."""
-    from unittest.mock import mock_open, patch
-
-    # GIVEN a port map to save
+def test_save_port_map_permission_error(tmp_path, monkeypatch, caplog):
+    """Scenario: save_port_map handles PermissionError gracefully."""
+    # GIVEN a test environment
     test_port_map_file = tmp_path / "port_map.json"
     monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
 
     otelcol_ports = {Port.otlp_grpc: 4317, Port.otlp_http: 4318}
     node_exporter_port = 9100
 
-    # WHEN save fails with PermissionError
+    # WHEN save fails due to permission error
     with patch("builtins.open", mock_open()) as mock_file:
         mock_file.side_effect = PermissionError("Permission denied")
-
         with caplog.at_level(logging.WARNING):
             save_port_map(otelcol_ports, node_exporter_port)
 
-    # THEN it should log a warning
+    # THEN it should log appropriate warnings
     assert "failed to save port map" in caplog.text
     assert "Permission denied" in caplog.text
     assert "Ports will be re-allocated" in caplog.text
+
+
+def test_save_port_map_timeout(tmp_path, monkeypatch, caplog):
+    """Scenario: save_port_map handles FileLock timeout gracefully."""
+    # GIVEN a test environment
+    test_port_map_file = tmp_path / "port_map.json"
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    # WHEN save fails due to lock timeout
+    with patch("utils.FileLock") as mock_filelock:
+        mock_filelock.return_value.__enter__.side_effect = Timeout("lock_file")
+        with caplog.at_level(logging.WARNING):
+            save_port_map({Port.otlp_grpc: 4317}, 9100)
+
+    # THEN it should log appropriate warnings
+    assert "timeout acquiring lock" in caplog.text
+    assert "Another process may be saving ports" in caplog.text
+    assert "Ports will be re-allocated" in caplog.text
+
+
+def test_load_port_map_timeout(tmp_path, monkeypatch, caplog):
+    """Scenario: load_port_map handles FileLock timeout gracefully."""
+    # GIVEN a test environment with a valid port map file
+    test_port_map_file = _setup_load_timeout_test(tmp_path)
+    monkeypatch.setattr("utils.PORT_MAP_FILE", str(test_port_map_file))
+
+    # WHEN load fails due to lock timeout
+    with patch("utils.FileLock") as mock_filelock:
+        mock_filelock.return_value.__enter__.side_effect = Timeout("lock_file")
+        with caplog.at_level(logging.WARNING):
+            result = load_port_map()
+
+    # THEN it should return None
+    assert result is None
+
+    # AND it should log appropriate warnings
+    assert "timeout acquiring lock" in caplog.text
+    assert "Another process may be allocating ports" in caplog.text
+
+
+def _setup_load_timeout_test(tmp_path):
+    """Helper: Setup for load_port_map timeout test."""
+    test_file = tmp_path / "port_map.json"
+    test_file.write_text('{"node_exporter": 9100, "otlp_grpc": 4317}')
+    return test_file
