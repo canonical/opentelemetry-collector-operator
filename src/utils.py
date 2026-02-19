@@ -100,7 +100,7 @@ def save_port_map(otelcol_port_map: Dict[Port, int], node_exporter_port: int) ->
                       f"Ports will be re-allocated on next reconciliation.")
 
 
-def find_available_port(start_port: int = DEFAULT_PORT_SEARCH_START, exclude_ports: Optional[set] = None) -> int:
+def find_available_port(start_port: int = DEFAULT_PORT_SEARCH_START, exclude_ports: Optional[Set[int]] = None) -> int:
     """Find an available port starting from the given port.
 
     Args:
