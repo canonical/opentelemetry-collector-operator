@@ -24,6 +24,8 @@ INTERNAL_TELEMETRY_LOG_FILE: Final[str] = "/var/snap/opentelemetry-collector/com
 FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
 
 DEFAULT_PORT_SEARCH_START: Final[int] = 50000
+PORT_MAP_FILE: Final[str] = "/var/snap/opentelemetry-collector/common/port_map.json"
+PORT_MAP_LOCK_TIMEOUT: Final[int] = 5
 
 # Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
 NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
