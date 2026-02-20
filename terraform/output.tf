@@ -14,6 +14,7 @@ output "endpoints" {
     receive_server_cert         = "receive-server-cert",
     send_charm_traces           = "send-charm-traces",
     send_loki_logs              = "send-loki-logs",
+    send_otlp                   = "send-otlp",
     send_remote_write           = "send-remote-write",
     send_traces                 = "send-traces",
 
