@@ -1,0 +1,190 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# TODO: Update once we have moved to a lib
+"""OpenTelemetry protocol (OTLP) Library.
+
+## Overview
+
+This document explains how to integrate with the Opentelemetry-collector charm
+for the purpose of providing OTLP telemetry to Opentelemetry-collector. This document is the
+authoritative reference on the structure of relation data that is
+shared between Opentelemetry-collector charms and any other charm that intends to
+provide OTLP telemetry for Opentelemetry-collector.
+"""
+
+import json
+import logging
+import socket
+from typing import ClassVar, Dict, List, Literal, Optional, Sequence
+
+from cosl.juju_topology import JujuTopology
+from ops import CharmBase, Relation
+from ops.framework import Object
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+DEFAULT_CONSUMER_RELATION_NAME = "send-otlp"
+DEFAULT_PROVIDER_RELATION_NAME = "receive-otlp"
+RELATION_INTERFACE_NAME = "otlp"
+
+logger = logging.getLogger(__name__)
+
+
+class OtlpEndpoint(BaseModel):
+    """A pydantic model for a single OTLP endpoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    protocol: Literal["http", "grpc"]
+    endpoint: str
+    telemetries: Sequence[Literal["logs", "metrics", "traces"]]
+
+
+class OtlpProviderAppData(BaseModel):
+    """A pydantic model for the OTLP provider's unit databag."""
+
+    KEY: ClassVar[str] = "otlp"
+
+    model_config = ConfigDict(extra="forbid")
+
+    endpoints: List[OtlpEndpoint]
+
+
+class OtlpConsumer(Object):
+    """A class for consuming OTLP endpoints."""
+
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str = DEFAULT_CONSUMER_RELATION_NAME,
+        protocols: Optional[Sequence[Literal["http", "grpc"]]] = None,
+        telemetries: Optional[Sequence[Literal["logs", "metrics", "traces"]]] = None,
+    ):
+        super().__init__(charm, relation_name)
+        self._charm = charm
+        self._relation_name = relation_name
+        self._protocols = protocols if protocols is not None else []
+        self._telemetries = telemetries if telemetries is not None else []
+        self.topology = JujuTopology.from_charm(charm)
+
+    def _get_provider_databag(self, otlp_databag: str) -> Optional[OtlpProviderAppData]:
+        """Load the OtlpProviderAppData from the given databag string.
+
+        For each endpoint in the databag, if it contains unsupported telemetry types, those
+        telemetries are filtered out before validation. If an endpoint contains an unsupported
+        protocol, or has no supported telemetries, it is skipped entirely.
+        """
+        try:
+            data = json.loads(otlp_databag)
+            endpoints_data = data.get("endpoints", [])
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OTLP databag: {e}")
+            return None
+
+        valid_endpoints = []
+        supported_telemetries = set(self._telemetries)
+        for endpoint_data in endpoints_data:
+            if filtered_telemetries := [
+                t for t in endpoint_data.get("telemetries", []) if t in supported_telemetries
+            ]:
+                endpoint_data["telemetries"] = filtered_telemetries
+            else:
+                # If there are no supported telemetries for this endpoint, skip it entirely
+                continue
+            try:
+                endpoint = OtlpEndpoint.model_validate(endpoint_data)
+            except ValidationError:
+                continue
+            valid_endpoints.append(endpoint)
+        try:
+            return OtlpProviderAppData(endpoints=valid_endpoints)
+        except ValidationError as e:
+            logger.error(f"OTLP databag failed validation: {e}")
+            return None
+
+    def get_remote_otlp_endpoints(self) -> Dict[int, OtlpEndpoint]:
+        """Return a mapping of relation ID to OTLP endpoint.
+
+        For each remote unit's list of OtlpEndpoints:
+            - If a telemetry type is not supported, then the endpoint is accepted, but the
+              telemetry is ignored.
+            - If the endpoint contains an unsupported protocol it is ignored.
+            - The first available (and supported) endpoint is returned.
+
+        Returns:
+            Dict mapping relation ID -> OtlpEndpoint
+        """
+        endpoints = {}
+        for rel in self.model.relations[self._relation_name]:
+            if not (otlp := rel.data[rel.app].get(OtlpProviderAppData.KEY)):
+                continue
+            if not (app_databag := self._get_provider_databag(otlp)):
+                continue
+
+            # Choose the first valid endpoint in list
+            if endpoint_choice := next(
+                (e for e in app_databag.endpoints if e.protocol in self._protocols), None
+            ):
+                endpoints[rel.id] = endpoint_choice
+
+        return endpoints
+
+
+class OtlpProvider(Object):
+    """A class for publishing all supported OTLP endpoints.
+
+    Args:
+        charm: The charm instance.
+        protocol_ports: A dictionary mapping ProtocolType to port number.
+        relation_name: The name of the relation to use.
+        path: An optional path to append to the endpoint URLs.
+        supported_telemetries: A list of supported telemetry types.
+    """
+
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str = DEFAULT_PROVIDER_RELATION_NAME,
+    ):
+        super().__init__(charm, relation_name)
+        self._charm = charm
+        self._relation_name = relation_name
+        self._endpoints = []
+
+    @property
+    def internal_url(self) -> str:
+        """Return the internal URL for the OTLP provider."""
+        return f"http://{socket.getfqdn()}"
+
+    def add_endpoint(
+        self,
+        protocol: Literal["http", "grpc"],
+        endpoint: str,
+        telemetries: Sequence[Literal["logs", "metrics", "traces"]],
+    ):
+        """Add an OtlpEndpoint to the list.
+
+        Call this method after endpoint-changing events e.g. TLS and ingress.
+        """
+        self._endpoints.append(
+            OtlpEndpoint(protocol=protocol, endpoint=endpoint, telemetries=telemetries)
+        )
+
+    def publish(self, relation: Optional[Relation] = None) -> None:
+        """Triggers programmatically the update of the relation data.
+
+        Args:
+            url: An optional URL to use instead of the internal URL.
+            relation: An optional instance of `class:ops.model.Relation` to update.
+                If not provided, all instances of the `otlp`
+                relation are updated.
+        """
+        if not self._charm.unit.is_leader():
+            # Only the leader unit can write to app data.
+            return
+
+        relations = [relation] if relation else self.model.relations[self._relation_name]
+        for relation in relations:
+            data = OtlpProviderAppData(endpoints=self._endpoints).model_dump(exclude_none=True)
+            otlp = {OtlpProviderAppData.KEY: data}
+            relation.data[self._charm.app].update({k: json.dumps(v) for k, v in otlp.items()})
