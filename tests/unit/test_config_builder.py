@@ -9,7 +9,7 @@ import pytest
 import yaml
 import copy
 
-from config_builder import ConfigBuilder, Component
+from config_builder import ConfigBuilder, Component, Port, build_port_map
 
 
 @pytest.mark.parametrize("pipelines", ([], ["logs", "metrics", "traces"]))
@@ -300,3 +300,91 @@ def test_global_scrape_timeout_and_interval():
             for scrape_cfg in receiver["config"]["scrape_configs"]:
                 assert scrape_cfg["scrape_interval"] == "1m"
                 assert scrape_cfg["scrape_timeout"] == "10s"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Feature: build_port_map
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("overrides", ["", "   "])
+def test_build_port_map_returns_defaults(overrides):
+    """An empty or whitespace-only override string returns the Port enum defaults unchanged."""
+    # GIVEN an empty or whitespace-only override string
+    # WHEN building the port map
+    port_map = build_port_map(overrides)
+    # THEN all ports match the enum defaults
+    for port in Port:
+        assert port_map[port.name] == port.value
+
+
+def test_build_port_map_single_override():
+    """A single override changes only the specified port."""
+    # GIVEN an override for a single port
+    overrides = "loki_http=3501"
+    # WHEN building the port map
+    port_map = build_port_map(overrides)
+    # THEN the overridden port has the new value
+    assert port_map["loki_http"] == 3501
+    # AND all other ports keep their defaults
+    for port in Port:
+        if port.name != "loki_http":
+            assert port_map[port.name] == port.value
+
+
+def test_build_port_map_multiple_overrides():
+    """Multiple comma-separated overrides are all applied."""
+    # GIVEN overrides for two ports
+    overrides = "loki_http=3501,otlp_grpc=4320"
+    # WHEN building the port map
+    port_map = build_port_map(overrides)
+    # THEN both ports have the overridden values
+    assert port_map["loki_http"] == 3501
+    assert port_map["otlp_grpc"] == 4320
+
+
+def test_build_port_map_whitespace_is_stripped():
+    """Leading/trailing whitespace around names and values is accepted."""
+    # GIVEN overrides with extra whitespace
+    overrides = "  loki_http = 3501 , otlp_grpc = 4320  "
+    # WHEN building the port map
+    port_map = build_port_map(overrides)
+    # THEN the overrides are applied correctly
+    assert port_map["loki_http"] == 3501
+    assert port_map["otlp_grpc"] == 4320
+
+
+@pytest.mark.parametrize(
+    "overrides, expected_error",
+    [
+        ("unknown_port=9999", "Unknown port name"),
+        ("loki_http=not_a_number", "must be an integer"),
+        ("loki_http3501", "Invalid format"),
+        ("loki_http=0", "between 1 and 65535"),
+        ("loki_http=65536", "between 1 and 65535"),
+        ("loki_http=-1", "between 1 and 65535"),
+        ("loki_http=4317", "Duplicate port"),  # 4317 is the default for otlp_grpc
+    ],
+)
+def test_build_port_map_invalid_input_raises(overrides, expected_error):
+    """Invalid override strings raise ValueError with a descriptive message."""
+    # GIVEN an invalid override string
+    # WHEN building the port map THEN a ValueError is raised with the expected message
+    with pytest.raises(ValueError, match=expected_error):
+        build_port_map(overrides)
+
+
+def test_config_builder_accepts_port_overrides():
+    """ConfigBuilder uses the provided port map in add_default_config."""
+    # GIVEN a port map with overridden ports
+    port_map = build_port_map("otlp_http=4400,otlp_grpc=4401,health=13200")
+    # WHEN creating a ConfigBuilder with those ports and building the config
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s", ports=port_map)
+    config.add_default_config()
+    built = yaml.safe_load(config.build())
+    # THEN the OTLP receiver endpoints use the overridden ports
+    otlp_receiver = built["receivers"]["otlp/host0"]
+    assert str(4400) in otlp_receiver["protocols"]["http"]["endpoint"]
+    assert str(4401) in otlp_receiver["protocols"]["grpc"]["endpoint"]
+    # AND the health_check extension uses the overridden port
+    assert str(13200) in built["extensions"]["health_check"]["endpoint"]
