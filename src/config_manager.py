@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Literal, Optional, Set
 
 import yaml
 
-from config_builder import Component, ConfigBuilder, Port
+from config_builder import Component, ConfigBuilder, Port, PortMap
 from constants import FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
 
@@ -114,6 +114,7 @@ class ConfigManager:
         insecure_skip_verify: bool = False,
         queue_size: int = 1000,
         max_elapsed_time_min: int = 5,
+        otelcol_port_map: Optional[PortMap] = None,
     ):
         """Generate a default OpenTelemetry collector ConfigManager.
 
@@ -128,12 +129,14 @@ class ConfigManager:
             insecure_skip_verify: value for `insecure_skip_verify` in all exporters
             queue_size: size of the sending queue for exporters
             max_elapsed_time_min: maximum elapsed time for retrying failed requests in minutes
+            otelcol_port_map: optional dictionary mapping Port enum members to allocated port numbers
         """
         self._unit_name = unit_name
         self._hostname = hostname
         self._insecure_skip_verify = insecure_skip_verify
         self._queue_size = queue_size
         self._max_elapsed_time_min = max_elapsed_time_min
+        self._otelcol_port_map = otelcol_port_map or {}
         self.config = ConfigBuilder(
             unit_name=self._unit_name,
             hostname=self._hostname,
@@ -141,9 +144,21 @@ class ConfigManager:
             global_scrape_timeout=global_scrape_timeout,
             receiver_tls=receiver_tls,
             exporter_skip_verify=insecure_skip_verify,
+            otelcol_port_map=otelcol_port_map,
         )
         self.config.add_default_config()
         self.config.add_extension("file_storage", {"directory": FILE_STORAGE_DIRECTORY})
+
+    def _get_port(self, port: Port) -> int:
+        """Get the allocated port number for a Port enum member.
+
+        Args:
+            port: The Port enum member
+
+        Returns:
+            The allocated port number, or the default port value if not in the map.
+        """
+        return self._otelcol_port_map.get(port, port.value)
 
     @property
     def sending_queue_config(self) -> Dict[str, Any]:
@@ -187,7 +202,7 @@ class ConfigManager:
             {
                 "protocols": {
                     "http": {
-                        "endpoint": f"0.0.0.0:{Port.loki_http.value}",
+                        "endpoint": f"0.0.0.0:{self._get_port(Port.loki_http)}",
                     },
                 },
                 "use_incoming_timestamp": True,
@@ -261,8 +276,8 @@ class ConfigManager:
             f"otlp/{self._hostname}",
             {
                 "protocols": {
-                    "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
-                    "grpc": {"endpoint": f"0.0.0.0:{Port.otlp_grpc.value}"},
+                    "http": {"endpoint": f"0.0.0.0:{self._get_port(Port.otlp_http)}"},
+                    "grpc": {"endpoint": f"0.0.0.0:{self._get_port(Port.otlp_grpc)}"},
                 },
             },
             pipelines=["profiles"],
@@ -318,7 +333,7 @@ class ConfigManager:
                             "scrape_interval": "60s",
                             "static_configs": [
                                 {
-                                    "targets": [f"0.0.0.0:{Port.metrics.value}"],
+                                    "targets": [f"0.0.0.0:{self._get_port(Port.metrics)}"],
                                     "labels": labels,
                                 }
                             ],
@@ -406,7 +421,7 @@ class ConfigManager:
             self.config.add_component(
                 Component.receiver,
                 f"zipkin/receive-traces/{self._unit_name}",
-                {"endpoint": f"0.0.0.0:{Port.zipkin.value}"},
+                {"endpoint": f"0.0.0.0:{self._get_port(Port.zipkin)}"},
                 pipelines=[f"traces/{self._unit_name}"],
             )
         if (
@@ -416,11 +431,11 @@ class ConfigManager:
             jaeger_config = {"protocols": {}}
             if "jaeger_grpc" in requested_tracing_protocols:
                 jaeger_config["protocols"].update(
-                    {"grpc": {"endpoint": f"0.0.0.0:{Port.jaeger_grpc.value}"}}
+                    {"grpc": {"endpoint": f"0.0.0.0:{self._get_port(Port.jaeger_grpc)}"}}
                 )
             if "jaeger_thrift_http" in requested_tracing_protocols:
                 jaeger_config["protocols"].update(
-                    {"thrift_http": {"endpoint": f"0.0.0.0:{Port.jaeger_thrift_http.value}"}}
+                    {"thrift_http": {"endpoint": f"0.0.0.0:{self._get_port(Port.jaeger_thrift_http)}"}}
                 )
             self.config.add_component(
                 Component.receiver,

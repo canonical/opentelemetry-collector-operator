@@ -41,9 +41,14 @@ def ctx(tmp_path, unit_id, app_name):
         source_path = CHARM_ROOT / "src" / src_dir
         target_path = tmp_path / "src" / src_dir
         copytree(source_path, target_path, dirs_exist_ok=True)
+
+    # Use tmp_path for port map file to avoid permission issues
+    port_map_file = tmp_path / "port_map.json"
+
     with (
         patch("charm.refresh_certs", lambda: True),
         patch("charm.ensure_logrotate_timer", lambda: True),
+        patch("utils.PORT_MAP_FILE", str(port_map_file)),
     ):
         yield Context(
             OpenTelemetryCollectorCharm, charm_root=tmp_path, unit_id=unit_id, app_name=app_name

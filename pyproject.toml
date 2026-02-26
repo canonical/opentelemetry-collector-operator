@@ -17,6 +17,7 @@ dependencies = [
   "charmlibs-pathops",
   "sh",
   "tenacity",
+  "filelock",
 ]
 
 [project.optional-dependencies]
