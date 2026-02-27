@@ -180,7 +180,7 @@ config:
 
         For example, `/var/log/**/{app_one,app_two}.log` will result in the agent ignoring both
         `/var/log/app_one.log` and `/var/log/app_two.log`.
-        
+
         To provide multiple path exclusion globs, separate with semicolons (;), such as
         `/var/log/app_one.log;/var/log/juju`.
 
@@ -263,7 +263,7 @@ config:
     debug_exporter_for_logs:
       description: >
         Add a debug exporter to the logs pipeline of the OpenTelemetry Collector config.
-        
+
         WARNING: Using the debug exporter in a production environment is discouraged, as it will
         write all collected telemetry to stdout, i.e. to syslog, which is likely to cause log
         flooding. This can be avoided with the correct usage of the `path_exclude` config option.
@@ -272,7 +272,7 @@ config:
     debug_exporter_for_metrics:
       description: >
         Add a debug exporter to the metrics pipeline of the OpenTelemetry Collector config.
-        
+
         WARNING: Using the debug exporter in a production environment is discouraged, as it will
         write all collected telemetry to stdout, i.e. to syslog, which is likely to cause log
         flooding. This can be avoided with the correct usage of the `path_exclude` config option.
@@ -281,12 +281,32 @@ config:
     debug_exporter_for_traces:
       description: >
         Add a debug exporter to the traces pipeline of the OpenTelemetry Collector config.
-        
+
         WARNING: Using the debug exporter in a production environment is discouraged, as it will
         write all collected telemetry to stdout, i.e. to syslog, which is likely to cause log
         flooding. This can be avoided with the correct usage of the `path_exclude` config option.
       type: boolean
       default: false
+    ports:
+      type: string
+      description: |
+        Comma-separated list of port overrides in the form "name=port[,name=port,...]".
+        Only the ports you want to change need to be listed; all others keep their defaults.
+
+        Available port names and their defaults:
+          loki_http=3500        HTTP endpoint for Loki log ingestion
+          otlp_grpc=4317        gRPC endpoint for OTLP protocol
+          otlp_http=4318        HTTP endpoint for OTLP protocol
+          metrics=8888          Endpoint for Prometheus metrics scraping
+          health=13133          Health check endpoint
+          jaeger_grpc=14250     gRPC endpoint for Jaeger protocol
+          jaeger_thrift_http=14268  HTTP endpoint for Jaeger Thrift protocol
+          zipkin=9411           HTTP endpoint for Zipkin protocol
+          node_exporter=9100    HTTP endpoint for node-exporter metrics
+
+        Example — override only the ports that conflict with other services:
+          juju config opentelemetry-collector ports="loki_http=3501,otlp_grpc=4320"
+      default: ""
 
 actions:
   reconcile:
