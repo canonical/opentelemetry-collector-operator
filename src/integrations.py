@@ -47,7 +47,7 @@ from cosl import LZMABase64
 from ops import CharmBase, tracing
 from ops.model import Relation
 
-from config_builder import Port, sha256
+from config_builder import Port, build_port_map, sha256
 from constants import (
     DASHBOARDS_DEST_PATH,
     DASHBOARDS_SRC_PATH,
@@ -88,19 +88,21 @@ def _add_alerts(alerts: Dict, dest_path: Path):
         logger.debug(f"updated alert rules file {rule_file.as_posix()}")
 
 
-def receive_loki_logs(charm: CharmBase, tls: bool):
+def receive_loki_logs(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None):
     """Integrate with other charms via the receive-loki-logs relation endpoint.
 
     This function must be called before `send_loki_logs`, so that the charm
     can gather all the alerts from relation data before sending them all
     to Loki.
     """
+    if ports is None:
+        ports = build_port_map()
     forward_alert_rules = cast(bool, charm.config.get("forward_alert_rules"))
     charm_root = charm.charm_dir.absolute()
     loki_provider = LokiPushApiProvider(
         charm,
         relation_name="receive-loki-logs",
-        port=Port.loki_http.value,
+        port=ports[Port.loki_http.name],
         scheme="https" if tls else "http",
     )
     charm.__setattr__("loki_provider", loki_provider)
@@ -238,13 +240,15 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
     return remote_write.endpoints
 
 
-def _get_tracing_receiver_url(protocol: ReceiverProtocol, tls_enabled: bool) -> str:
+def _get_tracing_receiver_url(
+    protocol: ReceiverProtocol, tls_enabled: bool, ports: Optional[Dict[str, int]] = None
+) -> str:
     """Build the endpoint URL for a tracing receiver.
 
     Args:
         protocol: The tracing protocol to build the URL for.
         tls_enabled: Whether to use HTTPS (True) or HTTP (False) for the URL.
-
+        ports: port map produced by build_port_map(); if None the enum defaults are used.
 
     Returns:
         str: The complete URL for the tracing receiver endpoint.
@@ -253,6 +257,8 @@ def _get_tracing_receiver_url(protocol: ReceiverProtocol, tls_enabled: bool) -> 
         The method assumes the receiver is in the same model since the charm
         doesn't have ingress support. The FQDN is used as the hostname.
     """
+    if ports is None:
+        ports = build_port_map()
     scheme = "http"
     if tls_enabled:
         scheme = "https"
@@ -260,16 +266,18 @@ def _get_tracing_receiver_url(protocol: ReceiverProtocol, tls_enabled: bool) -> 
     # The correct transport protocol is specified in the tracing library, and it's always
     # either http or grpc.
     if receiver_protocol_to_transport_protocol[protocol] == TransportProtocolType.grpc:
-        return f"{socket.getfqdn()}:{Port.otlp_grpc.value}"
-    return f"{scheme}://{socket.getfqdn()}:{Port.otlp_http.value}"
+        return f"{socket.getfqdn()}:{ports[Port.otlp_grpc.name]}"
+    return f"{scheme}://{socket.getfqdn()}:{ports[Port.otlp_http.name]}"
 
 
-def receive_traces(charm: CharmBase, tls: bool) -> Set:
+def receive_traces(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None) -> Set:
     """Integrate with other charms via the receive-traces relation endpoint.
 
     Returns:
         All receiver protocols that have been requested.
     """
+    if ports is None:
+        ports = build_port_map()
     tracing_provider = TracingEndpointProvider(charm, relation_name="receive-traces")
     charm.__setattr__("tracing_provider", tracing_provider)
     # Enable traces ingestion with TracingEndpointProvider, i.e. configure the receivers
@@ -291,6 +299,7 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
                     _get_tracing_receiver_url(
                         protocol=protocol,
                         tls_enabled=tls,
+                        ports=ports,
                     ),
                 )
                 for protocol in requested_tracing_protocols
@@ -299,14 +308,16 @@ def receive_traces(charm: CharmBase, tls: bool) -> Set:
     return requested_tracing_protocols
 
 
-def receive_profiles(charm: CharmBase, tls: bool) -> None:
+def receive_profiles(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None) -> None:
     """Integrate with other charms over the receive-profiles relation endpoint."""
     if not charm.unit.is_leader():
         # TODO: leader-only because of
         #  https://github.com/canonical/opentelemetry-collector-operator/issues/71
         return
+    if ports is None:
+        ports = build_port_map()
     fqdn = socket.getfqdn()
-    grpc_endpoint = f"{fqdn}:{Port.otlp_grpc.value}"
+    grpc_endpoint = f"{fqdn}:{ports[Port.otlp_grpc.name]}"
     # this charm lib exposes a holistic API, so we don't need to bind the instance
     ProfilingEndpointProvider(
         charm.model.relations["receive-profiles"], app=charm.app

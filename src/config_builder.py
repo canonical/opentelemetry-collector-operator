@@ -3,7 +3,7 @@
 import hashlib
 import logging
 from enum import Enum, unique
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Set, Union
 
 import yaml
 
@@ -52,7 +52,82 @@ class Port(int, Enum):
     """HTTP endpoint for Jaeger Thrift protocol"""
     zipkin = 9411
     """HTTP endpoint for Zipkin protocol"""
+    node_exporter = 9100
+    """HTTP endpoint for node-exporter metrics"""
 
+
+def _parse_port_override(pair: str, valid_names: Set[str]) -> tuple:
+    """Parse and validate a single port override string of the form "name=port".
+
+    Args:
+        pair: A single override string, e.g. "loki_http=3501".
+        valid_names: Set of accepted port names.
+
+    Returns:
+        A (name, value) tuple.
+
+    Raises:
+        ValueError: If the format is invalid, the name is unknown, the value
+            is not an integer, or the value is outside the 1-65535 range.
+    """
+    if "=" not in pair:
+        raise ValueError(f"Invalid format '{pair}': expected 'name=port'")
+    name, _, raw_value = pair.partition("=")
+    name = name.strip()
+    if name not in valid_names:
+        raise ValueError(f"Unknown port name '{name}'. Valid names: {', '.join(sorted(valid_names))}")
+    try:
+        value = int(raw_value.strip())
+    except ValueError:
+        raise ValueError(f"Port value for '{name}' must be an integer, got '{raw_value.strip()}'")
+    if not (1 <= value <= 65535):
+        raise ValueError(f"Port value for '{name}' must be between 1 and 65535, got {value}")
+    return name, value
+
+
+def _check_no_duplicate_ports(ports: Dict[str, int]) -> None:
+    """Verify that no two port names resolve to the same port number.
+
+    Args:
+        ports: The complete port map to validate.
+
+    Raises:
+        ValueError: If two or more port names share the same port number.
+    """
+    seen: Dict[int, str] = {}
+    for port_name, port_value in ports.items():
+        if port_value in seen:
+            raise ValueError(
+                f"Duplicate port {port_value}: assigned to both '{seen[port_value]}' and '{port_name}'"
+            )
+        seen[port_value] = port_name
+
+
+def build_port_map(overrides: str = "") -> Dict[str, int]:
+    """Build a port map from the Port enum defaults and optional overrides.
+
+    Args:
+        overrides: Comma-separated string of port overrides in the form
+            "name=port[,name=port,...]". For example: "loki_http=3501,otlp_grpc=4320".
+            An empty string returns the default port map unchanged.
+
+    Returns:
+        A dict mapping each Port name to its effective port number.
+
+    Raises:
+        ValueError: If a pair is malformed, a port name is unknown, a port
+            value is not a valid integer, is out of range (1-65535), or two
+            ports resolve to the same value.
+    """
+    ports: Dict[str, int] = {p.name: p.value for p in Port}
+    if not overrides.strip():
+        return ports
+    for pair in overrides.split(","):
+        if pair := pair.strip():
+            name, value = _parse_port_override(pair, set(ports))
+            ports[name] = value
+    _check_no_duplicate_ports(ports)
+    return ports
 
 @unique
 class Component(str, Enum):
@@ -93,6 +168,7 @@ class ConfigBuilder:
         global_scrape_timeout: str,
         receiver_tls: bool = False,
         exporter_skip_verify: bool = False,
+        ports: Optional[Dict[str, int]] = None,
     ):
         """Generate an empty OpenTelemetry collector config.
 
@@ -103,6 +179,7 @@ class ConfigBuilder:
             global_scrape_timeout: value for `scrape_timeout` in all prometheus receivers
             receiver_tls: whether to inject TLS config in all receivers on build
             exporter_skip_verify: value for `insecure_skip_verify` in all exporters
+            ports: port map produced by build_port_map(); if None the enum defaults are used
         """
         self._config = {
             "extensions": {},
@@ -122,6 +199,7 @@ class ConfigBuilder:
         self._exporter_skip_verify = exporter_skip_verify
         self._scrape_interval = global_scrape_interval
         self._scrape_timeout = global_scrape_timeout
+        self._ports: Dict[str, int] = ports if ports is not None else build_port_map()
 
     def build(self) -> str:
         """Build the final configuration and return it as a YAML string.
@@ -166,8 +244,8 @@ class ConfigBuilder:
             f"otlp/{self._hostname}",
             {
                 "protocols": {
-                    "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
-                    "grpc": {"endpoint": f"0.0.0.0:{Port.otlp_grpc.value}"},
+                    "http": {"endpoint": f"0.0.0.0:{self._ports[Port.otlp_http.name]}"},
+                    "grpc": {"endpoint": f"0.0.0.0:{self._ports[Port.otlp_grpc.name]}"},
                 },
             },
             pipelines=[
@@ -178,7 +256,7 @@ class ConfigBuilder:
         )
         # FIXME https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11780
         # Add TLS config to extensions
-        self.add_extension("health_check", {"endpoint": f"0.0.0.0:{Port.health.value}"})
+        self.add_extension("health_check", {"endpoint": f"0.0.0.0:{self._ports[Port.health.name]}"})
         self.add_telemetry(
             "logs",
             {
