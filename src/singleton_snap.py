@@ -6,7 +6,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Set
+from typing import Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,6 @@ class SnapRegistrationFile:
     PREFIX = "LCK.."
     SEPARATOR_REVISION = "--rev"
     SEPARATOR_UNIT = "__"
-    FILENAME_PATTERN = re.compile(
-        rf"^{re.escape(PREFIX)}.+{re.escape(SEPARATOR_REVISION)}\d+{re.escape(SEPARATOR_UNIT)}.+$"
-    )
 
     @property
     def filename(self):
@@ -145,22 +142,15 @@ class SingletonSnapManager:
         os.remove(self.LOCK_DIR.joinpath(registration_file.filename))
 
     @classmethod
-    def _list_registration_files(cls) -> list:
-        """List all valid SnapRegistrationFile objects in the lock directory.
-
-        Files that do not match the expected format are skipped with a debug log.
-        """
-        cls._ensure_lock_dir_exists()
-        result = []
-        for filename in os.listdir(cls.LOCK_DIR):
-            if not SnapRegistrationFile.FILENAME_PATTERN.match(filename):
-                logger.debug(
-                    "Ignoring file in singleton snap registry with unexpected format: %s",
-                    filename,
-                )
-                continue
-            result.append(SnapRegistrationFile.from_filename(filename))
-        return result
+    def _load(cls, filename) -> Optional[SnapRegistrationFile]:
+        try:
+            return SnapRegistrationFile.from_filename(filename)
+        except ValueError:
+            logger.debug(
+                "Ignoring file in singleton snap registry with unexpected format: %s",
+                filename,
+            )
+            return None
 
     @classmethod
     def get_revisions(cls, snap_name: str) -> Set[int]:
@@ -175,10 +165,14 @@ class SingletonSnapManager:
         Raises:
             OSError: If there's an error accessing the lock directory or files.
         """
+        cls._ensure_lock_dir_exists()
         revisions = set()
-        for registration_file in cls._list_registration_files():
+        for filename in os.listdir(cls.LOCK_DIR):
+            if not(registration_file := _load(filename)):
+                continue
+
             if registration_file.snap_name == snap_name:
-                path = cls.LOCK_DIR.joinpath(registration_file.filename)
+                path = cls.LOCK_DIR.joinpath(filename)
                 if os.path.exists(path):
                     revisions.add(registration_file.snap_revision)
         return revisions
@@ -202,9 +196,15 @@ class SingletonSnapManager:
             OSError: If there's an error accessing the lock directory
         """
         units = set()
-        for registration_file in cls._list_registration_files():
+        cls._ensure_lock_dir_exists()
+
+        for filename in os.listdir(cls.LOCK_DIR):
+            if not(registration_file := _load(filename)):
+                continue
+
             if registration_file.snap_name == snap_name:
                 units.add(registration_file.unit_name)
+
         return units
 
     def is_used_by_other_units(self, snap_name: str) -> bool:
