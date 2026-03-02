@@ -86,23 +86,23 @@ def test_get_revisions_duplicated():
     assert manager_one.get_revisions(snap_name) == {1}
 
 
-def test_get_revisions_ignores_unexpected_files(lock_dir):
+def test_singleton_snap_manager_ignores_unexpected_files(lock_dir, caplog):
+    import logging
+
     snap_name = "opentelemetry-collector"
     # GIVEN a SingletonSnapManager and a file with an unexpected name in the lock directory
     manager = SingletonSnapManager("unit-0")
     manager.register(snap_name, snap_revision=1)
     (lock_dir / "unexpected-file").write_text("")
-    # WHEN get_revisions is called
-    # THEN it does not raise an exception and returns only the valid revisions
-    assert manager.get_revisions(snap_name) == {1}
-
-
-def test_get_units_ignores_unexpected_files(lock_dir):
-    snap_name = "opentelemetry-collector"
-    # GIVEN a SingletonSnapManager and a file with an unexpected name in the lock directory
-    manager = SingletonSnapManager("unit-0")
-    manager.register(snap_name, snap_revision=1)
-    (lock_dir / "unexpected-file").write_text("")
-    # WHEN get_units is called
-    # THEN it does not raise an exception and returns only the valid units
-    assert manager.get_units(snap_name) == {"unit-0"}
+    # WHEN get_revisions and get_units are called
+    with caplog.at_level(logging.DEBUG):
+        revisions = manager.get_revisions(snap_name)
+        units = manager.get_units(snap_name)
+    # THEN they do not raise exceptions and return only the valid data
+    assert revisions == {1}
+    assert units == {"unit-0"}
+    # AND a DEBUG log about the unexpected format was emitted for the specific file
+    assert any(
+        "unexpected format" in record.message and "unexpected-file" in record.message
+        for record in caplog.records
+    )
