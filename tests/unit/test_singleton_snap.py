@@ -84,3 +84,25 @@ def test_get_revisions_duplicated():
     manager_two.register(snap_name, snap_revision=1)
     # THEN get_revisions displays all the registered revisions
     assert manager_one.get_revisions(snap_name) == {1}
+
+
+def test_get_revisions_ignores_unexpected_files(lock_dir):
+    snap_name = "opentelemetry-collector"
+    # GIVEN a SingletonSnapManager and a file with an unexpected name in the lock directory
+    manager = SingletonSnapManager("unit-0")
+    manager.register(snap_name, snap_revision=1)
+    (lock_dir / "unexpected-file").write_text("")
+    # WHEN get_revisions is called
+    # THEN it does not raise an exception and returns only the valid revisions
+    assert manager.get_revisions(snap_name) == {1}
+
+
+def test_get_units_ignores_unexpected_files(lock_dir):
+    snap_name = "opentelemetry-collector"
+    # GIVEN a SingletonSnapManager and a file with an unexpected name in the lock directory
+    manager = SingletonSnapManager("unit-0")
+    manager.register(snap_name, snap_revision=1)
+    (lock_dir / "unexpected-file").write_text("")
+    # WHEN get_units is called
+    # THEN it does not raise an exception and returns only the valid units
+    assert manager.get_units(snap_name) == {"unit-0"}
