@@ -168,7 +168,7 @@ class SingletonSnapManager:
         cls._ensure_lock_dir_exists()
         revisions = set()
         for filename in os.listdir(cls.LOCK_DIR):
-            if not(registration_file := _load(filename)):
+            if not(registration_file := cls._load(filename)):
                 continue
 
             if registration_file.snap_name == snap_name:
@@ -199,7 +199,7 @@ class SingletonSnapManager:
         cls._ensure_lock_dir_exists()
 
         for filename in os.listdir(cls.LOCK_DIR):
-            if not(registration_file := _load(filename)):
+            if not(registration_file := cls._load(filename)):
                 continue
 
             if registration_file.snap_name == snap_name:
