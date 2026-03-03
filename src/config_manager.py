@@ -617,7 +617,7 @@ class ConfigManager:
 
         return metrics_consumer_jobs
 
-    def add_debug_exporters(self, logs: bool=False, metrics: bool=False, traces: bool=False):
+    def add_debug_exporters(self, logs: bool = False, metrics: bool = False, traces: bool = False):
         """Add debug exporters for enabled pipelines.
 
         We set `use_internal_logger` to False to keep the debug output separate from the
@@ -628,6 +628,16 @@ class ConfigManager:
             self.config.add_component(
                 Component.exporter,
                 "debug/juju-config-enabled",
-                {"verbosity": "normal", "use_internal_logger": False},
-                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in pipelines.items() if enabled],
+                {
+                    "verbosity": "normal",
+                    "use_internal_logger": False,
+                    # We disable the sending_queue for now, but this is fixed upstream in rocks
+                    # >0.138.0. Remove this config once we bumped our otelcol rock.
+                    "debug": {"sending_queue": {"enabled": False}},
+                },
+                pipelines=[
+                    f"{pipeline}/{self._unit_name}"
+                    for pipeline, enabled in pipelines.items()
+                    if enabled
+                ],
             )
