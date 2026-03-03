@@ -633,7 +633,7 @@ class ConfigManager:
                     "use_internal_logger": False,
                     # We disable the sending_queue for now, but this is fixed upstream in rocks
                     # >0.138.0. Remove this config once we bumped our otelcol rock.
-                    "debug": {"sending_queue": {"enabled": False}},
+                    "sending_queue": {"enabled": False},
                 },
                 pipelines=[
                     f"{pipeline}/{self._unit_name}"
