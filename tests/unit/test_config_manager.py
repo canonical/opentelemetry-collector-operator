@@ -8,7 +8,7 @@ import copy
 import pytest
 
 from src.config_manager import ConfigManager
-from src.otlp import OtlpEndpoint
+from charmlibs.otlp import OtlpEndpoint
 
 
 def test_add_log_forwarding():

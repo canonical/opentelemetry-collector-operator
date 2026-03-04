@@ -10,7 +10,7 @@ from cosl.utils import LZMABase64
 from ops.testing import Model, Relation, State
 
 from src.integrations import send_otlp
-from src.otlp import OtlpConsumerAppData, OtlpEndpoint, RulesModel
+from charmlibs.otlp import OtlpConsumerAppData, OtlpEndpoint, RulesModel
 
 ALL_PROTOCOLS = ["grpc", "http"]
 ALL_TELEMETRIES = ["logs", "metrics", "traces"]

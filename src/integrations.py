@@ -56,7 +56,7 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
-from otlp import OtlpConsumer, OtlpEndpoint
+from charmlibs.otlp import OtlpConsumer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.11'",
@@ -249,6 +249,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/1d/ec1a60bd1a10daa292d3cd6bb0b359a81607154fb8165f3ec95fe003b85c/cffi-2.0.0-cp314-cp314t-win32.whl", hash = "sha256:1fc9ea04857caf665289b7a75923f2c6ed559b8298a1b8c49e59f7dd95c8481e", size = 180487, upload-time = "2025-09-08T23:23:40.423Z" },
     { url = "https://files.pythonhosted.org/packages/bf/41/4c1168c74fac325c0c8156f04b6749c8b6a8f405bbf91413ba088359f60d/cffi-2.0.0-cp314-cp314t-win_amd64.whl", hash = "sha256:d68b6cef7827e8641e8ef16f4494edda8b36104d79773a334beaa1e3521430f6", size = 191726, upload-time = "2025-09-08T23:23:41.742Z" },
     { url = "https://files.pythonhosted.org/packages/ae/3a/dbeec9d1ee0844c679f6bb5d6ad4e9f198b1224f4e7a32825f47f6192b0c/cffi-2.0.0-cp314-cp314t-win_arm64.whl", hash = "sha256:0a1527a803f0a659de1af2e1fd700213caba79377e27e4693648c2923da066f9", size = 184195, upload-time = "2025-09-08T23:23:43.004Z" },
+]
+
+[[package]]
+name = "charmlibs-interfaces-otlp"
+version = "0.1.0"
+source = { git = "https://github.com/sinapah/charmlibs?subdirectory=interfaces%2Fotlp&branch=feat%2Fotlp-lib#6b78ae6ec9d6f5230f64310d0bac900368bae54a" }
+dependencies = [
+    { name = "cosl" },
+    { name = "requests" },
 ]
 
 [[package]]
@@ -1099,6 +1108,7 @@ name = "opentelemetry-collector"
 version = "0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "charmlibs-interfaces-otlp" },
     { name = "charmlibs-pathops" },
     { name = "cosl" },
     { name = "cryptography" },
@@ -1126,6 +1136,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "charmlibs-interfaces-otlp", git = "https://github.com/sinapah/charmlibs?subdirectory=interfaces%2Fotlp&branch=feat%2Fotlp-lib" },
     { name = "charmlibs-pathops" },
     { name = "codespell", marker = "extra == 'dev'" },
     { name = "cosl" },
