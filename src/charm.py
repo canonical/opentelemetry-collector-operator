@@ -128,6 +128,7 @@ def event() -> str:
     """
     return os.environ.get("JUJU_HOOK_NAME") or os.environ.get("JUJU_ACTION_NAME", "")
 
+
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """Check whether mandatory relations are in place.
 
@@ -145,13 +146,14 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
                 {"cloud-config"},  # or
                 {"send-remote-write"},  # or
                 {"send-loki-logs"},  # or
-                {"grafana-dashboards-provider"},
-                {"send-otlp"},
+                {"grafana-dashboards-provider"},  # or
+                {"send-otlp"},  # or
             ],
             "juju-info": [  # must be paired with:
                 {"cloud-config"},  # or
                 {"send-remote-write"},  # or
-                {"send-loki-logs"},
+                {"send-loki-logs"},  # or
+                {"send-otlp"},  # or
             ],
         }
     )
@@ -494,7 +496,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         # If the config file or any cert has changed, a change in the hash
         # will trigger a restart
-        hash_file = self.charm_dir.absolute()/"config_hash"
+        hash_file = self.charm_dir.absolute() / "config_hash"
         old_hash = ""
         if hash_file.exists():
             old_hash = hash_file.read_text()

@@ -56,7 +56,12 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
-from otlp import OtlpConsumer, OtlpEndpoint
+from otlp import (
+    DEFAULT_CONSUMER_RELATION_NAME,
+    DEFAULT_PROVIDER_RELATION_NAME,
+    OtlpConsumer,
+    OtlpEndpoint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -447,15 +452,47 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
     """Instantiate the OtlpConsumer.
 
     This provides otelcol with the remote's OTLP endpoint for each relation.
+
+    The bundled rule files from the src/*_rules directories are copied to a
+    local path (*_RULES_DEST_PATH directories) within the charm's filesystem.
+
+    The `otlp_consumer.publish` then publishes them to the databag. See the
+    publish method's docstring of the otlp_consumer to understand what rules
+    are published to the databag and the mechanism to do so.
+
+    Since these paths are wiped on every hook, they can be used as a source of
+    truth for the current state of rules for the library to publish to the
+    databag.
+
+    This function assumes that receive_otlp is called before, so that the
+    rules from related OTLP consumer charms are already gathered and saved to
+    disk, ready to be published to the databag.
     """
+    charm_root = charm.charm_dir.absolute()
     otlp_consumer = OtlpConsumer(
         charm,
         protocols=["grpc", "http"],
         telemetries=["logs", "metrics"],
+        loki_rules_path=charm_root.joinpath(LOKI_RULES_DEST_PATH).as_posix(),
+        prometheus_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
     )
     # TODO: We can remove this since the lib doesn't observe events
     charm.__setattr__("otlp_consumer", otlp_consumer)
-    return otlp_consumer.get_remote_otlp_endpoints()
+
+    # Rules local to this charm
+    shutil.copytree(
+        charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+    shutil.copytree(
+        charm_root.joinpath(*METRICS_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+
+    otlp_consumer.publish()
+    return otlp_consumer.endpoints
 
 
 # TODO: Luca: move this into the GrafanCloudIntegrator library
