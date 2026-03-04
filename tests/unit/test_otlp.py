@@ -9,6 +9,7 @@ import pytest
 from cosl.utils import LZMABase64
 from ops.testing import Model, Relation, State
 
+from src.integrations import send_otlp
 from src.otlp import OtlpConsumerAppData, OtlpEndpoint, RulesModel
 
 ALL_PROTOCOLS = ["grpc", "http"]
@@ -89,7 +90,7 @@ def test_send_otlp(ctx):
 
     # AND WHEN any event executes the reconciler
     with ctx(ctx.on.update_status(), state=state) as mgr:
-        remote_endpoints = mgr.charm.otlp_consumer.endpoints
+        remote_endpoints = send_otlp(mgr.charm)
 
     # THEN the returned endpoints are filtered accordingly
     assert {k: v.model_dump() for k, v in remote_endpoints.items()} == {

@@ -56,12 +56,7 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
-from otlp import (
-    DEFAULT_CONSUMER_RELATION_NAME,
-    DEFAULT_PROVIDER_RELATION_NAME,
-    OtlpConsumer,
-    OtlpEndpoint,
-)
+from otlp import OtlpConsumer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -476,8 +471,6 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
         loki_rules_path=charm_root.joinpath(LOKI_RULES_DEST_PATH).as_posix(),
         prometheus_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
     )
-    # TODO: We can remove this since the lib doesn't observe events
-    charm.__setattr__("otlp_consumer", otlp_consumer)
 
     # Rules local to this charm
     shutil.copytree(
