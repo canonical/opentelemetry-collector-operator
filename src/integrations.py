@@ -28,8 +28,8 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from charms.pyroscope_coordinator_k8s.v0.profiling import (
-    ProfilingEndpointRequirer,
     ProfilingEndpointProvider,
+    ProfilingEndpointRequirer,
 )
 from charms.tempo_coordinator_k8s.v0.tracing import (
     ReceiverProtocol,
@@ -56,6 +56,7 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
+from charmlibs.otlp import OtlpConsumer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -233,8 +234,6 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
         peer_relation_name="peers",
     )
     charm.__setattr__("remote_write", remote_write)
-    # TODO: add alerts from remote write
-    # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
     # TODO: Luca: probably don't need this anymore
     remote_write.reload_alerts()
     return remote_write.endpoints
@@ -453,6 +452,51 @@ def forward_dashboards(charm: CharmBase):
     # TODO: Do we need to implement dashboard status changed logic?
     #   This propagates Grafana's errors to the charm which provided the dashboard
     # grafana_dashboards_provider._reinitialize_dashboard_data(inject_dropdowns=False)
+
+
+def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
+    """Instantiate the OtlpConsumer.
+
+    This provides otelcol with the remote's OTLP endpoint for each relation.
+
+    The bundled rule files from the src/*_rules directories are copied to a
+    local path (*_RULES_DEST_PATH directories) within the charm's filesystem.
+
+    The `otlp_consumer.publish` then publishes them to the databag. See the
+    publish method's docstring of the otlp_consumer to understand what rules
+    are published to the databag and the mechanism to do so.
+
+    Since these paths are wiped on every hook, they can be used as a source of
+    truth for the current state of rules for the library to publish to the
+    databag.
+
+    This function assumes that receive_otlp is called before, so that the
+    rules from related OTLP consumer charms are already gathered and saved to
+    disk, ready to be published to the databag.
+    """
+    charm_root = charm.charm_dir.absolute()
+    otlp_consumer = OtlpConsumer(
+        charm,
+        protocols=["grpc", "http"],
+        telemetries=["logs", "metrics"],
+        loki_rules_path=charm_root.joinpath(LOKI_RULES_DEST_PATH).as_posix(),
+        prometheus_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
+    )
+
+    # Rules local to this charm
+    shutil.copytree(
+        charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+    shutil.copytree(
+        charm_root.joinpath(*METRICS_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+
+    otlp_consumer.publish()
+    return otlp_consumer.endpoints
 
 
 # TODO: Luca: move this into the GrafanCloudIntegrator library

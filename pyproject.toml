@@ -17,6 +17,7 @@ dependencies = [
   "charmlibs-pathops",
   "sh",
   "tenacity",
+  "charmlibs-interfaces-otlp",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +35,9 @@ dev = [
   "ops[testing]",
   "jubilant",
 ]
+
+[tool.uv.sources]
+charmlibs-interfaces-otlp = { git = "https://github.com/sinapah/charmlibs", subdirectory = "interfaces/otlp", branch = "feat/otlp-lib" }
 
 # Testing tools configuration
 [tool.coverage.run]
