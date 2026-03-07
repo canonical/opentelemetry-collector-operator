@@ -1,11 +1,14 @@
 """File-based registration for singleton snap operations."""
 
 import errno
+import logging
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Set
+from typing import Optional, Set
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -139,6 +142,17 @@ class SingletonSnapManager:
         os.remove(self.LOCK_DIR.joinpath(registration_file.filename))
 
     @classmethod
+    def _load(cls, filename) -> Optional[SnapRegistrationFile]:
+        try:
+            return SnapRegistrationFile.from_filename(filename)
+        except ValueError:
+            logger.debug(
+                "Ignoring file in singleton snap registry with unexpected format: %s",
+                filename,
+            )
+            return None
+
+    @classmethod
     def get_revisions(cls, snap_name: str) -> Set[int]:
         """Get all revisions of a snap currently registered with any unit.
 
@@ -154,7 +168,9 @@ class SingletonSnapManager:
         cls._ensure_lock_dir_exists()
         revisions = set()
         for filename in os.listdir(cls.LOCK_DIR):
-            registration_file = SnapRegistrationFile.from_filename(filename)
+            if not(registration_file := cls._load(filename)):
+                continue
+
             if registration_file.snap_name == snap_name:
                 path = cls.LOCK_DIR.joinpath(filename)
                 if os.path.exists(path):
@@ -183,7 +199,9 @@ class SingletonSnapManager:
         cls._ensure_lock_dir_exists()
 
         for filename in os.listdir(cls.LOCK_DIR):
-            registration_file = SnapRegistrationFile.from_filename(filename)
+            if not(registration_file := cls._load(filename)):
+                continue
+
             if registration_file.snap_name == snap_name:
                 units.add(registration_file.unit_name)
 
