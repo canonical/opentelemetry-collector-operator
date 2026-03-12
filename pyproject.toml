@@ -68,6 +68,7 @@ pythonPlatform = "All"
 asyncio_mode = "auto"
 addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
 
+
 [tool.codespell]
 skip = ".git,.tox,build,venv*"
 ignore-words-list = "assertIn"
