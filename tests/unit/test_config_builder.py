@@ -377,7 +377,7 @@ def test_build_port_map_invalid_input_raises(overrides, expected_error):
 def test_config_builder_accepts_port_overrides():
     """ConfigBuilder uses the provided port map in add_default_config."""
     # GIVEN a port map with overridden ports
-    port_map = build_port_map("otlp_http=4400,otlp_grpc=4401,health=13200")
+    port_map = build_port_map("otlp_http=4400,otlp_grpc=4401,health=13200,metrics=8889")
     # WHEN creating a ConfigBuilder with those ports and building the config
     config = ConfigBuilder("unit/0", "host0", "1m", "10s", ports=port_map)
     config.add_default_config()
@@ -388,3 +388,6 @@ def test_config_builder_accepts_port_overrides():
     assert str(4401) in otlp_receiver["protocols"]["grpc"]["endpoint"]
     # AND the health_check extension uses the overridden port
     assert str(13200) in built["extensions"]["health_check"]["endpoint"]
+    # AND the internal telemetry metrics endpoint uses the overridden port
+    prometheus_reader = built["service"]["telemetry"]["metrics"]["readers"][0]["pull"]["exporter"]["prometheus"]
+    assert prometheus_reader["port"] == 8889
