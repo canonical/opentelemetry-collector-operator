@@ -9,7 +9,7 @@ import yaml
 from config_builder import Component, ConfigBuilder, Port
 from constants import FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
-from charmlibs.otlp import OtlpEndpoint
+from charmlibs.interfaces.otlp import OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 

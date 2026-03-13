@@ -56,7 +56,7 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
-from charmlibs.otlp import OtlpConsumer, OtlpEndpoint
+from charmlibs.interfaces.otlp import OtlpRequirer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -444,7 +444,7 @@ def forward_dashboards(charm: CharmBase):
 
 
 def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
-    """Instantiate the OtlpConsumer.
+    """Instantiate the OtlpRequirer.
 
     This provides otelcol with the remote's OTLP endpoint for each relation.
 
@@ -464,7 +464,7 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
     disk, ready to be published to the databag.
     """
     charm_root = charm.charm_dir.absolute()
-    otlp_consumer = OtlpConsumer(
+    otlp_consumer = OtlpRequirer(
         charm,
         protocols=["grpc", "http"],
         telemetries=["logs", "metrics"],

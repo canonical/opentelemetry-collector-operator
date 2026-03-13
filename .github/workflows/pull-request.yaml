@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - track/**
+      - feat/otlp-rules
 
 jobs:
   pull-request:
