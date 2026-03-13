@@ -6,19 +6,12 @@
 import json
 
 import pytest
+from charmlibs.interfaces.otlp import OtlpEndpoint
 from cosl.utils import LZMABase64
 from ops.testing import Model, Relation, State
 
 from src.integrations import send_otlp
-from charmlibs.interfaces.otlp import OtlpEndpoint
 
-ALL_PROTOCOLS = ["grpc", "http"]
-ALL_TELEMETRIES = ["logs", "metrics", "traces"]
-EMPTY_CONSUMER = {
-    "rules": json.dumps({"logql": {}, "promql": {}}),
-    "metadata": json.dumps({}),
-}
-SEND_OTLP = Relation("send-otlp", remote_app_data={"endpoints": "[]"})
 OTELCOL_METADATA = {
     "application": "otelcol",
     "charm_name": "opentelemetry-collector",
@@ -27,12 +20,13 @@ OTELCOL_METADATA = {
     "unit": "otelcol/0",
 }
 
+
 def _decompress(rules: str) -> dict:
     return json.loads(LZMABase64.decompress(rules))
 
 
 def test_send_otlp(ctx):
-    # GIVEN otelcol supports (defined by OtlpProvider) a subset of OTLP protocols and telemetries
+    # GIVEN otelcol supports (defined by OtlpRequirer) a subset of OTLP protocols and telemetries
     # * a remote app provides multiple OtlpEndpoints
     remote_app_data_1 = {
         "endpoints": json.dumps(
@@ -128,9 +122,8 @@ def test_forwarded_rules_have_topology(ctx):
     """Test that otelcol adds its own topology metadata in the databag.
 
     This test ensures that rules are always labeled even if labels are not
-    present in the upstream rules already. This is easier than checking if
-    rules are labeled in the send-otlp databag since cos-lib tests the rest of
-    the labeling rules feature.
+    present in the upstream rules already. `cos-lib` tests the rest of the
+    labeling rules feature.
     """
     # GIVEN multiple send-otlp relations
     sender_1 = Relation("send-otlp", remote_app_data={"endpoints": "[]"})

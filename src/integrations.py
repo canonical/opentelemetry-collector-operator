@@ -462,20 +462,16 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
     The bundled rule files from the src/*_rules directories are copied to a
     local path (*_RULES_DEST_PATH directories) within the charm's filesystem.
 
-    The `otlp_consumer.publish` then publishes them to the databag. See the
-    publish method's docstring of the otlp_consumer to understand what rules
+    The `otlp_requirer.publish` then publishes them to the databag. See the
+    publish method's docstring of the otlp_requirer to understand what rules
     are published to the databag and the mechanism to do so.
 
     Since these paths are wiped on every hook, they can be used as a source of
     truth for the current state of rules for the library to publish to the
     databag.
-
-    This function assumes that receive_otlp is called before, so that the
-    rules from related OTLP consumer charms are already gathered and saved to
-    disk, ready to be published to the databag.
     """
     charm_root = charm.charm_dir.absolute()
-    otlp_consumer = OtlpRequirer(
+    otlp_requirer = OtlpRequirer(
         charm,
         protocols=["grpc", "http"],
         telemetries=["logs", "metrics"],
@@ -495,8 +491,8 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
         dirs_exist_ok=True,
     )
 
-    otlp_consumer.publish()
-    return otlp_consumer.endpoints
+    otlp_requirer.publish()
+    return otlp_requirer.endpoints
 
 
 # TODO: Luca: move this into the GrafanCloudIntegrator library
