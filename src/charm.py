@@ -23,7 +23,7 @@ from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 import integrations
-from config_builder import Component
+from config_builder import Component, Port, build_port_map
 from config_manager import ConfigManager
 from constants import (
     CERT_DIR,
@@ -229,6 +229,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 )
                 return
 
+        # Parse port overrides from Juju config
+        try:
+            port_map = build_port_map(cast(str, self.config.get("ports")))
+        except ValueError as e:
+            self.unit.status = BlockedStatus(f"Invalid ports config: {e}")
+            return
+
         # Create the config manager
         config_manager = ConfigManager(
             unit_name=self.unit.name,
@@ -239,13 +246,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             insecure_skip_verify=cast(bool, self.config.get("tls_insecure_skip_verify")),
             queue_size=cast(int, self.config.get("queue_size")),
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
+            ports=port_map,
         )
 
         # Self-mon logging
         self._configure_logrotate()
 
         # Tracing setup
-        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready())
+        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready(), ports=port_map)
         config_manager.add_traces_ingestion(requested_tracing_protocols)
         # Add default processors to traces
         config_manager.add_traces_processing(
@@ -292,7 +300,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                             "static_configs": [
                                 {
                                     "targets": [
-                                        "0.0.0.0:9100"  # TODO: extract this node-exporter port somewhere
+                                        f"0.0.0.0:{port_map[Port.node_exporter.name]}"
                                     ],
                                     "labels": {
                                         "instance": socket.getfqdn(),
@@ -365,6 +373,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         "juju_model": topology.model,
                         "juju_model_uuid": topology.model_uuid,
                         "snap_name": fstab_entry.owner,
+                        "instance": socket.getfqdn(),
                     },
                 ),
                 pipelines=[f"logs/{self.unit.name}"],
@@ -408,7 +417,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         #  making the right choice in this tradeoff.
         if self._has_incoming_profiles:
             config_manager.add_profile_ingestion()
-            integrations.receive_profiles(self, tls=is_tls_ready())
+            integrations.receive_profiles(self, tls=is_tls_ready(), ports=port_map)
         if profiling_endpoints := integrations.send_profiles(self):
             config_manager.add_profile_forwarding(
                 profiling_endpoints,
@@ -417,7 +426,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             feature_gates = "service.profilesSupport"
 
         # Logs setup
-        integrations.receive_loki_logs(self, tls=is_tls_ready())
+        integrations.receive_loki_logs(self, tls=is_tls_ready(), ports=port_map)
         loki_endpoints = integrations.send_loki_logs(self)
         if self._has_incoming_logs_relation:
             config_manager.add_log_ingestion()
@@ -537,7 +546,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
                 return
 
-        self._configure_node_exporter_collectors()
+        self._configure_node_exporter(port_map[Port.node_exporter.name])
         self.unit.status = ActiveStatus()
 
         # Mandatory relation pairs
@@ -631,11 +640,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # TODO: Luca if the snap is used by other units, we should probably `ensure`
         # that the max_revision is installed instead.
 
-    def _configure_node_exporter_collectors(self):
-        """Configure the node-exporter snap collectors."""
+    def _configure_node_exporter(self, port: int):
+        """Configure the node-exporter snap."""
         configs = {
-            "collectors": " ".join(list(NODE_EXPORTER_ENABLED_COLLECTORS)),
-            "no-collectors": " ".join(list(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "collectors": " ".join(sorted(NODE_EXPORTER_ENABLED_COLLECTORS)),
+            "no-collectors": " ".join(sorted(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "web.listen-address": f":{port}",
         }
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
