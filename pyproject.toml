@@ -36,9 +36,6 @@ dev = [
   "jubilant",
 ]
 
-[tool.uv.sources]
-charmlibs-interfaces-otlp = { git = "https://github.com/sinapah/charmlibs", subdirectory = "interfaces/otlp", branch = "feat/otlp-lib" }
-
 # Testing tools configuration
 [tool.coverage.run]
 branch = true

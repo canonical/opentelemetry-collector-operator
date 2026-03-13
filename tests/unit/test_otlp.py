@@ -10,7 +10,7 @@ from cosl.utils import LZMABase64
 from ops.testing import Model, Relation, State
 
 from src.integrations import send_otlp
-from charmlibs.otlp import OtlpConsumerAppData, OtlpEndpoint, RulesModel
+from charmlibs.interfaces.otlp import OtlpEndpoint
 
 ALL_PROTOCOLS = ["grpc", "http"]
 ALL_TELEMETRIES = ["logs", "metrics", "traces"]
@@ -116,12 +116,10 @@ def test_forwarding_otlp_rule_counts(ctx, forward_rules):
     for relation in list(state_out.relations):
         if relation.endpoint == "send-otlp":
             assert (decompressed := _decompress(relation.local_app_data.get("rules")))
-            databag = OtlpConsumerAppData.model_validate({"rules": decompressed, "metadata": {}})
 
             # THEN bundled rules are included in the forwarded databag
-            assert isinstance(databag.rules, RulesModel)
-            logql_group_names = {r.get("name") for r in databag.rules.logql.get("groups", [])}
-            promql_group_names = {r.get("name") for r in databag.rules.promql.get("groups", [])}
+            logql_group_names = {r.get("name") for r in decompressed["logql"].get("groups", [])}
+            promql_group_names = {r.get("name") for r in decompressed["promql"].get("groups", [])}
             assert not logql_group_names
             assert "otelcol_f4d59020_otelcol_Exporter_alerts" in promql_group_names
 

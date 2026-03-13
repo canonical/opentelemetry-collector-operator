@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.11'",
@@ -254,10 +254,14 @@ wheels = [
 [[package]]
 name = "charmlibs-interfaces-otlp"
 version = "0.1.0"
-source = { git = "https://github.com/sinapah/charmlibs?subdirectory=interfaces%2Fotlp&branch=feat%2Fotlp-lib#6b78ae6ec9d6f5230f64310d0bac900368bae54a" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cosl" },
     { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/7b/e655137327b1e51916da281d52a59dae80ecbca530788170a86683d0db76/charmlibs_interfaces_otlp-0.1.0.tar.gz", hash = "sha256:300f111ff084de4394df785b800d571ef0a73074a23fca323cd2273047e0b294", size = 51665, upload-time = "2026-03-13T16:38:29.3Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/54/d894f788feefa40e3e09de6affeb6bcb0bb2393d74fea31cfe4990cdc0fa/charmlibs_interfaces_otlp-0.1.0-py3-none-any.whl", hash = "sha256:a4c94dd2a351e7cbd37f5c883a9441a94cb86d03ba924a5e84cf3dfa54c413d8", size = 9733, upload-time = "2026-03-13T16:38:27.963Z" },
 ]
 
 [[package]]
@@ -381,7 +385,7 @@ wheels = [
 
 [[package]]
 name = "cosl"
-version = "1.5.0"
+version = "1.6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ops" },
@@ -390,9 +394,9 @@ dependencies = [
     { name = "tenacity" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/af/692908f79b4be658d4ac7d83a87d58feeb2951c9fd23096c8fe259bd8a6e/cosl-1.5.0.tar.gz", hash = "sha256:cf650495e355081b44401ca7fad0d6f307f9cb2251370fc0c8ad1c7cc8ac12c3", size = 48770, upload-time = "2026-03-03T13:49:14.308Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/98/1a1f8aa7965ede9abfeb649b83375baf4e2f523778f90b841281cbe3603a/cosl-1.6.1.tar.gz", hash = "sha256:f96a6a978dfdee4a3b460cc48fa18514663bbc1c3a4f323315e3dbe3e6a2a596", size = 149512, upload-time = "2026-03-09T21:44:46.744Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/e0/a5ec5bab38a0b4b5107c6d9af304c8eb1662e40e31298a03edf49a8d73f5/cosl-1.5.0-py3-none-any.whl", hash = "sha256:b281eb343553bc25dae6401d54e4d0bd7894bdff6ad240ca889d313f9f044e52", size = 37912, upload-time = "2026-03-03T13:49:13.137Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/8f/3ca0f470fbc7b26ed33b5fe5815e38b6a628b8bb4df961924cae38755c46/cosl-1.6.1-py3-none-any.whl", hash = "sha256:12db85a81317c5b056171642098be91c09e78e04875ed1262b99681dea43b533", size = 37800, upload-time = "2026-03-09T21:44:45.373Z" },
 ]
 
 [[package]]
@@ -1136,7 +1140,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "charmlibs-interfaces-otlp", git = "https://github.com/sinapah/charmlibs?subdirectory=interfaces%2Fotlp&branch=feat%2Fotlp-lib" },
+    { name = "charmlibs-interfaces-otlp" },
     { name = "charmlibs-pathops" },
     { name = "codespell", marker = "extra == 'dev'" },
     { name = "cosl" },
