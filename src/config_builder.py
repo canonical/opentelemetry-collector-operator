@@ -268,7 +268,24 @@ class ConfigBuilder:
                 "output_paths": [INTERNAL_TELEMETRY_LOG_FILE],
             },
         )
-        self.add_telemetry("metrics", {"level": "normal"})
+        self.add_telemetry(
+            "metrics",
+            {
+                "level": "normal",
+                "readers": [
+                    {
+                        "pull": {
+                            "exporter": {
+                                "prometheus": {
+                                    "host": "0.0.0.0",
+                                    "port": self._ports[Port.metrics.name],
+                                }
+                            }
+                        }
+                    }
+                ],
+            },
+        )
 
     def add_component(
         self,
