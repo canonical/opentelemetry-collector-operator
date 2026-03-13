@@ -136,9 +136,9 @@ requires:
     interface: otlp
     optional: true
     description: |
-      Send OTLP data to an OTLP server by agregating all supported OTLP endpoints offered by an
-      OTLP server. OTLP provider. If multiple endpoints are supported, then the one with the most
-      modern protocol is chosen e.g., `gRPC` over `HTTP`.
+      Send OTLP data to an OTLP server by agregating all supported OTLP endpoints offered by the
+      server. If multiple endpoints are supported, then the one with the most modern protocol is
+      chosen e.g., `gRPC` over `HTTP`.
       
       This endpoint currently supports:
         - gRPC for ["logs", "metrics"]
