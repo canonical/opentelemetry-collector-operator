@@ -2,12 +2,14 @@
 
 import logging
 from typing import Any, Dict, List, Literal, Optional, Set
+from urllib.parse import urlparse
 
 import yaml
 
-from config_builder import Component, ConfigBuilder, Port
+from config_builder import Component, ConfigBuilder, Port, build_port_map
 from constants import FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
+from charmlibs.interfaces.otlp import OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +116,7 @@ class ConfigManager:
         insecure_skip_verify: bool = False,
         queue_size: int = 1000,
         max_elapsed_time_min: int = 5,
+        ports: Optional[Dict[str, int]] = None,
     ):
         """Generate a default OpenTelemetry collector ConfigManager.
 
@@ -128,12 +131,14 @@ class ConfigManager:
             insecure_skip_verify: value for `insecure_skip_verify` in all exporters
             queue_size: size of the sending queue for exporters
             max_elapsed_time_min: maximum elapsed time for retrying failed requests in minutes
+            ports: port map produced by build_port_map(); if None the enum defaults are used
         """
         self._unit_name = unit_name
         self._hostname = hostname
         self._insecure_skip_verify = insecure_skip_verify
         self._queue_size = queue_size
         self._max_elapsed_time_min = max_elapsed_time_min
+        self._ports: Dict[str, int] = ports if ports is not None else build_port_map()
         self.config = ConfigBuilder(
             unit_name=self._unit_name,
             hostname=self._hostname,
@@ -141,9 +146,14 @@ class ConfigManager:
             global_scrape_timeout=global_scrape_timeout,
             receiver_tls=receiver_tls,
             exporter_skip_verify=insecure_skip_verify,
+            ports=self._ports,
         )
         self.config.add_default_config()
         self.config.add_extension("file_storage", {"directory": FILE_STORAGE_DIRECTORY})
+
+    def _port(self, port: Port) -> int:
+        """Return the effective port number for the given Port, respecting any overrides."""
+        return self._ports[port.name]
 
     @property
     def sending_queue_config(self) -> Dict[str, Any]:
@@ -187,7 +197,7 @@ class ConfigManager:
             {
                 "protocols": {
                     "http": {
-                        "endpoint": f"0.0.0.0:{Port.loki_http.value}",
+                        "endpoint": f"0.0.0.0:{self._port(Port.loki_http)}",
                     },
                 },
                 "use_incoming_timestamp": True,
@@ -247,7 +257,7 @@ class ConfigManager:
                         "action": "upsert",
                         "key": "loki.attribute.labels",
                         # These labels are set in `_scrape_configs` of the `v1.loki_push_api` lib
-                        "value": "container, job, filename, juju_application, juju_charm, juju_model, juju_model_uuid, juju_unit, snap_name, path",
+                        "value": "container, job, filename, juju_application, juju_charm, juju_model, juju_model_uuid, juju_unit, snap_name, path, instance",
                     },
                 ]
             },
@@ -261,8 +271,8 @@ class ConfigManager:
             f"otlp/{self._hostname}",
             {
                 "protocols": {
-                    "http": {"endpoint": f"0.0.0.0:{Port.otlp_http.value}"},
-                    "grpc": {"endpoint": f"0.0.0.0:{Port.otlp_grpc.value}"},
+                    "http": {"endpoint": f"0.0.0.0:{self._port(Port.otlp_http)}"},
+                    "grpc": {"endpoint": f"0.0.0.0:{self._port(Port.otlp_grpc)}"},
                 },
             },
             pipelines=["profiles"],
@@ -318,7 +328,7 @@ class ConfigManager:
                             "scrape_interval": "60s",
                             "static_configs": [
                                 {
-                                    "targets": [f"0.0.0.0:{Port.metrics.value}"],
+                                    "targets": [f"0.0.0.0:{self._port(Port.metrics)}"],
                                     "labels": labels,
                                 }
                             ],
@@ -375,8 +385,40 @@ class ConfigManager:
                 pipelines=[f"metrics/{self._unit_name}"],
             )
 
-        # TODO Receive alert rules via remote write
-        # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
+    def add_otlp_forwarding(self, relation_map: Dict[int, OtlpEndpoint]):
+        """Configure sending OTLP telemetry to an OTLP endpoint.
+
+        There are 2 different OTLP exporters for their respective protocols: gRPC and HTTP. If a
+        gRPC endpoint is provided, it is preferred over the HTTP equivalent.
+
+        Telemetry is sent to all pipelines since OTLP supports all and its computationally
+        inexpensive unless a receiver is connected and receiving telemetry.
+
+        Args:
+            relation_map: a mapping of relation ID to a mapping of unit name to OtlpEndpoint
+        """
+        # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
+        # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter
+
+        if not relation_map:
+            return
+
+        # Exporter config
+        for rel_id, otlp_endpoint in relation_map.items():
+            insecure = urlparse(otlp_endpoint.endpoint).scheme == "http"
+            tls_config: Dict[str, Any] = {
+                "insecure": insecure,
+                "insecure_skip_verify": self._insecure_skip_verify,
+            }
+            exporter_type = 'otlp' if otlp_endpoint.protocol == 'grpc' else 'otlphttp'
+            self.config.add_component(
+                Component.exporter,
+                f"{exporter_type}/rel-{rel_id}/{self._unit_name}",
+                {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
+                pipelines=[
+                    f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries
+                ],
+            )
 
     def add_traces_ingestion(
         self,
@@ -406,7 +448,7 @@ class ConfigManager:
             self.config.add_component(
                 Component.receiver,
                 f"zipkin/receive-traces/{self._unit_name}",
-                {"endpoint": f"0.0.0.0:{Port.zipkin.value}"},
+                {"endpoint": f"0.0.0.0:{self._port(Port.zipkin)}"},
                 pipelines=[f"traces/{self._unit_name}"],
             )
         if (
@@ -416,11 +458,11 @@ class ConfigManager:
             jaeger_config = {"protocols": {}}
             if "jaeger_grpc" in requested_tracing_protocols:
                 jaeger_config["protocols"].update(
-                    {"grpc": {"endpoint": f"0.0.0.0:{Port.jaeger_grpc.value}"}}
+                    {"grpc": {"endpoint": f"0.0.0.0:{self._port(Port.jaeger_grpc)}"}}
                 )
             if "jaeger_thrift_http" in requested_tracing_protocols:
                 jaeger_config["protocols"].update(
-                    {"thrift_http": {"endpoint": f"0.0.0.0:{Port.jaeger_thrift_http.value}"}}
+                    {"thrift_http": {"endpoint": f"0.0.0.0:{self._port(Port.jaeger_thrift_http)}"}}
                 )
             self.config.add_component(
                 Component.receiver,
@@ -609,7 +651,7 @@ class ConfigManager:
 
         return metrics_consumer_jobs
 
-    def add_debug_exporters(self, logs: bool=False, metrics: bool=False, traces: bool=False):
+    def add_debug_exporters(self, logs: bool = False, metrics: bool = False, traces: bool = False):
         """Add debug exporters for enabled pipelines.
 
         We set `use_internal_logger` to False to keep the debug output separate from the
@@ -621,5 +663,9 @@ class ConfigManager:
                 Component.exporter,
                 "debug/juju-config-enabled",
                 {"verbosity": "normal", "use_internal_logger": False},
-                pipelines=[f"{pipeline}/{self._unit_name}" for pipeline, enabled in pipelines.items() if enabled],
+                pipelines=[
+                    f"{pipeline}/{self._unit_name}"
+                    for pipeline, enabled in pipelines.items()
+                    if enabled
+                ],
             )

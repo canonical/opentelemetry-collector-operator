@@ -1,9 +1,11 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 """Miscellaneous ops-independent utilities."""
 
 class InfoGauge:
     """Helper class for rendering info gauges."""
 
-    def __init__(self, *, name: str, help_: str):
         self.name = name
         self.help_ = help_
         self.series: list[dict[str, str]] = []
