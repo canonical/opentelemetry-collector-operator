@@ -6,6 +6,7 @@
 class InfoGauge:
     """Helper class for rendering info gauges."""
 
+    def __init__(self, name: str, help_: str):
         self.name = name
         self.help_ = help_
         self.series: list[dict[str, str]] = []
@@ -32,4 +33,6 @@ class InfoGauge:
             metric_lines.append(f"{self.name}{labels} 1")
 
         # Output must end with a new line, otherwise textfile collector fails
-        return ("\n".join([help_, type_, '\n'.join(metric_lines)]) if metric_lines else "") + "\n"
+        if metric_lines:
+            return "\n".join([help_, type_, '\n'.join(metric_lines)]) + "\n"
+        return ""
