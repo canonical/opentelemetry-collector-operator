@@ -1596,13 +1596,13 @@
       {
         "current": {
           "selected": false,
-          "text": "All",
-          "value": "$__all"
+          "text": "default",
+          "value": "default"
         },
         "hide": 0,
-        "includeAll": true,
+        "includeAll": false,
         "label": "Loki datasource",
-        "multi": true,
+        "multi": false,
         "name": "lokids",
         "options": [],
         "query": "loki",
