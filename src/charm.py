@@ -704,6 +704,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             infogauge.add({
                     "collector_unit": self.unit.name,
                     "related_unit": principal,
+                    "related_application": principal.split("/", 1)[0],
                 }
             )
 
