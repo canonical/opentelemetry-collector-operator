@@ -2036,8 +2036,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "OpenTelemetry Collector",
-  "uid": "3031fb6fc42cebfa9502c30aee9969cb2c0af01e",
+  "title": "OpenTelemetry Collector VM",
   "version": 1,
   "weekStart": ""
 }
