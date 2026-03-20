@@ -29,6 +29,7 @@ from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
+    EXTERNAL_CONFIG_SECRETS_DIR,
     LOGROTATE_PATH,
     LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
@@ -164,6 +165,9 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
 
 class OpenTelemetryCollectorCharm(ops.CharmBase):
     """Charm the service."""
+
+    external_configs: List[Dict[str, Any]] = []
+    external_secret_files: Dict[str, str] = {}
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
@@ -406,6 +410,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 alerts=cos_agent.logs_alerts,
                 dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
             )
+
+
+        # External-config setup
+        integrations.receive_external_configs(self)
+        if self.external_secret_files:
+            self._ensure_external_configs_secrets_dir()
+            self._write_secrets_to_disk()
+        else:
+            self._remove_external_configs_secrets_dir()
+        self._configure_external_configs(config_manager)
 
         # Profiling setup
         # cfr. https://github.com/open-telemetry/opentelemetry-collector/tree/main/featuregate
@@ -697,6 +711,21 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         cert_dir.mkdir(parents=True, exist_ok=True)
         cert_dir.chmod(0o755)
 
+    def _ensure_external_configs_secrets_dir(self) -> None:
+        directory = LocalPath(EXTERNAL_CONFIG_SECRETS_DIR)
+        directory.mkdir(parents=True, exist_ok=True)
+        directory.chmod(0o755)
+
+    def _remove_external_configs_secrets_dir(self) -> None:
+        directory = LocalPath(EXTERNAL_CONFIG_SECRETS_DIR)
+        if not directory.exists():
+            return
+
+        try:
+            shutil.rmtree(directory)
+        except OSError as e:
+            logger.warning("failed to remove external config secrets dir %s: %s", directory, e)
+
     def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
         """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
 
@@ -740,6 +769,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 logger.error(f"Failed to write CA certificate for job '{job_name}': {e}")
 
         return cert_paths
+
+    def _write_secrets_to_disk(self) -> None:
+        for filepath, secret in self.external_secret_files.items():
+            filepath = LocalPath(filepath)
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(secret, mode=0o644)
+            logger.debug("secret written to %s", filepath)
+
+    def _configure_external_configs(self, config_manager: ConfigManager):
+        config_manager.add_external_configs(self.external_configs)
 
     def _cleanup_certificates_on_remove(self):
         """Clean up certificates during charm removal.

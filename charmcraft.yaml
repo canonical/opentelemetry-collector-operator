@@ -139,10 +139,12 @@ requires:
       Send OTLP data to an OTLP server by agregating all supported OTLP endpoints offered by the
       server. If multiple endpoints are supported, then the one with the most modern protocol is
       chosen e.g., `gRPC` over `HTTP`.
-      
+
       This endpoint currently supports:
         - gRPC for ["logs", "metrics"]
         - HTTP for ["logs", "metrics"]
+  external-config:
+    interface: external-config
 
 peers:
   peers:

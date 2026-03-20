@@ -283,3 +283,45 @@ def test_add_otlp_forwarding():
     }
     assert config_manager.config._config["exporters"] == expected_exporters
     assert config_manager.config._config["service"]["pipelines"] == expected_pipelines
+
+
+def test_add_external_configs_adds_components_to_requested_pipelines():
+    config_manager = ConfigManager("otelcol/0", "otelcol", "", "", insecure_skip_verify=True)
+
+    config_manager.add_external_configs(
+        [
+            {
+                "config_yaml": """
+receivers:
+  prometheus/custom:
+    config:
+      scrape_configs:
+        - job_name: custom
+          static_configs:
+            - targets: ["0.0.0.0:9000"]
+""",
+                "pipelines": ["metrics"],
+            }
+        ]
+    )
+
+    receiver_name = "prometheus/custom/otelcol/0"
+    assert receiver_name in config_manager.config._config["receivers"]
+    assert receiver_name in config_manager.config._config["service"]["pipelines"]["metrics/otelcol/0"]["receivers"]
+
+
+@pytest.mark.parametrize(
+    "external_configs",
+    [
+        [{"config_yaml": "[]", "pipelines": ["metrics"]}],
+        [{"config_yaml": "receivers: []", "pipelines": ["metrics"]}],
+        ["not-a-dict"],
+    ],
+)
+def test_add_external_configs_skips_malformed_entries(external_configs):
+    config_manager = ConfigManager("otelcol/0", "otelcol", "", "", insecure_skip_verify=True)
+    initial_config = copy.deepcopy(config_manager.config._config)
+
+    config_manager.add_external_configs(external_configs)
+
+    assert config_manager.config._config == initial_config

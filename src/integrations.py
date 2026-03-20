@@ -21,6 +21,7 @@ from charms.grafana_cloud_integrator.v0.cloud_config_requirer import (
 )
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiConsumer, LokiPushApiProvider
+from charms.otelcol_integrator.v0.otelcol_integrator import OtelcolIntegratorRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
 )
@@ -51,6 +52,7 @@ from config_builder import Port, build_port_map, sha256
 from constants import (
     DASHBOARDS_DEST_PATH,
     DASHBOARDS_SRC_PATH,
+    EXTERNAL_CONFIG_SECRETS_DIR,
     LOKI_RULES_DEST_PATH,
     LOKI_RULES_SRC_PATH,
     METRICS_RULES_DEST_PATH,
@@ -88,6 +90,15 @@ def _add_alerts(alerts: Dict, dest_path: Path):
         rule_file.write_text(yaml.safe_dump(rule))
         logger.debug(f"updated alert rules file {rule_file.as_posix()}")
 
+
+def receive_external_configs(charm: CharmBase):
+    """Integrate with otelcol-integrator charm via the external-config relation endpoint."""
+    otelcol_requirer = OtelcolIntegratorRequirer(charm.model, "external-config", EXTERNAL_CONFIG_SECRETS_DIR)
+    external_configs = otelcol_requirer.retrieve_external_configs()
+    external_secret_files = otelcol_requirer.secret_files
+
+    charm.__setattr__("external_configs", external_configs)
+    charm.__setattr__("external_secret_files", external_secret_files)
 
 def receive_loki_logs(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None):
     """Integrate with other charms via the receive-loki-logs relation endpoint.
