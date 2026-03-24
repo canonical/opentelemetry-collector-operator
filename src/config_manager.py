@@ -704,7 +704,9 @@ class ConfigManager:
                 continue
 
             for config_type, config in config_block.items():
-                if config_type not in Component:
+                try:
+                    component = Component(config_type)
+                except ValueError:
                     logger.warning("wrong component type '%s' in external config, skipping", config_type)
                     continue
 
@@ -717,7 +719,7 @@ class ConfigManager:
                 for name, cnf in config.items():
                     comp_name = f"{name}/{self._unit_name}"
                     self.config.add_component(
-                        Component(config_type),
+                        component,
                         comp_name,
                         cnf,
                         pipelines=[f"{getattr(p, 'value', p)}/{self._unit_name}" for p in configs["pipelines"]],
