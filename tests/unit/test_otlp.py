@@ -115,7 +115,7 @@ def test_forwarding_otlp_rule_counts(ctx, forward_rules):
             logql_group_names = {r.get("name") for r in decompressed["logql"].get("groups", [])}
             promql_group_names = {r.get("name") for r in decompressed["promql"].get("groups", [])}
             assert not logql_group_names
-            assert "otelcol_f4d59020_otelcol_Exporter_alerts" in promql_group_names
+            assert "otelcol_f4d59020_otelcol_Exporter_rules" in promql_group_names
 
 
 def test_forwarded_rules_have_topology(ctx):
