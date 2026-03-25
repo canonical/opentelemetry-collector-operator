@@ -97,8 +97,8 @@ def receive_external_configs(charm: CharmBase):
     external_configs = otelcol_requirer.retrieve_external_configs()
     external_secret_files = otelcol_requirer.secret_files
 
-    charm.__setattr__("external_configs", external_configs)
-    charm.__setattr__("external_secret_files", external_secret_files)
+    charm.external_configs = external_configs
+    charm.external_secret_files = external_secret_files
 
 def receive_loki_logs(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None):
     """Integrate with other charms via the receive-loki-logs relation endpoint.

@@ -166,11 +166,10 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
 class OpenTelemetryCollectorCharm(ops.CharmBase):
     """Charm the service."""
 
-    external_configs: List[Dict[str, Any]] = []
-    external_secret_files: Dict[str, str] = {}
-
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
+        self.external_configs: List[Dict[str, Any]] = []
+        self.external_secret_files: Dict[str, str] = {}
         if event() in ("install", "upgrade"):
             self._install_snaps()
         elif event() == "remove":
