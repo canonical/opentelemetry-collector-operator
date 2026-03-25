@@ -91,14 +91,10 @@ def _add_alerts(alerts: Dict, dest_path: Path):
         logger.debug(f"updated alert rules file {rule_file.as_posix()}")
 
 
-def receive_external_configs(charm: CharmBase):
+def receive_external_configs(charm: CharmBase) -> tuple[list[dict[str, Any]], dict[str, str]]:
     """Integrate with otelcol-integrator charm via the external-config relation endpoint."""
     otelcol_requirer = OtelcolIntegratorRequirer(charm.model, "external-config", EXTERNAL_CONFIG_SECRETS_DIR)
-    external_configs = otelcol_requirer.retrieve_external_configs()
-    external_secret_files = otelcol_requirer.secret_files
-
-    charm.external_configs = external_configs
-    charm.external_secret_files = external_secret_files
+    return otelcol_requirer.retrieve_external_configs(), otelcol_requirer.secret_files
 
 def receive_loki_logs(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None):
     """Integrate with other charms via the receive-loki-logs relation endpoint.

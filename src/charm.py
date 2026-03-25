@@ -412,7 +412,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
 
         # External-config setup
-        integrations.receive_external_configs(self)
+        self.external_configs, self.external_secret_files = integrations.receive_external_configs(self)
         if self.external_secret_files:
             self._ensure_external_configs_secrets_dir()
             self._write_secrets_to_disk(self.external_secret_files)
