@@ -416,7 +416,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         integrations.receive_external_configs(self)
         if self.external_secret_files:
             self._ensure_external_configs_secrets_dir()
-            self._write_secrets_to_disk()
+            self._write_secrets_to_disk(self.external_secret_files)
         else:
             self._remove_external_configs_secrets_dir()
         self._configure_external_configs(config_manager)
@@ -770,8 +770,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         return cert_paths
 
-    def _write_secrets_to_disk(self) -> None:
-        for filepath, secret in self.external_secret_files.items():
+    def _write_secrets_to_disk(self, external_secret_files: dict[str, str]) -> None:
+        for filepath, secret in external_secret_files.items():
             filepath = LocalPath(filepath)
             filepath.parent.mkdir(parents=True, exist_ok=True)
             filepath.write_text(secret, mode=0o644)
