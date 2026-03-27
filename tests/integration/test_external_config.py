@@ -196,7 +196,7 @@ def test_loki_push_log_reaches_rsyslog(juju: jubilant.Juju):
     assert_log_reaches_rsyslog(juju, message)
 
 
-async def test_otlp_push_log_reaches_rsyslog(juju: jubilant.Juju):
+def test_otlp_push_log_reaches_rsyslog(juju: jubilant.Juju):
     # GIVEN an empty target file
     juju.ssh("ubuntu/0", command=f"sudo truncate -s 0 {RSYSLOG_OUTPUT_FILE}")
     # WHEN a log is sent to otelcol's OTLP endpoint
