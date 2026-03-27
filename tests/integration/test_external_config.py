@@ -64,8 +64,7 @@ def setup_rsyslog(juju: jubilant.Juju):
         "ubuntu/0",
         command=f"sudo ss -lunp | grep ':{RSYSLOG_REMOTE_PORT} ' || true",
     )
-    if f":{RSYSLOG_REMOTE_PORT} " not in listening:
-        raise Exception(f"rsyslog is not listening on :{RSYSLOG_REMOTE_PORT}: {listening}")
+    assert f":{RSYSLOG_REMOTE_PORT} " in listening, f"rsyslog is not listening on :{RSYSLOG_REMOTE_PORT}: {listening}"
 
 
 def push_loki_log_to_otelcol(juju: jubilant.Juju, message: str):
