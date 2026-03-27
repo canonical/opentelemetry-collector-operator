@@ -143,6 +143,7 @@ requires:
       This endpoint currently supports:
         - gRPC for ["logs", "metrics"]
         - HTTP for ["logs", "metrics"]
+  
   external-config:
     interface: external-config
     optional: true

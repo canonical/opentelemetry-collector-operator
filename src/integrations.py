@@ -481,7 +481,7 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
     otlp_requirer = OtlpRequirer(
         charm,
         protocols=["grpc", "http"],
-        telemetries=["logs", "metrics"],
+        telemetries=["logs", "metrics", "traces"],
         loki_rules_path=charm_root.joinpath(LOKI_RULES_DEST_PATH).as_posix(),
         prometheus_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
     )
