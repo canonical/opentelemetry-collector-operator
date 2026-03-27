@@ -120,8 +120,7 @@ def assert_log_reaches_rsyslog(juju: jubilant.Juju, message: str):
         "ubuntu/0",
         command=f"sudo grep -F -- '{message}' {RSYSLOG_OUTPUT_FILE} || true",
     )
-    if message not in output:
-        raise Exception(f"message '{message}' not found in {RSYSLOG_OUTPUT_FILE}")
+    assert message in output, f"message '{message}' not found in {RSYSLOG_OUTPUT_FILE}"
 
 
 def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm_22_04: str):
