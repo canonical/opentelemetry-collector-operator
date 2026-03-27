@@ -16,11 +16,11 @@ MODEL_NAME = "foo-model"
 MODEL_UUID = "f4d59020-c8e7-4053-8044-a2c1e5591c7f"
 MODEL = Model(MODEL_NAME, uuid=MODEL_UUID)
 OTELCOL_METADATA = {
-    "application": "otelcol",
-    "charm_name": "opentelemetry-collector",
     "model": MODEL_NAME,
     "model_uuid": MODEL_UUID,
+    "application": "otelcol",  # from app_name in conftest.py
     "unit": "otelcol/0",
+    "charm_name": "opentelemetry-collector",
 }
 
 
@@ -118,7 +118,8 @@ def test_forwarding_otlp_rule_counts(ctx, forward_rules):
             logql_group_names = {r.get("name") for r in decompressed["logql"].get("groups", [])}
             promql_group_names = {r.get("name") for r in decompressed["promql"].get("groups", [])}
             assert not logql_group_names
-            assert "otelcol_f4d59020_otelcol_Exporter_rules" in promql_group_names
+            bundled_rule_base_name = f"{MODEL_NAME}_f4d59020_otelcol".replace('-', '_')
+            assert f"{bundled_rule_base_name}_Exporter_rules" in promql_group_names
 
 
 def test_forwarded_rules_have_topology(ctx):
