@@ -12,11 +12,14 @@ from ops.testing import Model, Relation, State
 
 from src.integrations import send_otlp
 
+MODEL_NAME = "foo-model"
+MODEL_UUID = "f4d59020-c8e7-4053-8044-a2c1e5591c7f"
+MODEL = Model(MODEL_NAME, uuid=MODEL_UUID)
 OTELCOL_METADATA = {
     "application": "otelcol",
     "charm_name": "opentelemetry-collector",
-    "model": "otelcol",
-    "model_uuid": "f4d59020-c8e7-4053-8044-a2c1e5591c7f",
+    "model": MODEL_NAME,
+    "model_uuid": MODEL_UUID,
     "unit": "otelcol/0",
 }
 
@@ -100,7 +103,7 @@ def test_forwarding_otlp_rule_counts(ctx, forward_rules):
     state = State(
         relations=[sender_1, sender_2],
         leader=True,
-        model=Model("otelcol", uuid="f4d59020-c8e7-4053-8044-a2c1e5591c7f"),
+        model=MODEL,
         config={"forward_alert_rules": forward_rules},
     )
 
@@ -128,11 +131,7 @@ def test_forwarded_rules_have_topology(ctx):
     # GIVEN multiple send-otlp relations
     sender_1 = Relation("send-otlp", remote_app_data={"endpoints": "[]"})
     sender_2 = Relation("send-otlp", remote_app_data={"endpoints": "[]"})
-    state = State(
-        relations=[sender_1, sender_2],
-        leader=True,
-        model=Model("otelcol", uuid="f4d59020-c8e7-4053-8044-a2c1e5591c7f"),
-    )
+    state = State(relations=[sender_1, sender_2], leader=True, model=MODEL)
 
     # WHEN any event executes the reconciler
     state_out = ctx.run(ctx.on.update_status(), state=state)
