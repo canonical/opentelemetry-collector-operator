@@ -184,7 +184,7 @@ def test_configure_and_relate_otelcol_integrator(juju: jubilant.Juju):
     )
 
 
-async def test_loki_push_log_reaches_rsyslog(juju: jubilant.Juju):
+def test_loki_push_log_reaches_rsyslog(juju: jubilant.Juju):
     # GIVEN an empty target file (truncate in-place to preserve the inode;
     # replacing the file would leave rsyslog writing to the old, unlinked inode)
     juju.ssh("ubuntu/0", command=f"sudo truncate -s 0 {RSYSLOG_OUTPUT_FILE}")
