@@ -124,7 +124,7 @@ def assert_log_reaches_rsyslog(juju: jubilant.Juju, message: str):
         raise Exception(f"message '{message}' not found in {RSYSLOG_OUTPUT_FILE}")
 
 
-async def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN ubuntu and otelcol are deployed and related
     juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@22.04")
     juju.wait(
