@@ -467,37 +467,20 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
 
     This provides otelcol with the remote's OTLP endpoint for each relation.
 
-    The bundled rule files from the src/*_rules directories are copied to a
-    local path (*_RULES_DEST_PATH directories) within the charm's filesystem.
-
-    The `otlp_requirer.publish` then publishes them to the databag. See the
-    publish method's docstring of the otlp_requirer to understand what rules
-    are published to the databag and the mechanism to do so.
-
-    Since these paths are wiped on every hook, they can be used as a source of
-    truth for the current state of rules for the library to publish to the
-    databag.
+    The bundled rule files (from the src/*_rules directories) are published to the databag.
+    Conditional to the `forward_alert_rules` config, the rules from related OTLP requirer charms
+    are also published to the databag.
     """
-    # Use the paths on disk to coordinate and forward rules
+    # Gather our bundled rules
     charm_root = charm.charm_dir.absolute()
-    shutil.copytree(
-        charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
-        charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
-        dirs_exist_ok=True,
-    )
-    shutil.copytree(
-        charm_root.joinpath(*METRICS_RULES_SRC_PATH.split("/")),
-        charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")),
-        dirs_exist_ok=True,
-    )
-
-    # Publish rules for the provider
     rules = (
         RuleStore(JujuTopology.from_charm(charm))
-        .add_logql_path(charm_root.joinpath(LOKI_RULES_DEST_PATH), recursive=True)
-        .add_promql_path(charm_root.joinpath(METRICS_RULES_DEST_PATH), recursive=True)
+        .add_logql_path(charm_root.joinpath(LOKI_RULES_SRC_PATH), recursive=True)
+        .add_promql_path(charm_root.joinpath(METRICS_RULES_SRC_PATH), recursive=True)
     )
-    OtlpRequirer(charm, rules=rules).publish()
+    # Publish rules for the provider
+    # NOTE: we set aggregator_peer_relation_name to ensure aggregator generic rules are published
+    OtlpRequirer(charm, aggregator_peer_relation_name="peers", rules=rules).publish()
 
     # Access the provider's endpoints
     return OtlpRequirer(
