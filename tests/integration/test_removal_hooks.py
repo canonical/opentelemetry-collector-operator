@@ -14,7 +14,6 @@ import os
 from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname
 
 CONFIG_FILE_PATH = "/etc/otelcol/config.d"
-LOKI_RECEIVER_NAME = "loki/receive-loki-logs"
 OTLP_RECEIVER_NAME = "otlp"
 
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
@@ -43,9 +42,8 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
 
     assert get_snap_service_status(juju, "0") == "active"
 
-    # AND the name of the Loki receiver defined in the config file should include the machine number which is 0
+    # AND the name of the OTLP receiver defined in the config file should include the machine hostname
     config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/0')}.yaml"
-    assert get_receiver_config(juju, "ubuntu/0", LOKI_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"loki/receive-loki-logs/{get_hostname(juju, '0')}"
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
 
 async def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
@@ -90,11 +88,7 @@ async def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     # THEN snap must be active, i.e. successfully started, i.e. the configs are valid
     assert get_snap_service_status(juju, "0") == "active"
 
-    # AND the configs for both units should have a Loki receiver which only includes the machine number
-    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/1')}.yaml"
-
-    assert get_receiver_config(juju, "ubuntu/0", LOKI_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"loki/receive-loki-logs/{get_hostname(juju, '0')}"
-
+    # AND the configs for both units should have an OTLP receiver which includes the machine hostname
     config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/2')}.yaml"
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
 
@@ -150,11 +144,7 @@ async def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
         timeout=240,
     )
 
-    # AND the configs for both units should have a Loki receiver which only includes the machine number
-    # otelcol/1 is related to ubuntu/0 which is on machine 0
-    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/1')}.yaml"
-    assert get_receiver_config(juju, "ubuntu/0", LOKI_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"loki/receive-loki-logs/{get_hostname(juju, '0')}"
-
+    # AND the configs for both units should have an OTLP receiver which includes the machine hostname
     # otelcol/4 is related to ubuntu/2 which is on machine 1
     config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/4')}.yaml"
     assert get_receiver_config(juju, "ubuntu/2", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '2')}"

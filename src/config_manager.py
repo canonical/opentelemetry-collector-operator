@@ -669,3 +669,59 @@ class ConfigManager:
                     if enabled
                 ],
             )
+
+    def add_external_configs(self, external_configs: List[Dict[str, Any]]) -> None:
+        """Merge external configuration into the current config.
+
+        This method merges the provided external configuration dictionary
+        into the existing OpenTelemetry Collector configuration.
+
+        Args:
+            external_configs: Dictionary containing external configuration to merge.
+        """
+        for configs in external_configs:
+            if not isinstance(configs, dict):
+                logger.warning("external config entry is not a mapping, skipping")
+                continue
+
+            if "config_yaml" not in configs:
+                logger.warning("external configs missing 'config_yaml' key, skipping")
+                continue
+
+            if "pipelines" not in configs:
+                logger.warning("external configs missing 'pipelines' key, skipping")
+                continue
+
+            # Parse YAML with error handling
+            try:
+                config_block = yaml.safe_load(configs["config_yaml"])
+            except yaml.YAMLError as e:
+                logger.error("failed to parse external config YAML: %s, skipping", e)
+                continue
+
+            if not isinstance(config_block, dict):
+                logger.warning("external config YAML must be a mapping, skipping")
+                continue
+
+            for config_type, config in config_block.items():
+                try:
+                    component = Component(config_type)
+                except ValueError:
+                    logger.warning("wrong component type '%s' in external config, skipping", config_type)
+                    continue
+
+                if not isinstance(config, dict):
+                    logger.warning(
+                        "component type '%s' must map names to configs, skipping", config_type
+                    )
+                    continue
+
+                for name, cnf in config.items():
+                    comp_name = f"{name}/{self._unit_name}"
+                    self.config.add_component(
+                        component,
+                        comp_name,
+                        cnf,
+                        pipelines=[f"{getattr(p, 'value', p)}/{self._unit_name}" for p in configs["pipelines"]],
+                    )
+                    logger.debug("component type: '%s', name: '%s' added to config", config_type, comp_name)
