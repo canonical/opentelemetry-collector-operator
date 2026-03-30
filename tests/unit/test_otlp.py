@@ -36,7 +36,7 @@ def test_send_otlp(ctx):
             [
                 {
                     "protocol": "http",
-                    "endpoint": "http://provider-123.endpoint:4318",
+                    "endpoint": "http://provider-123:4318",
                     "telemetries": ["logs", "metrics"],
                 }
             ]
@@ -47,12 +47,12 @@ def test_send_otlp(ctx):
             [
                 {
                     "protocol": "grpc",
-                    "endpoint": "http://provider-456.endpoint:4317",
+                    "endpoint": "http://provider-456:4317",
                     "telemetries": ["traces"],
                 },
                 {
                     "protocol": "http",
-                    "endpoint": "http://provider-456.endpoint:4318",
+                    "endpoint": "http://provider-456:4318",
                     "telemetries": ["metrics"],
                 },
             ]
@@ -62,12 +62,12 @@ def test_send_otlp(ctx):
     expected_endpoints = {
         456: OtlpEndpoint(
             protocol="grpc",
-            endpoint="http://provider-456.endpoint:4317",
+            endpoint="http://provider-456:4317",
             telemetries=["traces"],
         ),
         123: OtlpEndpoint(
             protocol="http",
-            endpoint="http://provider-123.endpoint:4318",
+            endpoint="http://provider-123:4318",
             telemetries=["logs", "metrics"],
         ),
     }
