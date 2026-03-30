@@ -139,10 +139,17 @@ requires:
       Send OTLP data to an OTLP server by agregating all supported OTLP endpoints offered by the
       server. If multiple endpoints are supported, then the one with the most modern protocol is
       chosen e.g., `gRPC` over `HTTP`.
-      
+
       This endpoint currently supports:
-        - gRPC for ["logs", "metrics", "traces"]
-        - HTTP for ["logs", "metrics", "traces"]
+        - gRPC for ["logs", "metrics"]
+        - HTTP for ["logs", "metrics"]
+  
+  external-config:
+    interface: external-config
+    optional: true
+    description: |
+      Process the configs received and merge them into /etc/otelcol/config.d/[unit].yaml
+      If the received config has secrets that have render=file, the secret files will be stored in /var/snap/opentelemetry-collector/common/external_config_secrets.
 
 peers:
   peers:
