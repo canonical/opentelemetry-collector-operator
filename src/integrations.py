@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, cast, get_args
 
 import yaml
+from charmlibs.interfaces.otlp import OtlpEndpoint, OtlpRequirer, RuleStore
 from charmlibs.pathops import PathProtocol
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
@@ -44,7 +45,8 @@ from charms.tls_certificates_interface.v4.tls_certificates import (
     Mode,
     TLSCertificatesRequiresV4,
 )
-from cosl import LZMABase64
+from cosl.rules import JujuTopology
+from cosl.utils import LZMABase64
 from ops import CharmBase, tracing
 from ops.model import Relation
 
@@ -58,7 +60,6 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     METRICS_RULES_SRC_PATH,
 )
-from charmlibs.interfaces.otlp import OtlpRequirer, OtlpEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -477,16 +478,8 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
     truth for the current state of rules for the library to publish to the
     databag.
     """
+    # Use the paths on disk to coordinate and forward rules
     charm_root = charm.charm_dir.absolute()
-    otlp_requirer = OtlpRequirer(
-        charm,
-        protocols=["grpc", "http"],
-        telemetries=["logs", "metrics", "traces"],
-        loki_rules_path=charm_root.joinpath(LOKI_RULES_DEST_PATH).as_posix(),
-        prometheus_rules_path=charm_root.joinpath(METRICS_RULES_DEST_PATH).as_posix(),
-    )
-
-    # Rules local to this charm
     shutil.copytree(
         charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
         charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
@@ -498,8 +491,18 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
         dirs_exist_ok=True,
     )
 
-    otlp_requirer.publish()
-    return otlp_requirer.endpoints
+    # Publish rules for the provider
+    rules = (
+        RuleStore(JujuTopology.from_charm(charm))
+        .add_logql_path(charm_root.joinpath(LOKI_RULES_DEST_PATH), recursive=True)
+        .add_promql_path(charm_root.joinpath(METRICS_RULES_DEST_PATH), recursive=True)
+    )
+    OtlpRequirer(charm, rules=rules).publish()
+
+    # Access the provider's endpoints
+    return OtlpRequirer(
+        charm, protocols=["grpc", "http"], telemetries=["logs", "metrics", "traces"]
+    ).endpoints
 
 
 # TODO: Luca: move this into the GrafanCloudIntegrator library
