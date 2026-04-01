@@ -19,7 +19,7 @@ OTLP_RECEIVER_NAME = "otlp"
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
-async def test_deploy(juju: jubilant.Juju, charm: str):
+def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
     juju.deploy(charm, app="otelcol", config={"path_exclude": PATH_EXCLUDE})
@@ -46,7 +46,7 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
     config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/0')}.yaml"
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
 
-async def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
+def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     # GIVEN only 1 unit of the otelcol charm
     assert juju.status().get_units("otelcol").keys() == {"otelcol/0"}
     # WHEN the relation is removed
@@ -70,7 +70,7 @@ async def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     assert otelcol_config_dir.strip() == "does not exist"
 
 
-async def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
+def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     # GIVEN otelcol has 2 subordinate units on the same machine
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     juju.add_unit("ubuntu", to="0")
@@ -130,7 +130,7 @@ async def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     # AND the snap is still active in the machine
     assert get_snap_service_status(juju, "0") == "active"
 
-async def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
+def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     # GIVEN otelcol has 2 subordinate units on different machines
     juju.add_unit("ubuntu")
     juju.wait(

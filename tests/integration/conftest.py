@@ -4,6 +4,7 @@
 """Conftest file for integration tests."""
 
 import functools
+import glob
 import logging
 
 import os
@@ -12,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from pytest_operator.plugin import OpsTest
+import sh
 import jubilant
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ def timed_memoizer(func):
     """Cache the result of a function."""
 
     @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs):
         fname = func.__qualname__
         logger.info("Started: %s" % fname)
         start_time = datetime.now()
@@ -34,7 +35,7 @@ def timed_memoizer(func):
             ret = store[fname]
         else:
             logger.info("Return for {} not cached".format(fname))
-            ret = await func(*args, **kwargs)
+            ret = func(*args, **kwargs)
             store[fname] = ret
         logger.info("Finished: {} in: {} seconds".format(fname, datetime.now() - start_time))
         return ret
@@ -44,28 +45,23 @@ def timed_memoizer(func):
 
 @pytest.fixture(scope="module")
 @timed_memoizer
-async def charm(ops_test: OpsTest) -> str:
-    """Charm used for integration testing.
+def charm() -> str:
+    """Charm used for integration testing."""
+    if charm_file := os.environ.get("CHARM_PATH"):
+        return str(charm_file)
 
-    When multiple charm files (i.e., for different bases) are produced by a `charmcraft pack`,
-    our CI will currently set the variable to the highest-base one.
-    """
-    # FIXME: Avoid passing the charm file path as an environment variable,
-    #        so every time a test is executed a new charm is packed with the modification
-    #        in the internal telemetry level. This comment should be removed when then itest
-    #        are improved to not use internal telemetry to verify if otelcol is receiving logs and metrics
-    # if charm_file := os.environ.get("CHARM_PATH"):
-    #     return charm_file
+    sh.charmcraft.pack()  # type: ignore
 
-    charm = await ops_test.build_charm(".")
-    charm = str(charm).replace("24.04", "22.04")
+    current_dir = os.getcwd()
+    charms = glob.glob(os.path.join(current_dir, "*.charm"))
+    charm = charms[0]
     assert charm
     return charm
 
 
 @pytest.fixture(scope="module")
 @timed_memoizer
-async def charm_22_04(charm) -> str:
+def charm_22_04(charm) -> str:
     """Charm (platform = ubuntu@22.04) used for integration testing."""
     # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
     return charm.replace("24.04", "22.04")

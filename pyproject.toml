@@ -31,9 +31,9 @@ dev = [
   "pytest",
   "coverage[toml]",
   # Integration
-  "pytest-operator",
   "ops[testing]",
   "jubilant",
+  "sh",
 ]
 
 # Testing tools configuration
@@ -66,8 +66,7 @@ pythonVersion = "3.10"
 pythonPlatform = "All"
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
-addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
+addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO -p no:pytest_operator"
 
 [tool.codespell]
 skip = ".git,.tox,build,venv*"

@@ -9,7 +9,7 @@ import jubilant
 from constants import INTERNAL_TELEMETRY_LOG_FILE
 
 
-async def test_deploy(juju: jubilant.Juju, charm: str):
+def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     juju.deploy(charm, app="otelcol")
     juju.deploy("ubuntu", base="ubuntu@22.04", channel="latest/stable")
@@ -28,7 +28,7 @@ async def test_deploy(juju: jubilant.Juju, charm: str):
     )
 
 
-async def test_log_rotation(juju: jubilant.Juju):
+def test_log_rotation(juju: jubilant.Juju):
     # GIVEN the log file is present and is configured for log rotation
     files = juju.ssh("otelcol/0", f"ls -1 {INTERNAL_TELEMETRY_LOG_FILE}*").strip().split("\n")
     assert files == [INTERNAL_TELEMETRY_LOG_FILE]
