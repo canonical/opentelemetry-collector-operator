@@ -40,9 +40,10 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.integrate("otelcol:send-traces", "otelcol-b2:receive-traces")
 
     # THEN all units settle — blocked is expected (no data sink configured)
+    # Only check ubuntu apps for errors here; otelcol errors are caught in the next wait.
     juju.wait(
         lambda status: jubilant.all_active(status, "ubuntu-main", "ubuntu-b1", "ubuntu-b2"),
-        error=jubilant.any_error,
+        error=lambda status: jubilant.any_error(status, "ubuntu-main", "ubuntu-b1", "ubuntu-b2"),
         timeout=420,
     )
     juju.wait(
