@@ -34,6 +34,7 @@ dev = [
   "ops[testing]",
   "jubilant",
   "sh",
+  "pytest-jubilant~=1.0",
 ]
 
 # Testing tools configuration

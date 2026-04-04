@@ -22,11 +22,12 @@ def is_node_exporter_running_with_collectors(juju: jubilant.Juju, pattern: str):
     return True
 
 
-def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, otelcol_charm: tuple[str, str, dict]):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
+    charm, _, _ = otelcol_charm
     juju.deploy(
-        charm_22_04,
+        charm,
         app="otelcol",
         config={"path_exclude": PATH_EXCLUDE, **ENABLE_BASIC_DEBUG_EXPORTERS},
     )

@@ -4,7 +4,10 @@
 """Conftest file for integration tests."""
 
 import functools
-import glob
+from typing import Literal
+import subprocess
+from pytest import fixture
+from pytest_jubilant import get_resources, pack
 import logging
 
 import os
@@ -13,7 +16,6 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-import sh
 import jubilant
 
 logger = logging.getLogger(__name__)
@@ -21,50 +23,46 @@ logger = logging.getLogger(__name__)
 store = defaultdict(str)
 
 CONFIG_BUILDER_PATH = Path(__file__).parent.parent.parent / "src" / "config_builder.py"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def timed_memoizer(func):
-    """Cache the result of a function."""
+def charm_and_channel_and_resources(charm_path_key: str, charm_channel_key: str):
+    """Opentelemetry-collector charm used for integration testing.
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        fname = func.__qualname__
-        logger.info("Started: %s" % fname)
-        start_time = datetime.now()
-        if fname in store.keys():
-            ret = store[fname]
-        else:
-            logger.info("Return for {} not cached".format(fname))
-            ret = func(*args, **kwargs)
-            store[fname] = ret
-        logger.info("Finished: {} in: {} seconds".format(fname, datetime.now() - start_time))
-        return ret
+    Build once per session and reuse in all integration tests.
+    """
+    if channel_from_env := os.getenv(charm_channel_key):
+        charm = "opentelemetry-collector"
+        logger.info("Using published %s charm from %s", charm, channel_from_env)
+        return charm, channel_from_env, None
+    if path_from_env := os.getenv(charm_path_key):
+        charm_path = Path(path_from_env).absolute()
+        logger.info("Using local charm: %s", charm_path)
+        return charm_path, None, get_resources(REPO_ROOT)
+    for _ in range(3):
+        logger.info("packing Opentelemetry-collector charm ...")
+        try:
+            pth = pack(REPO_ROOT, platform="ubuntu@22.04:amd64")
+        except subprocess.CalledProcessError:
+            logger.warning("Failed to build Opentelemetry-collector charm. Trying again!")
+            continue
+        os.environ[charm_path_key] = str(pth)
+        return pth, None, get_resources(REPO_ROOT)
+    raise subprocess.CalledProcessError(1, "pack charm")
 
-    return wrapper
 
-
-@pytest.fixture(scope="module")
-@timed_memoizer
-def charm() -> str:
-    """Charm used for integration testing."""
-    if charm_file := os.environ.get("CHARM_PATH"):
-        return str(charm_file)
-
-    sh.charmcraft.pack()  # type: ignore
-
-    current_dir = os.getcwd()
-    charms = glob.glob(os.path.join(current_dir, "*.charm"))
-    charm = charms[0]
-    assert charm
-    return charm
+@fixture(scope="session")
+def otelcol_charm():
+    """Opentelemetry-collector coordinator used for integration testing."""
+    # TODO: otelcol_charm.replace("24.04", "22.04")
+    return charm_and_channel_and_resources("CHARM_PATH", "CHARM_CHANNEL")
 
 
 @pytest.fixture(scope="module")
-@timed_memoizer
-def charm_22_04(charm) -> str:
+def charm_22_04(otelcol_charm) -> str:
     """Charm (platform = ubuntu@22.04) used for integration testing."""
     # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
-    return charm.replace("24.04", "22.04")
+    return otelcol_charm[0].replace("24.04", "22.04")
 
 
 @pytest.fixture(scope="module")

@@ -12,10 +12,11 @@ from helpers import ENABLE_BASIC_DEBUG_EXPORTERS, PATH_EXCLUDE, is_pattern_in_de
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
-def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, otelcol_charm: tuple[str, str, dict]):
     # GIVEN an OpenTelemetry Collector charm and a principal
+    charm, _, _ = otelcol_charm
     juju.deploy(
-        charm_22_04,
+        charm,
         app="otelcol",
         config={"path_exclude": PATH_EXCLUDE, **ENABLE_BASIC_DEBUG_EXPORTERS},
     )
