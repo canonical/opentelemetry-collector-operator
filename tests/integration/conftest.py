@@ -3,8 +3,6 @@
 # See LICENSE file for licensing details.
 """Conftest file for integration tests."""
 
-import functools
-from typing import Literal
 import subprocess
 from pytest import fixture
 from pytest_jubilant import get_resources, pack
@@ -12,7 +10,6 @@ import logging
 
 import os
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 
 import pytest
