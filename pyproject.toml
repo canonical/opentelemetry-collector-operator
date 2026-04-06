@@ -33,7 +33,6 @@ dev = [
   # Integration
   "ops[testing]",
   "jubilant",
-  "sh",
   "pytest-jubilant~=1.0",
 ]
 
@@ -67,7 +66,7 @@ pythonVersion = "3.10"
 pythonPlatform = "All"
 
 [tool.pytest.ini_options]
-addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO -p no:pytest_operator"
+addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
 
 [tool.codespell]
 skip = ".git,.tox,build,venv*"

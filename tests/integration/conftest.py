@@ -51,7 +51,6 @@ def charm_and_channel_and_resources(charm_path_key: str, charm_channel_key: str)
 @fixture(scope="session")
 def otelcol_charm():
     """Opentelemetry-collector coordinator used for integration testing."""
-    # TODO: otelcol_charm.replace("24.04", "22.04")
     return charm_and_channel_and_resources("CHARM_PATH", "CHARM_CHANNEL")
 
 
