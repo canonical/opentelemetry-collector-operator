@@ -39,26 +39,26 @@ def charm_and_channel(charm_path_key: str, charm_channel_key: str) -> tuple[str,
     for _ in range(3):
         logger.info("packing Opentelemetry-collector charm ...")
         try:
-            pth = pack(REPO_ROOT, platform="ubuntu@22.04:amd64")
+            pth = str(pack(REPO_ROOT, platform="ubuntu@22.04:amd64"))
         except subprocess.CalledProcessError:
             logger.warning("Failed to build Opentelemetry-collector charm. Trying again!")
             continue
-        os.environ[charm_path_key] = str(pth)
-        return str(pth), None
+        os.environ[charm_path_key] = pth
+        return pth, None
     raise subprocess.CalledProcessError(1, "pack charm")
 
 
 @fixture(scope="session")
-def otelcol_charm():
+def charm():
     """Opentelemetry-collector coordinator used for integration testing."""
     return charm_and_channel("CHARM_PATH", "CHARM_CHANNEL")[0]
 
 
 @pytest.fixture(scope="module")
-def charm_22_04(otelcol_charm) -> str:
+def charm_22_04(charm) -> str:
     """Charm (platform = ubuntu@22.04) used for integration testing."""
     # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
-    return otelcol_charm[0].replace("24.04", "22.04")
+    return charm.replace("24.04", "22.04")
 
 
 @pytest.fixture(scope="module")
