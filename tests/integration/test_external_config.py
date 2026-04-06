@@ -124,7 +124,7 @@ def assert_log_reaches_rsyslog(juju: jubilant.Juju, message: str):
 
 def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm: str):
     # GIVEN ubuntu and otelcol are deployed and related
-    juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@22.04")
+    juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04")
     juju.wait(
         lambda status: jubilant.all_active(status, "ubuntu"),
         error=lambda status: jubilant.any_error(status, "ubuntu"),

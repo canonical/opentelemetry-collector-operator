@@ -12,7 +12,7 @@ from constants import INTERNAL_TELEMETRY_LOG_FILE
 def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     juju.deploy(charm, app="otelcol")
-    juju.deploy("ubuntu", base="ubuntu@22.04", channel="latest/stable")
+    juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04")
     # WHEN they are related
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     # THEN all units are settled
