@@ -59,7 +59,7 @@ def otelcol_charm():
 def charm_22_04(otelcol_charm) -> str:
     """Charm (platform = ubuntu@22.04) used for integration testing."""
     # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
-    return otelcol_charm[0].replace("24.04", "22.04")
+    return str(otelcol_charm[0]).replace("24.04", "22.04")
 
 
 @pytest.fixture(scope="module")

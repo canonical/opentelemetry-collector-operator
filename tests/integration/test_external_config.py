@@ -122,7 +122,7 @@ def assert_log_reaches_rsyslog(juju: jubilant.Juju, message: str):
     assert message in output, f"message '{message}' not found in {RSYSLOG_OUTPUT_FILE}"
 
 
-def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, otelcol_charm: tuple[str, str, dict]):
+def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN ubuntu and otelcol are deployed and related
     juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@22.04")
     juju.wait(
@@ -130,9 +130,8 @@ def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, otelcol_charm: tuple[st
         error=lambda status: jubilant.any_error(status, "ubuntu"),
         timeout=420,
     )
-    charm, _, _ = otelcol_charm
     juju.deploy(
-        charm,
+        charm_22_04,
         app="otelcol",
         config={"path_exclude": PATH_EXCLUDE_WITH_REMOTE_LOG},
     )
