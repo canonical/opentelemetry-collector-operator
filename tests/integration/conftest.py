@@ -5,7 +5,7 @@
 
 import subprocess
 from pytest import fixture
-from pytest_jubilant import get_resources, pack
+from pytest_jubilant import pack
 import logging
 
 import os
@@ -23,7 +23,7 @@ CONFIG_BUILDER_PATH = Path(__file__).parent.parent.parent / "src" / "config_buil
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def charm_and_channel_and_resources(charm_path_key: str, charm_channel_key: str):
+def charm_and_channel(charm_path_key: str, charm_channel_key: str) -> tuple[str, str | None]:
     """Opentelemetry-collector charm used for integration testing.
 
     Build once per session and reuse in all integration tests.
@@ -31,11 +31,11 @@ def charm_and_channel_and_resources(charm_path_key: str, charm_channel_key: str)
     if channel_from_env := os.getenv(charm_channel_key):
         charm = "opentelemetry-collector"
         logger.info("Using published %s charm from %s", charm, channel_from_env)
-        return charm, channel_from_env, None
+        return charm, channel_from_env
     if path_from_env := os.getenv(charm_path_key):
-        charm_path = Path(path_from_env).absolute()
+        charm_path = str(Path(path_from_env).absolute())
         logger.info("Using local charm: %s", charm_path)
-        return charm_path, None, get_resources(REPO_ROOT)
+        return charm_path, None
     for _ in range(3):
         logger.info("packing Opentelemetry-collector charm ...")
         try:
@@ -44,21 +44,21 @@ def charm_and_channel_and_resources(charm_path_key: str, charm_channel_key: str)
             logger.warning("Failed to build Opentelemetry-collector charm. Trying again!")
             continue
         os.environ[charm_path_key] = str(pth)
-        return pth, None, get_resources(REPO_ROOT)
+        return str(pth), None
     raise subprocess.CalledProcessError(1, "pack charm")
 
 
 @fixture(scope="session")
 def otelcol_charm():
     """Opentelemetry-collector coordinator used for integration testing."""
-    return charm_and_channel_and_resources("CHARM_PATH", "CHARM_CHANNEL")
+    return charm_and_channel("CHARM_PATH", "CHARM_CHANNEL")[0]
 
 
 @pytest.fixture(scope="module")
 def charm_22_04(otelcol_charm) -> str:
     """Charm (platform = ubuntu@22.04) used for integration testing."""
     # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
-    return str(otelcol_charm[0]).replace("24.04", "22.04")
+    return otelcol_charm[0].replace("24.04", "22.04")
 
 
 @pytest.fixture(scope="module")

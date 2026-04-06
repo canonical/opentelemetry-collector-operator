@@ -19,10 +19,10 @@ OTLP_RECEIVER_NAME = "otlp"
 # Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
-def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, otelcol_charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
-    juju.deploy(charm_22_04, app="otelcol", config={"path_exclude": PATH_EXCLUDE})
+    juju.deploy(otelcol_charm, app="otelcol", config={"path_exclude": PATH_EXCLUDE})
     juju.deploy("ubuntu", base="ubuntu@22.04", channel="latest/stable")
     # WHEN they are related
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")

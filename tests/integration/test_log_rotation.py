@@ -9,9 +9,9 @@ import jubilant
 from constants import INTERNAL_TELEMETRY_LOG_FILE
 
 
-def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, otelcol_charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
-    juju.deploy(charm_22_04, app="otelcol")
+    juju.deploy(otelcol_charm, app="otelcol")
     juju.deploy("ubuntu", base="ubuntu@22.04", channel="latest/stable")
     # WHEN they are related
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
