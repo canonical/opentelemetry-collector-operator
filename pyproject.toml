@@ -30,9 +30,9 @@ dev = [
   "pytest",
   "coverage[toml]",
   # Integration
-  "pytest-operator",
   "ops[testing]",
   "jubilant",
+  "pytest-jubilant~=1.0",
 ]
 
 # Testing tools configuration
@@ -65,7 +65,6 @@ pythonVersion = "3.10"
 pythonPlatform = "All"
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
 
 

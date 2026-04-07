@@ -3,16 +3,16 @@
 # See LICENSE file for licensing details.
 """Conftest file for integration tests."""
 
-import functools
+import subprocess
+from pytest import fixture
+from pytest_jubilant import pack
 import logging
 
 import os
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 
 import pytest
-from pytest_operator.plugin import OpsTest
 import jubilant
 
 logger = logging.getLogger(__name__)
@@ -20,55 +20,47 @@ logger = logging.getLogger(__name__)
 store = defaultdict(str)
 
 CONFIG_BUILDER_PATH = Path(__file__).parent.parent.parent / "src" / "config_builder.py"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def timed_memoizer(func):
-    """Cache the result of a function."""
+def charm_and_channel(charm_path_key: str, charm_channel_key: str, platform: str) -> tuple[str, str | None]:
+    """Opentelemetry-collector charm used for integration testing.
 
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        fname = func.__qualname__
-        logger.info("Started: %s" % fname)
-        start_time = datetime.now()
-        if fname in store.keys():
-            ret = store[fname]
-        else:
-            logger.info("Return for {} not cached".format(fname))
-            ret = await func(*args, **kwargs)
-            store[fname] = ret
-        logger.info("Finished: {} in: {} seconds".format(fname, datetime.now() - start_time))
-        return ret
-
-    return wrapper
-
-
-@pytest.fixture(scope="module")
-@timed_memoizer
-async def charm(ops_test: OpsTest) -> str:
-    """Charm used for integration testing.
-
-    When multiple charm files (i.e., for different bases) are produced by a `charmcraft pack`,
-    our CI will currently set the variable to the highest-base one.
+    Build once per session and reuse in all integration tests.
     """
-    # FIXME: Avoid passing the charm file path as an environment variable,
-    #        so every time a test is executed a new charm is packed with the modification
-    #        in the internal telemetry level. This comment should be removed when then itest
-    #        are improved to not use internal telemetry to verify if otelcol is receiving logs and metrics
-    # if charm_file := os.environ.get("CHARM_PATH"):
-    #     return charm_file
+    if channel_from_env := os.getenv(charm_channel_key):
+        charm = "opentelemetry-collector"
+        logger.info("Using published %s charm from %s", charm, channel_from_env)
+        return charm, channel_from_env
+    if path_from_env := os.getenv(charm_path_key):
+        charm_path = str(Path(path_from_env).absolute())
+        logger.info("Using local charm: %s", charm_path)
+        if "22.04" in platform:
+            return charm_path.replace("24.04", "22.04"), None
+        return charm_path, None
+    for _ in range(3):
+        logger.info("packing Opentelemetry-collector charm ...")
+        try:
+            pth = str(pack(REPO_ROOT, platform=platform))
+        except subprocess.CalledProcessError:
+            logger.warning("Failed to build Opentelemetry-collector charm. Trying again!")
+            continue
+        os.environ[charm_path_key] = pth
+        return pth, None
+    raise subprocess.CalledProcessError(1, "pack charm")
 
-    charm = await ops_test.build_charm(".")
-    charm = str(charm).replace("24.04", "22.04")
-    assert charm
-    return charm
+
+@fixture(scope="session")
+def charm():
+    """Charm (platform = ubuntu@24.04) used for integration testing."""
+    return charm_and_channel("CHARM_PATH", "CHARM_CHANNEL", platform="ubuntu@24.04:amd64")[0]
 
 
-@pytest.fixture(scope="module")
-@timed_memoizer
-async def charm_22_04(charm) -> str:
+@pytest.fixture(scope="session")
+def charm_22_04() -> str:
     """Charm (platform = ubuntu@22.04) used for integration testing."""
     # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
-    return charm.replace("24.04", "22.04")
+    return charm_and_channel("CHARM_PATH", "CHARM_CHANNEL", platform="ubuntu@22.04:amd64")[0]
 
 
 @pytest.fixture(scope="module")
