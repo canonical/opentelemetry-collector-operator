@@ -342,15 +342,9 @@ class ConfigManager:
         )
 
     @staticmethod
-    def _escape_dollars(value: Union[str, list, dict]) -> Union[str, list, dict]:
+    def _escape_dollars_in_job(value: dict) -> dict:
         """Recursively escape bare `$` signs in strings within a nested structure."""
-        if isinstance(value, str):
-            return re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
-        if isinstance(value, dict):
-            return {k: ConfigManager._escape_dollars(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [ConfigManager._escape_dollars(item) for item in value]
-        return value
+        return {k: ConfigManager._escape_dollars_in_job(v) for k, v in value.items()}
 
     @staticmethod
     def sanitize_escape_prometheus_scrape_configs(scrape_configs: List[Dict]) -> List[Dict]:
@@ -369,7 +363,7 @@ class ConfigManager:
         Returns:
             A deep copy of the scrape configs with all bare `$` signs escaped to `$$`.
         """
-        return [ConfigManager._escape_dollars(copy.deepcopy(job)) for job in scrape_configs]
+        return [ConfigManager._escape_dollars_in_job(copy.deepcopy(job)) for job in scrape_configs]
 
     def add_prometheus_scrape_jobs(self, jobs: List[Dict]):
         """Add Prometheus scrape configurations to the collector.
