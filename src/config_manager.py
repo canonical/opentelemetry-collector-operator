@@ -1,7 +1,9 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
+import copy
 import logging
-from typing import Any, Dict, List, Literal, Optional, Set
+import re
+from typing import Any, Dict, List, Literal, Optional, Set, Union
 from urllib.parse import urlparse
 
 import yaml
@@ -339,6 +341,36 @@ class ConfigManager:
             pipelines=[f"metrics/{self._unit_name}"],
         )
 
+    @staticmethod
+    def _escape_dollars(value: Union[str, list, dict]) -> Union[str, list, dict]:
+        """Recursively escape bare `$` signs in strings within a nested structure."""
+        if isinstance(value, str):
+            return re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
+        if isinstance(value, dict):
+            return {k: ConfigManager._escape_dollars(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [ConfigManager._escape_dollars(item) for item in value]
+        return value
+
+    @staticmethod
+    def sanitize_escape_prometheus_scrape_configs(scrape_configs: List[Dict]) -> List[Dict]:
+        """Escape $ signs in Prometheus scrape configs for otelcol compatibility.
+
+        The OpenTelemetry Collector interprets ${VAR} and $VAR as environment-variable
+        references. Prometheus relabeling rules legitimately use ${1}, ${2}, etc. as
+        capture-group back-references. To prevent otelcol from misinterpreting these,
+        every `$` must be doubled to `$$`, which otelcol treats as a literal dollar sign.
+
+        Already-escaped `$$` sequences are left unchanged (idempotent).
+
+        Args:
+            scrape_configs: list of scrape config dicts (may contain nested dicts/lists/strings).
+
+        Returns:
+            A deep copy of the scrape configs with all bare `$` signs escaped to `$$`.
+        """
+        return [ConfigManager._escape_dollars(copy.deepcopy(job)) for job in scrape_configs]
+
     def add_prometheus_scrape_jobs(self, jobs: List[Dict]):
         """Add Prometheus scrape configurations to the collector.
 
@@ -356,6 +388,7 @@ class ConfigManager:
         """
         if not jobs:
             return
+        jobs = ConfigManager.sanitize_escape_prometheus_scrape_configs(jobs)
         for scrape_job in jobs:
             # Otelcol acts as a client and scrapes the metrics-generating server, so we enable
             # toggling of skipping the validation of the server certificate
