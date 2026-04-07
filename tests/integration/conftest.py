@@ -48,6 +48,7 @@ def charm_and_channel(charm_path_key: str, charm_channel_key: str, platform: str
     raise subprocess.CalledProcessError(1, "pack charm")
 
 
+
 @fixture(scope="session")
 def charm():
     """Charm (platform = ubuntu@24.04) used for integration testing."""
