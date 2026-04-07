@@ -23,7 +23,7 @@ CONFIG_BUILDER_PATH = Path(__file__).parent.parent.parent / "src" / "config_buil
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def charm_and_channel(charm_path_key: str, charm_channel_key: str) -> tuple[str, str | None]:
+def charm_and_channel(charm_path_key: str, charm_channel_key: str, platform: str) -> tuple[str, str | None]:
     """Opentelemetry-collector charm used for integration testing.
 
     Build once per session and reuse in all integration tests.
@@ -39,7 +39,7 @@ def charm_and_channel(charm_path_key: str, charm_channel_key: str) -> tuple[str,
     for _ in range(3):
         logger.info("packing Opentelemetry-collector charm ...")
         try:
-            pth = str(pack(REPO_ROOT, platform="ubuntu@22.04:amd64"))
+            pth = str(pack(REPO_ROOT, platform=platform))
         except subprocess.CalledProcessError:
             logger.warning("Failed to build Opentelemetry-collector charm. Trying again!")
             continue
@@ -50,15 +50,15 @@ def charm_and_channel(charm_path_key: str, charm_channel_key: str) -> tuple[str,
 
 @fixture(scope="session")
 def charm():
-    """Opentelemetry-collector coordinator used for integration testing."""
-    return charm_and_channel("CHARM_PATH", "CHARM_CHANNEL")[0]
+    """Charm (platform = ubuntu@24.04) used for integration testing."""
+    return charm_and_channel("CHARM_PATH", "CHARM_CHANNEL", platform="ubuntu@24.04:amd64")[0]
 
 
-@pytest.fixture(scope="module")
-def charm_22_04(charm) -> str:
+@pytest.fixture(scope="session")
+def charm_22_04() -> str:
     """Charm (platform = ubuntu@22.04) used for integration testing."""
     # Note: Use '22.04' in integration tests with Zookeeper, because that's Zookeeper's base
-    return charm.replace("24.04", "22.04")
+    return charm_and_channel("CHARM_PATH", "CHARM_CHANNEL", platform="ubuntu@22.04:amd64")[0]
 
 
 @pytest.fixture(scope="module")

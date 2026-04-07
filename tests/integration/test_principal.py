@@ -22,17 +22,17 @@ def is_node_exporter_running_with_collectors(juju: jubilant.Juju, pattern: str):
     return True
 
 
-def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, charm: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     ## NOTE: /var/log/cloud-init.log and /var/log/cloud-init-output.log are always present
     juju.deploy(
-        charm_22_04,
+        charm,
         app="otelcol",
         config={"path_exclude": PATH_EXCLUDE, **ENABLE_BASIC_DEBUG_EXPORTERS},
     )
-    juju.deploy("zookeeper", channel="3/stable")
+    juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04")
     # WHEN they are related
-    juju.integrate("otelcol:juju-info", "zookeeper:juju-info")
+    juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     # THEN all units are active
     juju.wait(
         lambda status: jubilant.all_blocked(status, "otelcol"),
@@ -40,7 +40,7 @@ def test_deploy(juju: jubilant.Juju, charm_22_04: str):
         timeout=420,
     )
     juju.wait(
-        lambda status: jubilant.all_active(status, "zookeeper"),
+        lambda status: jubilant.all_active(status, "ubuntu"),
         error=jubilant.any_error,
         timeout=420,
     )
