@@ -124,16 +124,34 @@ requires:
     interface: tracing
     limit: 1
     optional: true
-    description: Send traces to a charmed Tempo instance.
+    description: Send workload and charm traces sent to this charm by related charms to a charmed Tempo instance.
   send-charm-traces:
     interface: tracing
     limit: 1
     optional: true
-    description: Send charm traces to a charmed Tempo instance.
+    description: Send this charm's own charm traces to a tracing backend. This is useful for debugging and understanding the behaviour of the charm itself, as opposed to its workload and the workloads that send it telemetry.
   send-profiles:
     interface: profiling
     optional: true
     description: Send any received profiling data to other charms.
+  send-otlp:
+    interface: otlp
+    optional: true
+    description: |
+      Send OTLP data to an OTLP server by agregating all supported OTLP endpoints offered by the
+      server. If multiple endpoints are supported, then the one with the most modern protocol is
+      chosen e.g., `gRPC` over `HTTP`.
+
+      This endpoint currently supports:
+        - gRPC for ["logs", "metrics"]
+        - HTTP for ["logs", "metrics"]
+  
+  external-config:
+    interface: external-config
+    optional: true
+    description: |
+      Process the configs received and merge them into /etc/otelcol/config.d/[unit].yaml
+      If the received config has secrets that have render=file, the secret files will be stored in /var/snap/opentelemetry-collector/common/external_config_secrets.
 
 peers:
   peers:

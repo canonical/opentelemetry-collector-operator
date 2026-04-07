@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, cast, get_args
 
 import yaml
+from charmlibs.interfaces.otlp import OtlpEndpoint, OtlpRequirer, RuleStore
 from charmlibs.pathops import PathProtocol
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
@@ -21,6 +22,7 @@ from charms.grafana_cloud_integrator.v0.cloud_config_requirer import (
 )
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiConsumer, LokiPushApiProvider
+from charms.otelcol_integrator.v0.otelcol_integrator import OtelcolIntegratorRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
 )
@@ -28,8 +30,8 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from charms.pyroscope_coordinator_k8s.v0.profiling import (
-    ProfilingEndpointRequirer,
     ProfilingEndpointProvider,
+    ProfilingEndpointRequirer,
 )
 from charms.tempo_coordinator_k8s.v0.tracing import (
     ReceiverProtocol,
@@ -43,7 +45,8 @@ from charms.tls_certificates_interface.v4.tls_certificates import (
     Mode,
     TLSCertificatesRequiresV4,
 )
-from cosl import LZMABase64
+from cosl.rules import JujuTopology
+from cosl.utils import LZMABase64
 from ops import CharmBase, tracing
 from ops.model import Relation
 
@@ -51,6 +54,7 @@ from config_builder import Port, build_port_map, sha256
 from constants import (
     DASHBOARDS_DEST_PATH,
     DASHBOARDS_SRC_PATH,
+    EXTERNAL_CONFIG_SECRETS_DIR,
     LOKI_RULES_DEST_PATH,
     LOKI_RULES_SRC_PATH,
     METRICS_RULES_DEST_PATH,
@@ -87,6 +91,11 @@ def _add_alerts(alerts: Dict, dest_path: Path):
         rule_file.write_text(yaml.safe_dump(rule))
         logger.debug(f"updated alert rules file {rule_file.as_posix()}")
 
+
+def receive_external_configs(charm: CharmBase) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Integrate with otelcol-integrator charm via the external-config relation endpoint."""
+    otelcol_requirer = OtelcolIntegratorRequirer(charm.model, "external-config", EXTERNAL_CONFIG_SECRETS_DIR)
+    return otelcol_requirer.retrieve_external_configs(), otelcol_requirer.secret_files
 
 def receive_loki_logs(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None):
     """Integrate with other charms via the receive-loki-logs relation endpoint.
@@ -233,8 +242,6 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
         peer_relation_name="peers",
     )
     charm.__setattr__("remote_write", remote_write)
-    # TODO: add alerts from remote write
-    # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/37277
     # TODO: Luca: probably don't need this anymore
     remote_write.reload_alerts()
     return remote_write.endpoints
@@ -453,6 +460,49 @@ def forward_dashboards(charm: CharmBase):
     # TODO: Do we need to implement dashboard status changed logic?
     #   This propagates Grafana's errors to the charm which provided the dashboard
     # grafana_dashboards_provider._reinitialize_dashboard_data(inject_dropdowns=False)
+
+
+def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
+    """Instantiate the OtlpRequirer.
+
+    This provides otelcol with the remote's OTLP endpoint for each relation.
+
+    The bundled rule files from the src/*_rules directories are copied to a
+    local path (*_RULES_DEST_PATH directories) within the charm's filesystem.
+
+    The `otlp_requirer.publish` then publishes them to the databag. See the
+    publish method's docstring of the otlp_requirer to understand what rules
+    are published to the databag and the mechanism to do so.
+
+    Since these paths are wiped on every hook, they can be used as a source of
+    truth for the current state of rules for the library to publish to the
+    databag.
+    """
+    # Use the paths on disk to coordinate and forward rules
+    charm_root = charm.charm_dir.absolute()
+    shutil.copytree(
+        charm_root.joinpath(*LOKI_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+    shutil.copytree(
+        charm_root.joinpath(*METRICS_RULES_SRC_PATH.split("/")),
+        charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")),
+        dirs_exist_ok=True,
+    )
+
+    # Publish rules for the provider
+    rules = (
+        RuleStore(JujuTopology.from_charm(charm))
+        .add_logql_path(charm_root.joinpath(LOKI_RULES_DEST_PATH), recursive=True)
+        .add_promql_path(charm_root.joinpath(METRICS_RULES_DEST_PATH), recursive=True)
+    )
+    OtlpRequirer(charm, rules=rules).publish()
+
+    # Access the provider's endpoints
+    return OtlpRequirer(
+        charm, protocols=["grpc", "http"], telemetries=["logs", "metrics", "traces"]
+    ).endpoints
 
 
 # TODO: Luca: move this into the GrafanCloudIntegrator library

@@ -253,6 +253,19 @@ wheels = [
 ]
 
 [[package]]
+name = "charmlibs-interfaces-otlp"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cosl" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/a6/29ac5c572d3bdf89ea6575fb0c2172ce824df20de7c8e3d1b63e2868397e/charmlibs_interfaces_otlp-0.2.0.tar.gz", hash = "sha256:86923b1cd8dbf4b2fa82b8408ba95592b452774d5bba5de998da245051058de1", size = 53525, upload-time = "2026-03-27T18:31:19.489Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/99/2e526b64d96a4087d8711c168152e34cec22d8af10cd617706f2bf28ae7f/charmlibs_interfaces_otlp-0.2.0-py3-none-any.whl", hash = "sha256:0aedfed58af3d5a1455f3a679a716b6ea45173d33779f7198360ed887497b355", size = 10996, upload-time = "2026-03-27T18:31:18.367Z" },
+]
+
+[[package]]
 name = "charmlibs-pathops"
 version = "1.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1140,6 +1153,7 @@ name = "opentelemetry-collector"
 version = "0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "charmlibs-interfaces-otlp" },
     { name = "charmlibs-pathops" },
     { name = "cosl" },
     { name = "cryptography" },
@@ -1167,6 +1181,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "charmlibs-interfaces-otlp" },
     { name = "charmlibs-pathops" },
     { name = "codespell", marker = "extra == 'dev'" },
     { name = "cosl" },

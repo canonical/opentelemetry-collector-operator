@@ -4,6 +4,7 @@ from typing import Final, Set
 
 SERVICE_NAME: Final[str] = "otelcol"
 CERT_DIR: Final[str] = "/var/snap/opentelemetry-collector/common/certs"
+EXTERNAL_CONFIG_SECRETS_DIR: Final[str] = "/var/snap/opentelemetry-collector/common/external_config_secrets"
 SERVER_CERT_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol-server-cert.crt"
 SERVER_CERT_PRIVATE_KEY_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol-private-key.key"
 RECV_CA_CERT_FOLDER_PATH: Final[str] = "/usr/local/share/ca-certificates/juju_receive-ca-cert"
