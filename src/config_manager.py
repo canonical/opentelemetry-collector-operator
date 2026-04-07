@@ -345,8 +345,7 @@ class ConfigManager:
     def _escape_dollars(value: Union[str, list, dict]) -> Union[str, list, dict]:
         """Recursively escape bare `$` signs in strings within a nested structure."""
         if isinstance(value, str):
-            # Replace single $ with $$
-            return value.replace("$", "$$")
+            return re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
         if isinstance(value, dict):
             return {k: ConfigManager._escape_dollars(v) for k, v in value.items()}
         if isinstance(value, list):
