@@ -35,6 +35,8 @@ def charm_and_channel(charm_path_key: str, charm_channel_key: str, platform: str
     if path_from_env := os.getenv(charm_path_key):
         charm_path = str(Path(path_from_env).absolute())
         logger.info("Using local charm: %s", charm_path)
+        if "22.04" in platform:
+            return charm_path.replace("24.04", "22.04"), None
         return charm_path, None
     for _ in range(3):
         logger.info("packing Opentelemetry-collector charm ...")
