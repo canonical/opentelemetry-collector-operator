@@ -33,7 +33,7 @@ dev = [
   # Integration
   "pytest-operator",
   "ops[testing]",
-  "jubilant",
+  "jubilant<2.0",
 ]
 
 # Testing tools configuration
