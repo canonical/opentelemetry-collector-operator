@@ -11,7 +11,7 @@ from helpers import PATH_EXCLUDE, is_pattern_in_debug_logs
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
-async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     juju.deploy(
         charm_22_04,
@@ -34,7 +34,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     )
 
 
-async def test_traces_are_scraped(juju: jubilant.Juju):
+def test_traces_are_scraped(juju: jubilant.Juju):
     grep_filters = ["ScopeTraces", "postgresql-charm"]
-    result = await is_pattern_in_debug_logs(juju, grep_filters)
+    result = is_pattern_in_debug_logs(juju, grep_filters)
     assert result

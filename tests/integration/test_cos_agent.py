@@ -12,7 +12,7 @@ from helpers import ENABLE_BASIC_DEBUG_EXPORTERS, PATH_EXCLUDE, is_pattern_in_de
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
-async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     # GIVEN an OpenTelemetry Collector charm and a principal
     juju.deploy(
         charm_22_04,
@@ -35,15 +35,15 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     )
 
 
-async def test_metrics_are_scraped(juju: jubilant.Juju):
+def test_metrics_are_scraped(juju: jubilant.Juju):
     grep_filters = ["juju_application=zookeeper", f"juju_model={juju.model}"]
-    result = await is_pattern_in_debug_logs(juju, grep_filters)
+    result = is_pattern_in_debug_logs(juju, grep_filters)
     assert result
 
 
-async def test_logs_are_scraped(juju: jubilant.Juju):
+def test_logs_are_scraped(juju: jubilant.Juju):
     grep_filters = ["log.file.name=zookeeper.log", "log.file.path=/snap/opentelemetry-collector"]
-    result = await is_pattern_in_debug_logs(juju, grep_filters)
+    result = is_pattern_in_debug_logs(juju, grep_filters)
     assert result
 
 
