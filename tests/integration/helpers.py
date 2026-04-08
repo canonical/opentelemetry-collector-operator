@@ -21,7 +21,7 @@ SNAP_STATUS_COMMAND: Final[str] = "sudo snap services opentelemetry-collector"
 
 
 @retry(stop=stop_after_attempt(20), wait=wait_fixed(10))
-async def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list):
+def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list):
     cmd = (
         "sudo snap logs opentelemetry-collector -n=all"
         + " | "
@@ -34,7 +34,7 @@ async def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list):
     return True
 
 
-async def is_pattern_not_in_debug_logs(juju: jubilant.Juju, pattern: str):
+def is_pattern_not_in_debug_logs(juju: jubilant.Juju, pattern: str):
     debug_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
     if re.search(pattern, debug_logs):
         raise Exception(f"Pattern {pattern} found in the debug logs")
