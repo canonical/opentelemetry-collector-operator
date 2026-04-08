@@ -1,9 +1,11 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
+import copy
 import hashlib
 import logging
 from enum import Enum, unique
-from typing import Any, Dict, List, Literal, Optional, Set, Union
+import re
+from typing import Any, Dict, List, Literal, Optional, Set, Union, cast
 
 import yaml
 
@@ -219,6 +221,7 @@ class ConfigBuilder:
             self._scrape_interval,
             self._scrape_timeout,
         )
+        self._sanitize_prometheus_scrape_configs()
         self._add_exporter_insecure_skip_verify(self._exporter_skip_verify)
         return yaml.safe_dump(self._config)
 
@@ -428,8 +431,46 @@ class ConfigBuilder:
         """Set the `scrape_interval` and `scrape_timeout` for all scrape_configs in every prometheus receiver."""
         receivers = self._config.get("receivers", {})
         for name, receiver in receivers.items():
-            if name.split("/")[0] == "prometheus":
+            if name.startswith("prometheus/"):
                 scrape_configs = receiver.get("config", {}).get("scrape_configs", [])
                 for scrape_cfg in scrape_configs:
                     scrape_cfg["scrape_interval"] = interval
                     scrape_cfg["scrape_timeout"] = timeout
+
+    @staticmethod
+    def _escape_dollars(value: Union[str, list, dict]) -> Union[str, list, dict]:
+        """Recursively escape bare `$` signs in strings within a nested structure."""
+        if isinstance(value, str):
+            return re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
+        if isinstance(value, dict):
+            return {k: ConfigBuilder._escape_dollars(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [ConfigBuilder._escape_dollars(item) for item in value]
+        return value
+
+    @staticmethod
+    def _sanitize_escape_prometheus_scrape_configs(scrape_configs: List[Dict]) -> List[Dict]:
+        """Escape $ signs in Prometheus scrape configs for otelcol compatibility.
+
+        The OpenTelemetry Collector interprets ${VAR} and $VAR as environment-variable
+        references. Prometheus relabeling rules legitimately use ${1}, ${2}, etc. as
+        capture-group back-references. To prevent otelcol from misinterpreting these,
+        every `$` must be doubled to `$$`, which otelcol treats as a literal dollar sign.
+
+        Already-escaped `$$` sequences are left unchanged (idempotent).
+
+        Args:
+            scrape_configs: list of scrape config dicts (may contain nested dicts/lists/strings).
+
+        Returns:
+            A deep copy of the scrape configs with all bare `$` signs escaped to `$$`.
+        """
+        return [cast(Dict, ConfigBuilder._escape_dollars(copy.deepcopy(job))) for job in scrape_configs]
+
+    def _sanitize_prometheus_scrape_configs(self):
+        """Escape any $ in any prometheus receiver's scrape configs."""
+        for name, receiver in self._config.get("receivers", {}).items():
+            if name.startswith("prometheus/"):
+                scrape_configs = receiver.get("config", {}).get("scrape_configs", [])
+                sanitized_scrape_configs = self._sanitize_escape_prometheus_scrape_configs(scrape_configs)
+                receiver["config"]["scrape_configs"] = sanitized_scrape_configs
