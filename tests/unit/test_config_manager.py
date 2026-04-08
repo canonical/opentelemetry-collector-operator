@@ -307,4 +307,24 @@ receivers:
 
     receiver_name = "prometheus/custom/otelcol/0"
     assert receiver_name in config_manager.config._config["receivers"]
-    assert receiver_name in config_manager.config._config["service"]["pipelines"]["metrics/otelcol/0"]["receivers"]
+    assert (
+        receiver_name
+        in config_manager.config._config["service"]["pipelines"]["metrics/otelcol/0"]["receivers"]
+    )
+
+
+@pytest.mark.parametrize(
+    "external_configs",
+    [
+        [{"config_yaml": "[]", "pipelines": ["metrics"]}],
+        [{"config_yaml": "receivers: []", "pipelines": ["metrics"]}],
+        ["not-a-dict"],
+    ],
+)
+def test_add_external_configs_skips_malformed_entries(external_configs):
+    config_manager = ConfigManager("otelcol/0", "otelcol", "", "", insecure_skip_verify=True)
+    initial_config = copy.deepcopy(config_manager.config._config)
+
+    config_manager.add_external_configs(external_configs)
+
+    assert config_manager.config._config == initial_config
