@@ -450,8 +450,8 @@ class ConfigBuilder:
             case _:
                 return value
 
-    @staticmethod
-    def _sanitize_escape_prometheus_scrape_configs(scrape_configs: List[Dict]) -> List[Dict]:
+    @classmethod
+    def _sanitize_escape_prometheus_scrape_configs(cls, scrape_configs: List[Dict]) -> List[Dict]:
         """Escape $ signs in Prometheus scrape configs for otelcol compatibility.
 
         The OpenTelemetry Collector interprets ${VAR} and $VAR as environment-variable
@@ -467,7 +467,7 @@ class ConfigBuilder:
         Returns:
             A deep copy of the scrape configs with all bare `$` signs escaped to `$$`.
         """
-        return [cast(Dict, ConfigBuilder._escape_dollars(copy.deepcopy(job))) for job in scrape_configs]
+        return [cast(Dict, cls._escape_dollars(copy.deepcopy(job))) for job in scrape_configs]
 
     def _sanitize_prometheus_scrape_configs(self):
         """Escape any $ in any prometheus receiver's scrape configs."""
