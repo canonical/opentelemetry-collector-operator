@@ -437,16 +437,18 @@ class ConfigBuilder:
                     scrape_cfg["scrape_interval"] = interval
                     scrape_cfg["scrape_timeout"] = timeout
 
-    @staticmethod
-    def _escape_dollars(value: Union[str, list, dict]) -> Union[str, list, dict]:
+    @classmethod
+    def _escape_dollars(cls, value: Any) -> Any:
         """Recursively escape bare `$` signs in strings within a nested structure."""
-        if isinstance(value, str):
-            return re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
-        if isinstance(value, dict):
-            return {k: ConfigBuilder._escape_dollars(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [ConfigBuilder._escape_dollars(item) for item in value]
-        return value
+        match value:
+            case str():
+                return re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
+            case dict():
+                return {k: cls._escape_dollars(v) for k, v in value.items()}
+            case list():
+                return [cls._escape_dollars(item) for item in value]
+            case _:
+                return value
 
     @staticmethod
     def _sanitize_escape_prometheus_scrape_configs(scrape_configs: List[Dict]) -> List[Dict]:
