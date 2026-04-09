@@ -9,7 +9,7 @@ import pytest
 import yaml
 import copy
 
-from config_builder import ConfigBuilder, Component, Port, build_port_map
+from src.config_builder import ConfigBuilder, Component, Port, build_port_map
 
 
 @pytest.mark.parametrize("pipelines", ([], ["logs", "metrics", "traces"]))
@@ -391,3 +391,107 @@ def test_config_builder_accepts_port_overrides():
     # AND the internal telemetry metrics endpoint uses the overridden port
     prometheus_reader = built["service"]["telemetry"]["metrics"]["readers"][0]["pull"]["exporter"]["prometheus"]
     assert prometheus_reader["port"] == 8889
+
+
+@pytest.mark.parametrize(
+    "input_replacement,expected_replacement",
+    [
+        # Single capture group ${1}
+        ("${1}.juju-73d163-3-lxd-0", "$${1}.juju-73d163-3-lxd-0"),
+        # Multiple capture groups ${1} and ${2}
+        ("${1}-${2}", "$${1}-$${2}"),
+        # Plain $var env-var-like
+        ("$MY_VAR", "$$MY_VAR"),
+        # Already escaped $$ — must be idempotent
+        ("$${1}.juju-73d163-3-lxd-0", "$${1}.juju-73d163-3-lxd-0"),
+        # No dollar signs — unchanged
+        ("static-replacement", "static-replacement"),
+        # Empty string
+        ("", ""),
+    ],
+)
+def test_sanitize_escape_prometheus_scrape_configs_parametrized(
+    input_replacement, expected_replacement
+):
+    """Test that bare $ signs in relabel_configs replacement fields are properly escaped."""
+    # GIVEN a scrape config with a relabeling rule containing a replacement value
+    scrape_configs = [
+        {
+            "job_name": "test_job",
+            "relabel_configs": [
+                {
+                    "action": "replace",
+                    "regex": "([^.]+).*",
+                    "replacement": input_replacement,
+                }
+            ],
+        }
+    ]
+
+    expected_scrape_configs = [
+        {
+            "job_name": "test_job",
+            "relabel_configs": [
+                {
+                    "action": "replace",
+                    "regex": "([^.]+).*",
+                    "replacement": expected_replacement,
+                }
+            ],
+        }
+    ]
+
+    # WHEN sanitize_escape_prometheus_scrape_configs is called
+    result = ConfigBuilder._sanitize_escape_prometheus_scrape_configs(scrape_configs)
+
+    # THEN the scrape config is correctly escaped
+    assert result == expected_scrape_configs
+
+
+def test_sanitize_escape_prometheus_scrape_configs_multiple_jobs_mixed():
+    """Test that multiple jobs are handled correctly, including already-escaped ones."""
+    # GIVEN two jobs: one with bare $ signs, one already escaped
+    scrape_configs = [
+        {
+            "job_name": "job_bare",
+            "relabel_configs": [{"replacement": "${1}.host"}],
+        },
+        {
+            "job_name": "job_already_escaped",
+            "relabel_configs": [{"replacement": "$${1}.host"}],
+        },
+    ]
+
+    # WHEN sanitize_escape_prometheus_scrape_configs is called
+    result = ConfigBuilder._sanitize_escape_prometheus_scrape_configs(scrape_configs)
+
+    # THEN bare $ in job_bare is escaped
+    assert result[0]["relabel_configs"][0]["replacement"] == "$${1}.host"
+    # AND already-escaped $$ in job_already_escaped is unchanged
+    assert result[1]["relabel_configs"][0]["replacement"] == "$${1}.host"
+
+
+def test_sanitize_escape_prometheus_scrape_configs_no_mutation():
+    """Test that the original input is not mutated (deep copy guarantee)."""
+    # GIVEN a scrape config with bare $ signs
+    original = [{"relabel_configs": [{"replacement": "${1}.host"}]}]
+    original_copy = copy.deepcopy(original)
+
+    # WHEN sanitize_escape_prometheus_scrape_configs is called
+    ConfigBuilder._sanitize_escape_prometheus_scrape_configs(original)
+
+    # THEN the original input is not mutated
+    assert original == original_copy
+
+
+def test_sanitize_escape_prometheus_scrape_configs_idempotent():
+    """Test that calling the method twice returns the same result (idempotent)."""
+    # GIVEN a scrape config with bare $ signs
+    scrape_configs = [{"relabel_configs": [{"replacement": "${1}.host"}]}]
+
+    # WHEN sanitize_escape_prometheus_scrape_configs is called twice
+    once = ConfigBuilder._sanitize_escape_prometheus_scrape_configs(scrape_configs)
+    twice = ConfigBuilder._sanitize_escape_prometheus_scrape_configs(once)
+
+    # THEN the result is the same both times
+    assert once == twice
