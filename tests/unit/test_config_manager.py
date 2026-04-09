@@ -307,7 +307,10 @@ receivers:
 
     receiver_name = "prometheus/custom/otelcol/0"
     assert receiver_name in config_manager.config._config["receivers"]
-    assert receiver_name in config_manager.config._config["service"]["pipelines"]["metrics/otelcol/0"]["receivers"]
+    assert (
+        receiver_name
+        in config_manager.config._config["service"]["pipelines"]["metrics/otelcol/0"]["receivers"]
+    )
 
 
 @pytest.mark.parametrize(
