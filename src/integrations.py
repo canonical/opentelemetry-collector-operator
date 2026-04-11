@@ -343,11 +343,12 @@ def send_profiles(charm: CharmBase) -> List[ProfilingEndpoint]:
     ]
 
 
-def send_traces(charm: CharmBase) -> Optional[str]:
+def send_traces(charm: CharmBase) -> List[str]:
     """Integrate with Tempo via the send-traces relation endpoint.
 
     Returns:
-        The tracing OTLP HTTP endpoint if the Provider is ready, None otherwise
+        A list of OTLP HTTP endpoints for every ready ``send-traces`` relation.
+        Returns an empty list when no relation is ready.
     """
     # Enable pushing traces to a backend (i.e. Tempo) with TracingEndpointRequirer, i.e. configure the exporters
     tracing_requirer = TracingEndpointRequirer(
@@ -361,9 +362,12 @@ def send_traces(charm: CharmBase) -> Optional[str]:
     # NOTE: the name must be 'tracing' because the COS Agent library hardcodes it
     # https://github.com/canonical/grafana-agent-operator/blob/7363627f4e83b03ef179506a95b5fb411523b041/lib/charms/grafana_agent/v0/cos_agent.py#L1062
     charm.__setattr__("tracing", tracing_requirer)
-    if not tracing_requirer.is_ready():
-        return None
-    return tracing_requirer.get_endpoint("otlp_http")
+    return [
+        endpoint
+        for rel in charm.model.relations["send-traces"]
+        if tracing_requirer.is_ready(rel)
+        if (endpoint := tracing_requirer.get_endpoint("otlp_http", rel)) is not None
+    ]
 
 
 def send_charm_traces(charm: CharmBase) -> Optional[str]:

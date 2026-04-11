@@ -504,21 +504,22 @@ class ConfigManager:
             pipelines=[f"traces/{self._unit_name}"],
         )
 
-    def add_traces_forwarding(self, endpoint: str) -> None:
+    def add_traces_forwarding(self, endpoint: str, identifier: str) -> None:
         """Configure trace forwarding to a Tempo endpoint.
 
         Sets up an OTLP HTTP exporter to forward traces to the specified endpoint.
+        Each call must use a unique identifier so that multiple Tempo backends can
+        be wired into the traces pipeline simultaneously.
 
         Args:
             endpoint: The URL of the Tempo endpoint to forward traces to.
-
-        Note:
-            Currently, only one endpoint is supported due to limitations in the
-            Tempo charm. The exporter will be added to the 'traces' pipeline.
+            identifier: A unique string used to disambiguate the exporter name
+                (e.g. the relation index). The exporter will be named
+                ``otlphttp/send-traces-{identifier}``.
         """
         self.config.add_component(
             Component.exporter,
-            "otlphttp/send-traces",
+            f"otlphttp/send-traces-{identifier}",
             {
                 "endpoint": endpoint,
                 **self.sending_queue_config,

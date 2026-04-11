@@ -117,12 +117,10 @@ requires:
       Obtain a certificate from a CA.
       The charm sends a CSR over this relation and receives a signed certificate back.
       That is the cert that would be presented to incoming TLS connections.
-  # TODO: remove limit once https://github.com/canonical/tempo-coordinator-k8s-operator/issues/168 is resolved
   send-traces:
     interface: tracing
-    limit: 1
     optional: true
-    description: Send workload and charm traces sent to this charm by related charms to a charmed Tempo instance.
+    description: Send workload and charm traces sent to this charm by related charms to one or more charmed Tempo instances.
   send-charm-traces:
     interface: tracing
     limit: 1
