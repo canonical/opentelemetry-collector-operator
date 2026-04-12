@@ -194,11 +194,14 @@ def mock_cos_agent_update_tracing():
 
 
 @pytest.fixture(autouse=True)
-def mock_ensure_certs_dir(request):
-    """Mock the _ensure_certs_dir method to avoid PermissionError in tests."""
+def mock_ensure_directory(request, tmp_path):
+    """Mock the _ensure_directory method to avoid PermissionError in tests."""
+    node_exporter_dir = tmp_path / "textfile-collector.d"
+    node_exporter_dir.mkdir(parents=True, exist_ok=True)
     with (
-        patch("charm.OpenTelemetryCollectorCharm._ensure_certs_dir"),
+        patch("charm.OpenTelemetryCollectorCharm._ensure_directory"),
         patch("charm.CERT_DIR", "/tmp/test_certs"),
+        patch("charm.NODE_EXPORTER_TEXTFILE_DIRECTORY", str(node_exporter_dir)),
     ):
         yield
 
