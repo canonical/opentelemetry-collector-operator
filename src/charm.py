@@ -10,6 +10,7 @@ import shutil
 import socket
 import subprocess
 from pathlib import Path
+from textwrap import dedent
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -36,6 +37,7 @@ from constants import (
     METRICS_RULES_DEST_PATH,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
+    NODE_EXPORTER_TEXTFILE_DIRECTORY,
     RECV_CA_CERT_FOLDER_PATH,
     SERVER_CA_CERT_PATH,
     SERVER_CERT_PATH,
@@ -461,7 +463,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         metrics_consumer_jobs = integrations.scrape_metrics(self)
         # Write CA certificates to disk and update job configurations
         try:
-            self._ensure_certs_dir()
+            self._ensure_directory(CERT_DIR)
             cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
             metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
                 metrics_consumer_jobs, cert_paths
@@ -555,6 +557,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 self.unit.status = BlockedStatus(f"Mismatching snap revisions for {snap_name}")
                 return
 
+        self._ensure_directory(NODE_EXPORTER_TEXTFILE_DIRECTORY)
         self._configure_node_exporter(port_map[Port.node_exporter.name])
         self.unit.status = ActiveStatus()
 
@@ -619,6 +622,20 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if not manager.is_used_by_other_units(snap_name):
             self._remove_snap(snap_name)
 
+        self._remove_node_exporter_info_metric_file()
+
+    def _remove_node_exporter_info_metric_file(self):
+        """Remove the node-exporter info metrics file."""
+        path = self._node_exporter_info_metric_file_path
+        try:
+            existed = path.exists()
+            path.unlink(missing_ok=True)
+            if existed:
+                logger.info(f"removed node-exporter info metric file: {path}")
+        except OSError as e:
+            logger.warning(f"failed to remove node-exporter info metric file {path}: {e}")
+
+
     def _remove_opentelemetry_collector(self):
         """Coordinate opentelemetry-collector snap and config file removal."""
         manager = SingletonSnapManager(self.unit.name)
@@ -655,9 +672,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             "collectors": " ".join(sorted(NODE_EXPORTER_ENABLED_COLLECTORS)),
             "no-collectors": " ".join(sorted(NODE_EXPORTER_DISABLED_COLLECTORS)),
             "web.listen-address": f":{port}",
+            "collector.textfile.directory": NODE_EXPORTER_TEXTFILE_DIRECTORY,
         }
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
+        self._node_exporter_info_metric_file_path.write_text(self._info_metric)
 
     def _configure_logrotate(self):
         """Configure logrotate for otelcol's internal logs.
@@ -701,13 +720,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """
         return snap.SnapCache()[snap_name]
 
-    def _ensure_certs_dir(self) -> None:
-        cert_dir = Path(CERT_DIR)
-        cert_dir.mkdir(parents=True, exist_ok=True)
-        cert_dir.chmod(0o755)
-
-    def _ensure_external_configs_secrets_dir(self) -> None:
-        directory = LocalPath(EXTERNAL_CONFIG_SECRETS_DIR)
+    def _ensure_directory(self, path: str) -> None:
+        directory = LocalPath(path)
         directory.mkdir(parents=True, exist_ok=True)
         directory.chmod(0o755)
 
@@ -769,7 +783,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if not external_secret_files:
             self._remove_external_configs_secrets_dir()
             return
-        self._ensure_external_configs_secrets_dir()
+        self._ensure_directory(EXTERNAL_CONFIG_SECRETS_DIR)
         for filepath, secret in external_secret_files.items():
             filepath = LocalPath(filepath)
             filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -830,6 +844,32 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_server_cert_relation(self) -> bool:
         return any(self.model.relations.get("receive-server-cert", []))
+
+    @property
+    def _node_exporter_info_metric_file_path(self) -> LocalPath:
+        return LocalPath(NODE_EXPORTER_TEXTFILE_DIRECTORY) / f"{self.unit.name.replace('/','_')}.prom"
+
+    @property
+    def _info_metric(self) -> str:
+        subordinate_unit = self.unit.name
+        principal_unit = "UNKNOWN"
+
+        for relation_name in ["cos-agent", "juju-info"]:
+            for relation in self.model.relations.get(relation_name, []):
+                if not relation.units:
+                    continue
+
+                principal_unit = next(iter(relation.units)).name
+                break
+            else:
+                continue
+            break
+
+        return dedent(f"""\
+        # HELP subordinate_charm_info Subordinate charm information
+        # TYPE subordinate_charm_info gauge
+        subordinate_charm_info{{subordinate_unit="{subordinate_unit}", principal_unit="{principal_unit}"}} 1
+        """)
 
 
 if __name__ == "__main__":  # pragma: nocover
