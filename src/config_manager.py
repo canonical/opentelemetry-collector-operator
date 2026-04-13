@@ -380,6 +380,7 @@ class ConfigManager:
                 {
                     "endpoint": endpoint["url"],
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
+                    "add_metric_suffixes": False,
                     **self.prometheus_remotewrite_wal_config,
                 },
                 pipelines=[f"metrics/{self._unit_name}"],

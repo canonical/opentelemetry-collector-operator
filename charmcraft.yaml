@@ -91,7 +91,13 @@ requires:
   send-remote-write:
     interface: prometheus_remote_write
     optional: true
-    description: To forward collected metrics to a Prometheus backend.
+    description: |
+      To forward collected metrics to a Prometheus backend.
+
+      The remote write exporter config has ``add_metric_suffixes`` set to
+      ``false`` to not add suffixes to metric names based on the type of the
+      metric (e.g. _total for counters). This is to maintain parity with
+      grafana-agent, and will eventually be deprecated.
   send-loki-logs:
     interface: loki_push_api
     optional: true
