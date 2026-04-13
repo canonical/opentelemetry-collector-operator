@@ -106,6 +106,7 @@ def test_add_prometheus_scrape():
         }
     ]
     expected_prom_recv_cfg = {
+        "trim_metric_suffixes": True,
         "config": {
             "scrape_configs": [
                 {
@@ -117,7 +118,7 @@ def test_add_prometheus_scrape():
                     "tls_config": {"insecure_skip_verify": True},
                 },
             ],
-        }
+        },
     }
     config_manager.add_prometheus_scrape_jobs(first_job)
     # THEN it exists in the prometheus receiver config

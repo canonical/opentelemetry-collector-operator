@@ -325,7 +325,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.config.add_component(
                 Component.receiver,
                 f"prometheus/cos-agent/{self.unit.name}",
-                {"config": {"scrape_configs": cos_agent.metrics_jobs}},
+                {
+                    "config": {"scrape_configs": cos_agent.metrics_jobs},
+                    "trim_metric_suffixes": True,
+                },
                 pipelines=[f"metrics/{self.unit.name}"],
             )
         if self.unit.is_leader():

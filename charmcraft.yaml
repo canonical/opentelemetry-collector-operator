@@ -77,6 +77,10 @@ requires:
       `cos-agent` is a dedicated relation for the grafana agent machine
       charm. It will allow you to set up custom scrape jobs, fetch files
       from arbitrary locations, send alert rules, dashboards, etc.
+
+      The prometheus receiver config has ``trim_metric_suffixes`` set to
+      ``true`` to restore the original metric names used in OpenTelemetry
+      instrumentation. This maintains parity with grafana-agent.
     interface: cos_agent
     scope: container
     optional: true
@@ -87,7 +91,12 @@ requires:
   metrics-endpoint:
     interface: prometheus_scrape
     optional: true
-    description: To scrape other charms' metrics endpoints.
+    description: |
+      To scrape other charms' metrics endpoints.
+
+      The prometheus receiver config has ``trim_metric_suffixes`` set to
+      ``true`` to restore the original metric names used in OpenTelemetry
+      instrumentation. This maintains parity with grafana-agent.
   send-remote-write:
     interface: prometheus_remote_write
     optional: true
@@ -95,9 +104,9 @@ requires:
       To forward collected metrics to a Prometheus backend.
 
       The remote write exporter config has ``add_metric_suffixes`` set to
-      ``false`` to not add suffixes to metric names based on the type of the
-      metric (e.g. _total for counters). This is to maintain parity with
-      grafana-agent, and will eventually be deprecated.
+      ``false`` to convert the OTLP metric names used in OpenTelemetry
+      instrumentation to Prometheus-compatible names. This maintains parity
+      with grafana-agent.
   send-loki-logs:
     interface: loki_push_api
     optional: true
