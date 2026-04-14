@@ -852,14 +852,18 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _info_metric(self) -> str:
         subordinate_unit = self.unit.name
+        subordinate_app = self.app.name
         principal_unit = "UNKNOWN"
+        principal_app = "UNKNOWN"
 
         for relation_name in ["cos-agent", "juju-info"]:
             for relation in self.model.relations.get(relation_name, []):
                 if not relation.units:
                     continue
 
-                principal_unit = next(iter(relation.units)).name
+                remote_unit = next(iter(relation.units))
+                principal_unit = remote_unit.name
+                principal_app = remote_unit.app.name
                 break
             else:
                 continue
@@ -868,7 +872,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         return dedent(f"""\
         # HELP subordinate_charm_info Subordinate charm information
         # TYPE subordinate_charm_info gauge
-        subordinate_charm_info{{subordinate_unit="{subordinate_unit}", principal_unit="{principal_unit}"}} 1
+        subordinate_charm_info{{subordinate_app="{subordinate_app}", subordinate_unit="{subordinate_unit}", principal_app="{principal_app}", principal_unit="{principal_unit}"}} 1
         """)
 
 

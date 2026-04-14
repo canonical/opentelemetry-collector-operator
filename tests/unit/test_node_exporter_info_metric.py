@@ -100,6 +100,12 @@ def file_contains_principal_unit(tmp_path, principal_unit):
     assert f'principal_unit="{principal_unit}"' in content
 
 
+@then(parsers.parse("the info metric file contains the principal app {principal_app}"))
+def file_contains_principal_app(tmp_path, principal_app):
+    content = (tmp_path / "textfile-collector.d" / "otelcol_0.prom").read_text()
+    assert f'principal_app="{principal_app}"' in content
+
+
 @then("the info metric file does not exist")
 def info_metric_file_does_not_exist(tmp_path):
     assert not (tmp_path / "textfile-collector.d" / "otelcol_0.prom").exists()
