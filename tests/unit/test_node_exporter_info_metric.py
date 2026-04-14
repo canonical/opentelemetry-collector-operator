@@ -9,30 +9,7 @@ from ops.testing import State, SubordinateRelation
 from pytest_bdd import given, parsers, scenario, scenarios, then, when
 
 
-@scenario("features/test_node_exporter_info_metric.feature", "Info metric file is written when charm runs")
-def test_info_metric_file_is_written():
-    pass
-
-
-@scenario(
-    "features/test_node_exporter_info_metric.feature",
-    "Info metric contains principal unit from subordinate relation",
-)
-def test_info_metric_contains_principal_unit():
-    pass
-
-
-@scenario("features/test_node_exporter_info_metric.feature", "Info metric file is removed on charm removal")
-def test_info_metric_file_removed_on_remove():
-    pass
-
-
-@scenario(
-    "features/test_node_exporter_info_metric.feature",
-    "Removing info metric file is a no-op when it does not exist",
-)
-def test_info_metric_file_remove_is_noop_when_missing():
-    pass
+scenarios("features/test_node_exporter_info_metric.feature")
 
 
 # --- GIVEN ---
