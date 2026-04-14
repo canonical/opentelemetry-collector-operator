@@ -6,7 +6,7 @@
 from unittest.mock import patch
 
 from ops.testing import State, SubordinateRelation
-from pytest_bdd import given, parsers, scenario, then, when
+from pytest_bdd import given, parsers, scenario, scenarios, then, when
 
 
 @scenario("features/test_node_exporter_info_metric.feature", "Info metric file is written when charm runs")
