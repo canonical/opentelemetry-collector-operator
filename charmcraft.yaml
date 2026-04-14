@@ -77,10 +77,6 @@ requires:
       `cos-agent` is a dedicated relation for the grafana agent machine
       charm. It will allow you to set up custom scrape jobs, fetch files
       from arbitrary locations, send alert rules, dashboards, etc.
-
-      The prometheus receiver config has ``trim_metric_suffixes`` set to
-      ``true`` to restore the original metric names used in OpenTelemetry
-      instrumentation. This maintains parity with grafana-agent.
     interface: cos_agent
     scope: container
     optional: true
@@ -91,12 +87,7 @@ requires:
   metrics-endpoint:
     interface: prometheus_scrape
     optional: true
-    description: |
-      To scrape other charms' metrics endpoints.
-
-      The prometheus receiver config has ``trim_metric_suffixes`` set to
-      ``true`` to restore the original metric names used in OpenTelemetry
-      instrumentation. This maintains parity with grafana-agent.
+    description: To scrape other charms' metrics endpoints.
   send-remote-write:
     interface: prometheus_remote_write
     optional: true

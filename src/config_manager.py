@@ -366,10 +366,7 @@ class ConfigManager:
         self.config.add_component(
             Component.receiver,
             f"prometheus/metrics-endpoint/{self._unit_name}",
-            config={
-                "config": {"scrape_configs": jobs},
-                "trim_metric_suffixes": True,
-            },
+            config={"config": {"scrape_configs": jobs}},
             pipelines=[f"metrics/{self._unit_name}"],
         )
 

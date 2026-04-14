@@ -106,7 +106,6 @@ def test_add_prometheus_scrape():
         }
     ]
     expected_prom_recv_cfg = {
-        "trim_metric_suffixes": True,
         "config": {
             "scrape_configs": [
                 {
