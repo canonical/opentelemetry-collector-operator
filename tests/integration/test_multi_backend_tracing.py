@@ -16,7 +16,7 @@ OTELCOL_CONFIG_FILE = os.path.join(
 )
 
 
-async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
+def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     """Deploy otelcol and two backend otelcol apps, wire both as send-traces targets."""
     # GIVEN an otelcol and two backends — each as a subordinate to its own ubuntu principal
     juju.deploy("ubuntu", app="ubuntu-main", base="ubuntu@22.04", channel="latest/stable")
@@ -59,7 +59,7 @@ async def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     )
 
 
-async def test_two_exporters_in_config(juju: jubilant.Juju):
+def test_two_exporters_in_config(juju: jubilant.Juju):
     """Both send-traces relations produce distinct exporters wired into the traces pipeline."""
     # GIVEN otelcol settled with two send-traces relations
     cfg = get_otelcol_config(juju, "ubuntu-main/0", OTELCOL_CONFIG_FILE)
@@ -78,7 +78,7 @@ async def test_two_exporters_in_config(juju: jubilant.Juju):
         )
 
 
-async def test_no_ambiguous_relation_error(juju: jubilant.Juju):
+def test_no_ambiguous_relation_error(juju: jubilant.Juju):
     """No unit enters error state, which is what AmbiguousRelationUsageError would cause."""
     # An unhandled AmbiguousRelationUsageError in a charm hook drives the unit into
     # error state. Asserting clean status is more reliable than grepping log output,
@@ -86,7 +86,7 @@ async def test_no_ambiguous_relation_error(juju: jubilant.Juju):
     assert not jubilant.any_error(juju.status())
 
 
-async def test_relation_removal_reconfigures_cleanly(juju: jubilant.Juju):
+def test_relation_removal_reconfigures_cleanly(juju: jubilant.Juju):
     """Removing one send-traces relation drops its exporter and leaves the other intact."""
     # WHEN one backend relation is removed
     juju.remove_relation("otelcol:send-traces", "otelcol-b2:receive-traces")
