@@ -11,7 +11,7 @@ from constants import CONFIG_FOLDER, NODE_EXPORTER_TEXTFILE_DIRECTORY
 from singleton_snap import SnapRegistrationFile
 import os
 
-from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname
+from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname, textfile_filename
 
 CONFIG_FILE_PATH = "/etc/otelcol/config.d"
 OTLP_RECEIVER_NAME = "otlp"
@@ -48,9 +48,9 @@ def test_deploy(juju: jubilant.Juju, charm: str):
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
 
     node_exporter_textfile = juju.ssh(
-        "ubuntu/0", command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/otelcol_0.prom || echo "does not exist"'
+        "ubuntu/0", command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/0")} || echo "does not exist"'
     )
-    assert node_exporter_textfile.strip() != "does not exist"
+    assert node_exporter_textfile.strip() == ""
 
 def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     # GIVEN only 1 unit of the otelcol charm
@@ -75,7 +75,7 @@ def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
         "ubuntu/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
     node_exporter_textfile = juju.ssh(
-        "ubuntu/0", command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/otelcol_0.prom || echo "does not exist"'
+        "ubuntu/0", command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/0")} || echo "does not exist"'
     )
     assert otelcol_config_dir.strip() == "does not exist"
     assert node_exporter_textfile.strip() == "does not exist"
@@ -135,10 +135,17 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     )
     node_exporter_textfile = juju.ssh(
         "ubuntu/0",
-        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/otelcol_2.prom || echo "does not exist"'
+        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/2")} || echo "does not exist"'
     )
     assert otelcol_config.strip() == "does not exist"
     assert node_exporter_textfile.strip() == "does not exist"
+
+    # AND the node-exporter textfile for the surviving unit (otelcol/1) remains on disk
+    node_exporter_textfile_surviving = juju.ssh(
+        "ubuntu/0",
+        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/1")} || echo "does not exist"'
+    )
+    assert node_exporter_textfile_surviving.strip() == ""
 
     # AND the otelcol config directory remains on disk
     otelcol_config_dir = juju.ssh(
@@ -193,12 +200,12 @@ def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     # otelcol/1 runs on ubuntu/0 (machine 0)
     node_exporter_textfile_machine0 = juju.ssh(
         "ubuntu/0",
-        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/otelcol_1.prom || echo "does not exist"'
+        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/1")} || echo "does not exist"'
     )
     # otelcol/4 runs on ubuntu/2 (machine 1)
     node_exporter_textfile_machine1 = juju.ssh(
         "ubuntu/2",
-        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/otelcol_4.prom || echo "does not exist"'
+        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/4")} || echo "does not exist"'
     )
     assert otelcol_config_0.strip() == "does not exist"
     assert otelcol_config_1.strip() == "does not exist"
