@@ -6,7 +6,7 @@
 from unittest.mock import patch
 
 from ops.testing import State, SubordinateRelation
-from pytest_bdd import given, parsers, scenario, scenarios, then, when
+from pytest_bdd import given, parsers, scenarios, then, when
 
 
 scenarios("features/test_node_exporter_info_metric.feature")
