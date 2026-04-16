@@ -731,7 +731,7 @@ class ConfigManager:
                         "component type: '%s', name: '%s' added to config", config_type, comp_name
                     )
 
-    def add_memory_limiter_processing(self, soft_limit_percentage_request: int = 50) -> None:
+    def add_memory_limiter_processing(self, soft_limit_percentage_request: int = 85) -> None:
         """Configure the memory limiter processor.
 
         The time between measurements of memory usage is hardcoded to 1 second
