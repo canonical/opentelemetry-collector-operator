@@ -252,11 +252,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ports=port_map,
         )
 
+        # Memory limiter setup
+        self._configure_limits_processor(config_manager)
+
         # Self-mon logging
         self._configure_logrotate()
 
         # Tracing setup
-        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready(), ports=port_map)
+        requested_tracing_protocols = integrations.receive_traces(
+            self, tls=is_tls_ready(), ports=port_map
+        )
         config_manager.add_traces_ingestion(requested_tracing_protocols)
         # Add default processors to traces
         config_manager.add_traces_processing(
@@ -302,9 +307,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                             "scrape_interval": "60s",
                             "static_configs": [
                                 {
-                                    "targets": [
-                                        f"0.0.0.0:{port_map[Port.node_exporter.name]}"
-                                    ],
+                                    "targets": [f"0.0.0.0:{port_map[Port.node_exporter.name]}"],
                                     "labels": {
                                         "instance": socket.getfqdn(),
                                         "juju_charm": topology.charm_name,
@@ -410,9 +413,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
             )
 
-
         # External-config setup
-        self.external_configs, self.external_secret_files = integrations.receive_external_configs(self)
+        self.external_configs, self.external_secret_files = integrations.receive_external_configs(
+            self
+        )
         self._write_secrets_to_disk(self.external_secret_files)
         self._configure_external_configs(config_manager)
 
@@ -778,6 +782,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def _configure_external_configs(self, config_manager: ConfigManager):
         config_manager.add_external_configs(self.external_configs)
+
+    def _configure_limits_processor(self, config_manager: ConfigManager):
+        try:
+            limit = int(cast(str, self.config.get("soft_memory_limit_percentage")))
+            config_manager.add_memory_limiter_processing(soft_limit_percentage_request=limit)
+        except ValueError:
+            logger.warning(
+                "Invalid soft_memory_limit_percentage config value, defaulting the value to 50."
+            )
+            config_manager.add_memory_limiter_processing()
 
     def _cleanup_certificates_on_remove(self):
         """Clean up certificates during charm removal.

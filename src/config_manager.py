@@ -410,14 +410,12 @@ class ConfigManager:
                 "insecure": insecure,
                 "insecure_skip_verify": self._insecure_skip_verify,
             }
-            exporter_type = 'otlp' if otlp_endpoint.protocol == 'grpc' else 'otlphttp'
+            exporter_type = "otlp" if otlp_endpoint.protocol == "grpc" else "otlphttp"
             self.config.add_component(
                 Component.exporter,
                 f"{exporter_type}/rel-{rel_id}/{self._unit_name}",
                 {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
-                pipelines=[
-                    f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries
-                ],
+                pipelines=[f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries],
             )
 
     def add_traces_ingestion(
@@ -707,7 +705,9 @@ class ConfigManager:
                 try:
                     component = Component(config_type)
                 except ValueError:
-                    logger.warning("wrong component type '%s' in external config, skipping", config_type)
+                    logger.warning(
+                        "wrong component type '%s' in external config, skipping", config_type
+                    )
                     continue
 
                 if not isinstance(config, dict):
@@ -722,6 +722,55 @@ class ConfigManager:
                         component,
                         comp_name,
                         cnf,
-                        pipelines=[f"{getattr(p, 'value', p)}/{self._unit_name}" for p in configs["pipelines"]],
+                        pipelines=[
+                            f"{getattr(p, 'value', p)}/{self._unit_name}"
+                            for p in configs["pipelines"]
+                        ],
                     )
-                    logger.debug("component type: '%s', name: '%s' added to config", config_type, comp_name)
+                    logger.debug(
+                        "component type: '%s', name: '%s' added to config", config_type, comp_name
+                    )
+
+    def add_memory_limiter_processing(self, soft_limit_percentage_request: int = 50) -> None:
+        """Configure the memory limiter processor.
+
+        The time between measurements of memory usage is hardcoded to 1 second
+        as recommended by the processor's documentation.
+
+        The soft_limit_percentage is clamped to [15, 85] to ensure the hard
+        limit can never exceed 100%, which itself is clamped to [30, 100]. The
+        processor will enter memory limited mode and will start refusing the
+        data when memory usage exceeds the soft limit by returning errors to
+        the preceding component in the pipeline that made the telemetry
+        function call. This is a non-permanent error. When receivers see this
+        error they are expected to retry sending the same data or apply
+        backpressure to their own data sources in order to slow the inflow of
+        data into the Collector, and to allow memory usage to go below the set
+        limits. When the memory usage is above the hard limit the processor
+        will additionally force garbage collection to be performed.
+
+        | user input (%) | soft limit (%) | hard limit (%) |
+        | -10            | 15             | 30             |
+        | 60             | 60             | 75             |
+        | 100            | 85             | 100            |
+
+        Args:
+            soft_limit_percentage_request: The soft limit, clamped to [15,85],
+            as a percentage of total memory before the processor starts
+            refusing data.
+        """
+        spike_limit_percentage = 15
+        clamped = max(
+            spike_limit_percentage,
+            min(soft_limit_percentage_request, 100 - spike_limit_percentage),
+        )
+        self.config.add_component(
+            Component.processor,
+            "memory_limiter",
+            {
+                "check_interval": "1s",
+                "limit_percentage": spike_limit_percentage + clamped,
+                "spike_limit_percentage": spike_limit_percentage,
+            },
+            pipelines=[f"traces/{self._unit_name}"],
+        )

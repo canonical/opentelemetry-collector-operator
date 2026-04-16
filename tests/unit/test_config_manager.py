@@ -328,3 +328,24 @@ def test_add_external_configs_skips_malformed_entries(external_configs):
     config_manager.add_external_configs(external_configs)
 
     assert config_manager.config._config == initial_config
+
+
+@pytest.mark.parametrize(
+    "limit_request",
+    [-10, 60, 100],
+)
+def test_add_memory_limiter_processing(limit_request):
+    # GIVEN a user requested soft limit percentage for the memory limiter processor
+    config_manager = ConfigManager("otelcol/0", "otelcol", "", "")
+
+    # WHEN the memory limiter processor is added to the config
+    config_manager.add_memory_limiter_processing(soft_limit_percentage_request=limit_request)
+
+    # THEN the memory limiter processor is added to the config with valid soft and hard limits
+    assert "memory_limiter" in config_manager.config._config["processors"]
+    memory_limiter_config = config_manager.config._config["processors"]["memory_limiter"]
+    limit_percentage = memory_limiter_config["limit_percentage"]
+    spike_limit_percentage = memory_limiter_config["spike_limit_percentage"]
+    assert limit_percentage > spike_limit_percentage
+    assert 30 <= limit_percentage <= 100
+    assert 15 <= spike_limit_percentage <= 85
