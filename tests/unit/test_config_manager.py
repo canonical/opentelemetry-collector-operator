@@ -72,6 +72,7 @@ def test_add_remote_write():
     # WHEN a remote write exporter is added to the config
     expected_remote_write_cfg = {
         "endpoint": "http://192.168.1.244/cos-prometheus-0/api/v1/write",
+        "add_metric_suffixes": False,
         "tls": {
             "insecure_skip_verify": True,
         },
@@ -116,7 +117,7 @@ def test_add_prometheus_scrape():
                     "tls_config": {"insecure_skip_verify": True},
                 },
             ],
-        }
+        },
     }
     config_manager.add_prometheus_scrape_jobs(first_job)
     # THEN it exists in the prometheus receiver config
