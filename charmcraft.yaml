@@ -18,7 +18,7 @@ description: |
 
   As a subordinate, it is deployed alongside a principal charm and scales automatically with
   it. The collector aggregates telemetry from the host machine and from related charms, then
-  forwards it to the appropriate backends such as Prometheus, Loki, and Tempo.
+  forwards it to the appropriate backends such as Prometheus, Mimir, Loki, and Tempo.
 
   Key features:
 
