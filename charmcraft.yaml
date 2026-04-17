@@ -9,10 +9,36 @@ type: charm
 subordinate: true
 summary: Vendor-agnostic way to receive, process and export telemetry data.
 description: |
-  The OpenTelemetry Collector offers a vendor-agnostic implementation on how to receive,
-  process and export telemetry data. In addition, it removes the need to run, operate and
-  maintain multiple agents/collectors in order to support open-source telemetry data formats
-  (e.g. Jaeger, Prometheus, etc.) to multiple open-source or commercial back-ends.
+  OpenTelemetry Collector is a Juju subordinate charm that deploys and manages the
+  OpenTelemetry Collector on machines (LXD, MAAS, etc.), providing a vendor-agnostic telemetry
+  pipeline for receiving, processing, and exporting metrics, logs, traces, and profiles. It is
+  a complementary charm to the Canonical Observability Stack (COS), enabling other charms to
+  send their telemetry to COS backends:
+  https://documentation.ubuntu.com/observability
+
+  As a subordinate, it is deployed alongside a principal charm and scales automatically with
+  it. The collector aggregates telemetry from the host machine and from related charms, then
+  forwards it to the appropriate backends such as Prometheus, Loki, and Tempo.
+
+  Key features:
+
+  - Vendor-agnostic telemetry collection covering metrics, logs, traces, and profiles in a
+    single agent.
+  - Multi-protocol trace ingestion supporting OpenTelemetry (OTLP gRPC/HTTP), with additional
+    support for Jaeger and Zipkin protocols.
+  - Automatic scraping of Prometheus metrics endpoints and collection of log files from the
+    host machine.
+  - Forwarding of telemetry to COS backends — Prometheus (remote write), Mimir, Loki, and Tempo —
+    through Juju relations.
+  - Integration with the cos-agent interface for custom scrape jobs, log file paths, alert
+    rules, and dashboards provided by principal charms.
+  - Built-in Grafana dashboards and alert rules for self-monitoring.
+  - TLS support with configurable CA trust via the receive-ca-cert and receive-server-cert
+    relations.
+  - Configurable processors, sampling rates, scrape intervals, and per-protocol receiver
+    toggles.
+  - Grafana Cloud integration via the cloud-config relation.
+  - Customizable port mappings to avoid conflicts with other services on the host.
 
 links:
   # documentation: https://discourse.charmhub.io/
