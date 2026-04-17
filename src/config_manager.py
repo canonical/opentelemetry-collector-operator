@@ -2,7 +2,6 @@
 
 import logging
 from typing import Any, Dict, List, Literal, Optional, Set
-from urllib.parse import urlparse
 
 import yaml
 
@@ -380,6 +379,7 @@ class ConfigManager:
                 {
                     "endpoint": endpoint["url"],
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
+                    "add_metric_suffixes": False,
                     **self.prometheus_remotewrite_wal_config,
                 },
                 pipelines=[f"metrics/{self._unit_name}"],
@@ -405,9 +405,8 @@ class ConfigManager:
 
         # Exporter config
         for rel_id, otlp_endpoint in relation_map.items():
-            insecure = urlparse(otlp_endpoint.endpoint).scheme == "http"
             tls_config: Dict[str, Any] = {
-                "insecure": insecure,
+                "insecure": otlp_endpoint.insecure,
                 "insecure_skip_verify": self._insecure_skip_verify,
             }
             exporter_type = "otlp" if otlp_endpoint.protocol == "grpc" else "otlphttp"
