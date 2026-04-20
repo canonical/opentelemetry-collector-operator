@@ -1,6 +1,7 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
 import logging
+import os
 from typing import Any, Dict, List, Literal, Optional, Set
 
 import yaml
@@ -758,8 +759,12 @@ class ConfigManager:
             as a percentage of total memory before the processor starts
             refusing data.
         """
+        # FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/256
+        # Same as running free -m on the machine and looking at the total memory in MiB.
+        total_mib = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
+
         spike_limit_percentage = 15
-        clamped = max(
+        soft_limit_percentage = max(
             spike_limit_percentage,
             min(soft_limit_percentage_request, 100 - spike_limit_percentage),
         )
@@ -768,8 +773,8 @@ class ConfigManager:
             "memory_limiter",
             {
                 "check_interval": "1s",
-                "limit_percentage": spike_limit_percentage + clamped,
-                "spike_limit_percentage": spike_limit_percentage,
+                "limit_mib": (spike_limit_percentage + soft_limit_percentage) * total_mib // 100,
+                "spike_limit_mib": spike_limit_percentage * total_mib // 100,
             },
             pipelines=[f"traces/{self._unit_name}"],
         )
