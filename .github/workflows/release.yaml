@@ -9,8 +9,9 @@ on:
 
 jobs:
   release:
-    uses: canonical/observability/.github/workflows/charm-release.yaml@v1
+    uses: canonical/observability/.github/workflows/charm-release.yaml@698b788fbe2507b2d55f5bb16a1e41de6bc3c86e
     secrets: inherit
     with:
       provider: machine
       default-track: dev
+      pack-using-remote-build: true
