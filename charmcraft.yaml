@@ -93,7 +93,13 @@ requires:
   send-remote-write:
     interface: prometheus_remote_write
     optional: true
-    description: To forward collected metrics to a Prometheus backend.
+    description: |
+      To forward collected metrics to a Prometheus backend.
+
+      The remote write exporter config has ``add_metric_suffixes`` set to
+      ``false`` to convert the OTLP metric names used in OpenTelemetry
+      instrumentation to Prometheus-compatible names. This maintains parity
+      with grafana-agent.
   send-loki-logs:
     interface: loki_push_api
     optional: true
