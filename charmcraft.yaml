@@ -400,6 +400,11 @@ config:
         before the memory limiter processor is able to reject it. Be sure to
         consider this when setting your limits, particularly for non-OTLP
         receivers.
+
+        The total available memory is determined by reading the cgroup memory
+        limit from `/sys/fs/cgroup/memory.max`. If the file is not present or
+        contains "max", the total physical memory of the machine is used
+        instead.
       default: "85"
 
 actions:

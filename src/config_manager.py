@@ -5,13 +5,32 @@ import os
 from typing import Any, Dict, List, Literal, Optional, Set
 
 import yaml
-
-from config_builder import Component, ConfigBuilder, Port, build_port_map
-from constants import FILE_STORAGE_DIRECTORY
-from integrations import ProfilingEndpoint
 from charmlibs.interfaces.otlp import OtlpEndpoint
 
+from config_builder import Component, ConfigBuilder, Port, build_port_map
+from constants import CGROUP_MEMORY_MAX, FILE_STORAGE_DIRECTORY
+from integrations import ProfilingEndpoint
+
 logger = logging.getLogger(__name__)
+
+
+def _total_memory_mib() -> int:
+    """Return the total memory available to this process in MiB.
+
+    Reads the cgroup memory limit, which reflects container/LXD limits.
+    Falls back to physical RAM when the cgroup file is absent or reads "max"
+    (meaning no limit is set).
+
+    We need this function until this issue is closed:
+        - https://github.com/canonical/opentelemetry-collector-operator/issues/256
+    """
+    try:
+        raw = open(CGROUP_MEMORY_MAX).read().strip()
+        if raw != "max":
+            return int(raw) // (1024 * 1024)
+    except (OSError, ValueError):
+        pass
+    return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
 
 
 def tail_sampling_config(
@@ -759,10 +778,7 @@ class ConfigManager:
             as a percentage of total memory before the processor starts
             refusing data.
         """
-        # FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/256
-        # Same as running free -m on the machine and looking at the total memory in MiB.
-        total_mib = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
-
+        total_mib = _total_memory_mib()
         spike_limit_percentage = 15
         soft_limit_percentage = max(
             spike_limit_percentage,
@@ -776,5 +792,9 @@ class ConfigManager:
                 "limit_mib": (spike_limit_percentage + soft_limit_percentage) * total_mib // 100,
                 "spike_limit_mib": spike_limit_percentage * total_mib // 100,
             },
-            pipelines=[f"traces/{self._unit_name}"],
+            pipelines=[
+                f"metrics/{self._unit_name}",
+                f"logs/{self._unit_name}",
+                f"traces/{self._unit_name}",
+            ],
         )
