@@ -72,6 +72,7 @@ def test_add_remote_write():
     # WHEN a remote write exporter is added to the config
     expected_remote_write_cfg = {
         "endpoint": "http://192.168.1.244/cos-prometheus-0/api/v1/write",
+        "add_metric_suffixes": False,
         "tls": {
             "insecure_skip_verify": True,
         },
@@ -116,7 +117,7 @@ def test_add_prometheus_scrape():
                     "tls_config": {"insecure_skip_verify": True},
                 },
             ],
-        }
+        },
     }
     config_manager.add_prometheus_scrape_jobs(first_job)
     # THEN it exists in the prometheus receiver config
@@ -230,8 +231,9 @@ def test_add_otlp_forwarding():
             0: OtlpEndpoint(
                 **{
                     "protocol": "grpc",
-                    "endpoint": "https://1.2.3.4:grpc-port",
+                    "endpoint": "1.2.3.4:grpc-port",
                     "telemetries": ["metrics", "traces"],
+                    "insecure": False,
                 }
             ),
             1: OtlpEndpoint(
@@ -239,13 +241,15 @@ def test_add_otlp_forwarding():
                     "protocol": "http",
                     "endpoint": "http://host-1:http-port",
                     "telemetries": ["logs"],
+                    "insecure": True,
                 }
             ),
             2: OtlpEndpoint(
                 **{
                     "protocol": "grpc",
-                    "endpoint": "https://host-2:grpc-port",
+                    "endpoint": "host-2:grpc-port",
                     "telemetries": ["logs", "traces"],
+                    "insecure": True,
                 }
             ),
         }
@@ -254,7 +258,7 @@ def test_add_otlp_forwarding():
     # THEN the exporter config contains appropriate "otlp" and "otlphttp" exporters
     expected_exporters = {
         f"otlp/rel-0/{unit_name}": {
-            "endpoint": "https://1.2.3.4:grpc-port",
+            "endpoint": "1.2.3.4:grpc-port",
             "tls": {"insecure": False, "insecure_skip_verify": True},
         },
         f"otlphttp/rel-1/{unit_name}": {
@@ -262,8 +266,8 @@ def test_add_otlp_forwarding():
             "tls": {"insecure": True, "insecure_skip_verify": True},
         },
         f"otlp/rel-2/{unit_name}": {
-            "endpoint": "https://host-2:grpc-port",
-            "tls": {"insecure": False, "insecure_skip_verify": True},
+            "endpoint": "host-2:grpc-port",
+            "tls": {"insecure": True, "insecure_skip_verify": True},
         },
     }
     # AND the exporters are added to the appropriate pipelines

@@ -9,10 +9,46 @@ type: charm
 subordinate: true
 summary: Vendor-agnostic way to receive, process and export telemetry data.
 description: |
-  The OpenTelemetry Collector offers a vendor-agnostic implementation on how to receive,
-  process and export telemetry data. In addition, it removes the need to run, operate and
-  maintain multiple agents/collectors in order to support open-source telemetry data formats
-  (e.g. Jaeger, Prometheus, etc.) to multiple open-source or commercial back-ends.
+  OpenTelemetry Collector is a Juju subordinate charm that deploys and manages the
+  OpenTelemetry Collector on machines (LXD, MAAS, etc.), providing a vendor-agnostic telemetry
+  pipeline for receiving, processing, and exporting metrics, logs, traces, and profiles. It is
+  a complementary charm to the Canonical Observability Stack (COS), enabling other charms to
+  send their telemetry to COS backends:
+  https://documentation.ubuntu.com/observability
+
+  As a subordinate, it is deployed alongside a principal charm and scales automatically with
+  it. The collector aggregates telemetry from the host machine and from related charms, then
+  forwards it to the appropriate backends such as Prometheus, Mimir, Loki, and Tempo.
+
+  Key features:
+
+  - Vendor-agnostic telemetry collection covering metrics, logs, traces, and profiles in a
+    single agent.
+  - Multi-protocol trace ingestion supporting OpenTelemetry (OTLP gRPC/HTTP), with additional
+    support for Jaeger and Zipkin protocols.
+  - Automatic scraping of Prometheus metrics endpoints and collection of log files from the
+    host machine.
+  - Forwarding of telemetry to COS backends — Prometheus (remote write), Mimir, Loki, and Tempo —
+    through Juju relations.
+  - Integration with the cos-agent interface for custom scrape jobs, log file paths, alert
+    rules, and dashboards provided by principal charms.
+  - Built-in Grafana dashboards and alert rules for self-monitoring.
+  - TLS support with configurable CA trust via the receive-ca-cert and receive-server-cert
+    relations.
+  - Configurable processors, sampling rates, scrape intervals, and per-protocol receiver
+    toggles.
+  - Grafana Cloud integration via the cloud-config relation.
+  - External configuration support via the external-config relation, allowing related charms
+    (such as opentelemetry-collector-integrator) to inject custom collector configuration snippets
+    that are merged into the running configuration.
+  - Customizable port mappings to avoid conflicts with other services on the host.
+
+  Known limitations:
+
+  - All receivers feed into all exporters within the same signal pipeline. There is no
+    support for selective routing of telemetry from specific receivers to specific exporters.
+  - OpenTelemetry Collector connectors are not supported. Features that depend on connectors,
+    such as generating metrics from trace spans (spanmetrics), are not available.
 
 links:
   # documentation: https://discourse.charmhub.io/
@@ -26,8 +62,10 @@ assumes:
 platforms:
   ubuntu@22.04:amd64:
   ubuntu@22.04:arm64:
+  ubuntu@22.04:s390x:
   ubuntu@24.04:amd64:
   ubuntu@24.04:arm64:
+  ubuntu@24.04:s390x:
 
 parts:
   charm:
@@ -91,7 +129,13 @@ requires:
   send-remote-write:
     interface: prometheus_remote_write
     optional: true
-    description: To forward collected metrics to a Prometheus backend.
+    description: |
+      To forward collected metrics to a Prometheus backend.
+
+      The remote write exporter config has ``add_metric_suffixes`` set to
+      ``false`` to convert the OTLP metric names used in OpenTelemetry
+      instrumentation to Prometheus-compatible names. This maintains parity
+      with grafana-agent.
   send-loki-logs:
     interface: loki_push_api
     optional: true
@@ -143,13 +187,13 @@ requires:
       This endpoint currently supports:
         - gRPC for ["logs", "metrics"]
         - HTTP for ["logs", "metrics"]
-  
   external-config:
     interface: external-config
     optional: true
     description: |
       Process the configs received and merge them into /etc/otelcol/config.d/[unit].yaml
-      If the received config has secrets that have render=file, the secret files will be stored in /var/snap/opentelemetry-collector/common/external_config_secrets.
+      If the received config has secrets that have render=file, the secret files will be stored
+      in /var/snap/opentelemetry-collector/common/external_config_secrets.
 
 peers:
   peers:

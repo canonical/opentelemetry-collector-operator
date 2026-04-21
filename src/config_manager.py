@@ -2,7 +2,6 @@
 
 import logging
 from typing import Any, Dict, List, Literal, Optional, Set
-from urllib.parse import urlparse
 
 import yaml
 
@@ -380,6 +379,7 @@ class ConfigManager:
                 {
                     "endpoint": endpoint["url"],
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
+                    "add_metric_suffixes": False,
                     **self.prometheus_remotewrite_wal_config,
                 },
                 pipelines=[f"metrics/{self._unit_name}"],
@@ -405,19 +405,16 @@ class ConfigManager:
 
         # Exporter config
         for rel_id, otlp_endpoint in relation_map.items():
-            insecure = urlparse(otlp_endpoint.endpoint).scheme == "http"
             tls_config: Dict[str, Any] = {
-                "insecure": insecure,
+                "insecure": otlp_endpoint.insecure,
                 "insecure_skip_verify": self._insecure_skip_verify,
             }
-            exporter_type = 'otlp' if otlp_endpoint.protocol == 'grpc' else 'otlphttp'
+            exporter_type = "otlp" if otlp_endpoint.protocol == "grpc" else "otlphttp"
             self.config.add_component(
                 Component.exporter,
                 f"{exporter_type}/rel-{rel_id}/{self._unit_name}",
                 {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
-                pipelines=[
-                    f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries
-                ],
+                pipelines=[f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries],
             )
 
     def add_traces_ingestion(
@@ -707,7 +704,9 @@ class ConfigManager:
                 try:
                     component = Component(config_type)
                 except ValueError:
-                    logger.warning("wrong component type '%s' in external config, skipping", config_type)
+                    logger.warning(
+                        "wrong component type '%s' in external config, skipping", config_type
+                    )
                     continue
 
                 if not isinstance(config, dict):
@@ -722,6 +721,11 @@ class ConfigManager:
                         component,
                         comp_name,
                         cnf,
-                        pipelines=[f"{getattr(p, 'value', p)}/{self._unit_name}" for p in configs["pipelines"]],
+                        pipelines=[
+                            f"{getattr(p, 'value', p)}/{self._unit_name}"
+                            for p in configs["pipelines"]
+                        ],
                     )
-                    logger.debug("component type: '%s', name: '%s' added to config", config_type, comp_name)
+                    logger.debug(
+                        "component type: '%s', name: '%s' added to config", config_type, comp_name
+                    )
