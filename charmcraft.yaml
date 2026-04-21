@@ -43,6 +43,13 @@ description: |
     that are merged into the running configuration.
   - Customizable port mappings to avoid conflicts with other services on the host.
 
+  Known limitations:
+
+  - All receivers feed into all exporters within the same signal pipeline. There is no
+    support for selective routing of telemetry from specific receivers to specific exporters.
+  - OpenTelemetry Collector connectors are not supported. Features that depend on connectors,
+    such as generating metrics from trace spans (spanmetrics), are not available.
+
 links:
   # documentation: https://discourse.charmhub.io/
   website: https://charmhub.io/opentelemetry-collector
