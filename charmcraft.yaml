@@ -38,6 +38,9 @@ description: |
   - Configurable processors, sampling rates, scrape intervals, and per-protocol receiver
     toggles.
   - Grafana Cloud integration via the cloud-config relation.
+  - External configuration support via the external-config relation, allowing related charms
+    (such as opentelemetry-collector-integrator) to inject custom collector configuration snippets
+    that are merged into the running configuration.
   - Customizable port mappings to avoid conflicts with other services on the host.
 
 links:
@@ -177,13 +180,13 @@ requires:
       This endpoint currently supports:
         - gRPC for ["logs", "metrics"]
         - HTTP for ["logs", "metrics"]
-  
   external-config:
     interface: external-config
     optional: true
     description: |
       Process the configs received and merge them into /etc/otelcol/config.d/[unit].yaml
-      If the received config has secrets that have render=file, the secret files will be stored in /var/snap/opentelemetry-collector/common/external_config_secrets.
+      If the received config has secrets that have render=file, the secret files will be stored
+      in /var/snap/opentelemetry-collector/common/external_config_secrets.
 
 peers:
   peers:
