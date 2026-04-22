@@ -5,7 +5,7 @@
 
 from unittest.mock import patch
 from ops.testing import State
-from scenario import ActiveStatus, BlockedStatus
+from scenario import BlockedStatus
 from helpers import get_otelcol_config_file
 import dataclasses
 
