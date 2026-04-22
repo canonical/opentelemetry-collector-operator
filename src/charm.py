@@ -55,6 +55,10 @@ logger = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 
+class InvalidMemoryLimiterConfig:
+    """Returned when the memory_limit_percentage config value is not a valid integer."""
+
+
 def validate_cert(cert: str) -> bool:
     """Validate certificate content using PEM format validation.
 
@@ -253,7 +257,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
 
         # Memory limiter setup
-        self._configure_limits_processor(config_manager)
+        limits_processor = self._configure_limits_processor(config_manager)
 
         # Self-mon logging
         self._configure_logrotate()
@@ -566,6 +570,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
+        if isinstance(limits_processor, InvalidMemoryLimiterConfig):
+            self.unit.status = BlockedStatus(
+                "Invalid memory_limit_percentage config value, see debug-log"
+            )
+
         # Workload version
         self.unit.set_workload_version(self._otelcol_version or "")
 
@@ -783,15 +792,21 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _configure_external_configs(self, config_manager: ConfigManager):
         config_manager.add_external_configs(self.external_configs)
 
-    def _configure_limits_processor(self, config_manager: ConfigManager):
+    def _configure_limits_processor(
+        self, config_manager: ConfigManager
+    ) -> None | InvalidMemoryLimiterConfig:
         try:
-            limit = int(cast(str, self.config.get("soft_memory_limit_percentage")))
-            config_manager.add_memory_limiter_processing(soft_limit_percentage_request=limit)
+            limit = int(cast(str, self.config.get("memory_limit_percentage")))
+            if limit < 0 or limit > 100:
+                raise ValueError("memory_limit_percentage value must be [0, 100]")
+            config_manager.add_memory_limiter_processing(limit)
         except ValueError:
             logger.warning(
-                "Invalid soft_memory_limit_percentage config value, defaulting the value to 50."
+                "Invalid memory_limit_percentage config value, defaulting to 100. "
+                "Valid values are [0, 100]"
             )
-            config_manager.add_memory_limiter_processing()
+            config_manager.add_memory_limiter_processing(100)
+            return InvalidMemoryLimiterConfig()
 
     def _cleanup_certificates_on_remove(self):
         """Clean up certificates during charm removal.

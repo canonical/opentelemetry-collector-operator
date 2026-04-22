@@ -750,47 +750,42 @@ class ConfigManager:
                         "component type: '%s', name: '%s' added to config", config_type, comp_name
                     )
 
-    def add_memory_limiter_processing(self, soft_limit_percentage_request: int = 85) -> None:
+    def add_memory_limiter_processing(self, limit_percentage_request) -> None:
         """Configure the memory limiter processor.
 
         The time between measurements of memory usage is hardcoded to 1 second
         as recommended by the processor's documentation.
 
-        The soft_limit_percentage is clamped to [15, 85] to ensure the hard
-        limit can never exceed 100%, which itself is clamped to [30, 100]. The
-        processor will enter memory limited mode and will start refusing the
-        data when memory usage exceeds the soft limit by returning errors to
-        the preceding component in the pipeline that made the telemetry
-        function call. This is a non-permanent error. When receivers see this
-        error they are expected to retry sending the same data or apply
-        backpressure to their own data sources in order to slow the inflow of
-        data into the Collector, and to allow memory usage to go below the set
-        limits. When the memory usage is above the hard limit the processor
-        will additionally force garbage collection to be performed.
+        The resulting limit_percentage (hard limit) is clamped to [0, 100] as a
+        percentage of total memory. The spike_limit_percentage is hardcoded to
+        20% of the hard limit. A hard limit of 0% means no memory limit is
+        enforced.
 
-        | user input (%) | soft limit (%) | hard limit (%) |
-        | -10            | 15             | 30             |
-        | 60             | 60             | 75             |
-        | 100            | 85             | 100            |
+        When memory usage exceeds the soft limit, the processor starts refusing
+        data by returning errors to the preceding component in the pipeline.
+        When memory usage exceeds the hard limit, the processor additionally
+        forces garbage collection.
+
+        | user input (%) | hard limit (% of total) | soft limit (% of hard) |
+        | -10            | 0                       | 0                      |
+        | 50             | 50                      | 40                     |
+        | 100            | 100                     | 80                     |
 
         Args:
-            soft_limit_percentage_request: The soft limit, clamped to [15,85],
-            as a percentage of total memory before the processor starts
-            refusing data.
+            limit_percentage_request: The hard limit, clamped to [0, 100],
+            as a percentage of total memory at which the processor forces GC.
         """
         total_mib = _total_memory_mib()
-        spike_limit_percentage = 15
-        soft_limit_percentage = max(
-            spike_limit_percentage,
-            min(soft_limit_percentage_request, 100 - spike_limit_percentage),
-        )
+        hard_limit_percentage = max(0, min(limit_percentage_request, 100))
+        hard_limit_mib = hard_limit_percentage * total_mib // 100
+        spike_limit_mib = hard_limit_mib * 20 // 100
         self.config.add_component(
             Component.processor,
             "memory_limiter",
             {
                 "check_interval": "1s",
-                "limit_mib": (spike_limit_percentage + soft_limit_percentage) * total_mib // 100,
-                "spike_limit_mib": spike_limit_percentage * total_mib // 100,
+                "limit_mib": hard_limit_mib,
+                "spike_limit_mib": spike_limit_mib,
             },
             pipelines=[
                 f"metrics/{self._unit_name}",

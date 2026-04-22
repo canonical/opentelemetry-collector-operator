@@ -369,18 +369,21 @@ config:
         Example — override only the ports that conflict with other services:
           juju config opentelemetry-collector ports="loki_http=3501,otlp_grpc=4320"
       default: ""
-    soft_memory_limit_percentage:
+    memory_limit_percentage:
       type: string
       description: |
-        Configure the soft limit for the collector's memory limiter processor.
+        Configure the hard limit for the collector's memory limiter processor,
+        applied to all of the collector's pipelines.
+        
+        The resulting hard limit is clamped to [0, 100] percent. The soft limit
+        is always 80% of the hard limit percentage. A hard limit of 0% means no
+        memory limit is enforced.
 
-        This processor is applied to all of the collector's pipelines.
-        
-        The resulting soft_limit_percentage is clamped to [15, 85] to ensure
-        the hard limit can never exceed 100%, which itself is clamped to
-        [30, 100]. The difference between the soft and hard limit is always 15
-        percentage points.
-        
+        | user input (%) | hard limit (% of total) | soft limit (% of hard) |
+        | -10            | 0                       | 0                      |
+        | 50             | 50                      | 40                     |
+        | 100            | 100                     | 80                     |
+
         The processor will enter memory limited mode and will start
         refusing the data when memory usage exceeds the soft limit by returning
         errors to the preceding component in the pipeline that made the
@@ -391,11 +394,6 @@ config:
         below the set limits. When the memory usage is above the hard limit the
         processor will additionally force garbage collection to be performed.
 
-        | user input (%) | soft limit (%) | hard limit (%) |
-        | -10            | 15             | 30             |
-        | 60             | 60             | 75             |
-        | 100            | 85             | 100            |
-
         > Warning: Incoming data can consume additional memory in a Collector
         before the memory limiter processor is able to reject it. Be sure to
         consider this when setting your limits, particularly for non-OTLP
@@ -405,7 +403,7 @@ config:
         limit from `/sys/fs/cgroup/memory.max`. If the file is not present or
         contains "max", the total physical memory of the machine is used
         instead.
-      default: "85"
+      default: "100"
 
 actions:
   reconcile:
