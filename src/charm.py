@@ -264,8 +264,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             sampling_rate_workload=cast(float, self.config.get("tracing_sampling_rate_workload")),
             sampling_rate_error=cast(float, self.config.get("tracing_sampling_rate_error")),
         )
-        if tracing_otlp_http_endpoint := integrations.send_traces(self):
-            config_manager.add_traces_forwarding(tracing_otlp_http_endpoint)
+        tracing_endpoints = integrations.send_traces(self)
+        for rel_id, endpoint in sorted(tracing_endpoints.items()):
+            config_manager.add_traces_forwarding(endpoint, identifier=rel_id)
+        if tracing_endpoints:
             integrations.send_charm_traces(self)
 
         # COS Agent setup
