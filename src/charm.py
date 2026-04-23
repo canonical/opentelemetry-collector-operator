@@ -56,10 +56,6 @@ logger = logging.getLogger(__name__)
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 
-class InvalidMemoryLimiterConfig:
-    """Returned when the memory_limit_percentage config value is not a valid integer."""
-
-
 def validate_cert(cert: str) -> bool:
     """Validate certificate content using PEM format validation.
 
@@ -258,7 +254,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
 
         # Memory limiter setup
-        limits_processor = self._configure_limits_processor(config_manager)
+        valid_memory_limit = self._configure_limits_processor(config_manager)
 
         # Self-mon logging
         self._configure_logrotate()
@@ -571,7 +567,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
-        if type(limits_processor) is InvalidMemoryLimiterConfig:
+        if not valid_memory_limit:
             self.unit.status = BlockedStatus(
                 "Invalid memory_limit_percentage config value, see debug-log"
             )
@@ -793,15 +789,21 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _configure_external_configs(self, config_manager: ConfigManager):
         config_manager.add_external_configs(self.external_configs)
 
-    def _configure_limits_processor(
-        self, config_manager: ConfigManager
-    ) -> None | InvalidMemoryLimiterConfig:
+    def _configure_limits_processor(self, config_manager: ConfigManager) -> bool:
+        """Configure the memory limiter processor.
+
+        Returns:
+            True if the config value was valid, False otherwise.
+        """
         try:
             limit = parse_memory_limit(self.config.get("memory_limit_percentage"))
-            config_manager.add_memory_limiter_processor(limit)
         except ValueError:
-            config_manager.add_memory_limiter_processor(100)
-            return InvalidMemoryLimiterConfig()
+            limit = 100
+        else:
+            config_manager.add_memory_limiter_processor(limit)
+            return True
+        config_manager.add_memory_limiter_processor(limit)
+        return False
 
     def _cleanup_certificates_on_remove(self):
         """Clean up certificates during charm removal.

@@ -5,7 +5,6 @@
 
 import logging
 import os
-from typing import cast
 
 from constants import CGROUP_MEMORY_MAX
 

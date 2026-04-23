@@ -7,7 +7,6 @@ from copy import deepcopy
 
 import pytest
 import yaml
-import copy
 
 from src.config_builder import ConfigBuilder, Component, Port, build_port_map
 
