@@ -27,7 +27,7 @@ def test_install_snaps_called_on_upgrade_charm(ctx):
 
 
 def test_install_snaps_called_on_install(ctx):
-    """Sanity check: _install_snaps must be called on the install hook."""
+    """Check: _install_snaps must be called on the install hook."""
     with (
         patch("charm.event", return_value="install"),
         patch.object(OpenTelemetryCollectorCharm, "_install_snaps") as mock_install,

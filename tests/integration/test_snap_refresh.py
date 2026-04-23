@@ -103,7 +103,7 @@ def test_deploy_old_charm_revision(juju: jubilant.Juju):
 
 
 def test_lockfile_matches_installed_snap_before_refresh(juju: jubilant.Juju):
-    """Sanity check: the lockfile revision must match the installed snap revision after deploy."""
+    """Check: the lockfile revision must match the installed snap revision after deploy."""
     # GIVEN otelcol deployed at the old charm revision
     # WHEN we inspect the singleton snap lockfiles and the installed snap revisions
     for snap_name in MANAGED_SNAPS:
