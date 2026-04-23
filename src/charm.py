@@ -265,8 +265,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             sampling_rate_error=cast(float, self.config.get("tracing_sampling_rate_error")),
         )
         tracing_endpoints = integrations.send_traces(self)
-        for idx, endpoint in enumerate(tracing_endpoints):
-            config_manager.add_traces_forwarding(endpoint, identifier=str(idx))
+        for rel_id, endpoint in sorted(tracing_endpoints.items()):
+            config_manager.add_traces_forwarding(endpoint, identifier=rel_id)
         if tracing_endpoints:
             integrations.send_charm_traces(self)
 

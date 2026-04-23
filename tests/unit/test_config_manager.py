@@ -56,11 +56,11 @@ def test_add_traces_forwarding():
     }
     config_manager.add_traces_forwarding(
         endpoint="http://192.168.1.244:4318",
-        identifier="0",
+        identifier=0,
     )
     # THEN it exists in the traces exporter config under a uniquely named key
     config = dict(
-        sorted(config_manager.config._config["exporters"]["otlphttp/send-traces-0"].items())
+        sorted(config_manager.config._config["exporters"]["otlphttp/rel-0/send-traces"].items())
     )
     expected_config = dict(sorted(expected_traces_forwarding_cfg.items()))
     assert config == expected_config
@@ -73,27 +73,27 @@ def test_add_traces_forwarding_multiple_endpoints():
     # WHEN two traces exporters are added to the config (one per Tempo backend)
     config_manager.add_traces_forwarding(
         endpoint="http://tempo1.example.com:4318",
-        identifier="0",
+        identifier=0,
     )
     config_manager.add_traces_forwarding(
         endpoint="http://tempo2.example.com:4318",
-        identifier="1",
+        identifier=1,
     )
 
     exporters = config_manager.config._config["exporters"]
 
     # THEN two distinct exporters exist
-    assert "otlphttp/send-traces-0" in exporters
-    assert "otlphttp/send-traces-1" in exporters
-    assert exporters["otlphttp/send-traces-0"]["endpoint"] == "http://tempo1.example.com:4318"
-    assert exporters["otlphttp/send-traces-1"]["endpoint"] == "http://tempo2.example.com:4318"
+    assert "otlphttp/rel-0/send-traces" in exporters
+    assert "otlphttp/rel-1/send-traces" in exporters
+    assert exporters["otlphttp/rel-0/send-traces"]["endpoint"] == "http://tempo1.example.com:4318"
+    assert exporters["otlphttp/rel-1/send-traces"]["endpoint"] == "http://tempo2.example.com:4318"
 
     # AND both exporters are wired into the traces pipeline
     pipeline_exporters = config_manager.config._config["service"]["pipelines"]["traces/otelcol/0"][
         "exporters"
     ]
-    assert "otlphttp/send-traces-0" in pipeline_exporters
-    assert "otlphttp/send-traces-1" in pipeline_exporters
+    assert "otlphttp/rel-0/send-traces" in pipeline_exporters
+    assert "otlphttp/rel-1/send-traces" in pipeline_exporters
 
 
 def test_add_remote_write():

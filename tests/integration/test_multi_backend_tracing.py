@@ -64,8 +64,8 @@ def test_two_exporters_in_config(juju: jubilant.Juju):
     # GIVEN otelcol settled with two send-traces relations
     cfg = get_otelcol_config(juju, "ubuntu-main/0", OTELCOL_CONFIG_FILE)
 
-    # THEN two otlphttp/send-traces-* exporters exist — one per backend
-    send_traces_exporters = [k for k in cfg["exporters"] if k.startswith("otlphttp/send-traces-")]
+    # THEN two otlphttp/rel-*/send-traces exporters exist — one per backend
+    send_traces_exporters = [k for k in cfg["exporters"] if k.endswith("/send-traces")]
     assert len(send_traces_exporters) == 2, (
         f"Expected 2 send-traces exporters, got {send_traces_exporters}"
     )
@@ -97,7 +97,7 @@ def test_relation_removal_reconfigures_cleanly(juju: jubilant.Juju):
 
     # THEN exactly one send-traces exporter remains in the config
     cfg = get_otelcol_config(juju, "ubuntu-main/0", OTELCOL_CONFIG_FILE)
-    send_traces_exporters = [k for k in cfg["exporters"] if k.startswith("otlphttp/send-traces-")]
+    send_traces_exporters = [k for k in cfg["exporters"] if k.endswith("/send-traces")]
     assert len(send_traces_exporters) == 1, (
         f"Expected 1 send-traces exporter after removal, got {send_traces_exporters}"
     )
