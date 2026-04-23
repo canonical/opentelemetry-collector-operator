@@ -796,7 +796,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             True if the config value was valid, False otherwise.
         """
         try:
-            limit = parse_memory_limit(self.config.get("memory_limit_percentage"))
+            limit = parse_memory_limit(cast(str, self.config.get("memory_limit_percentage")))
         except ValueError:
             limit = 100
         else:
