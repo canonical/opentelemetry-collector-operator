@@ -9,3 +9,6 @@ __pycache__/
 .vscode/
 cos-tool*
 version
+# Terraform
+**/.terraform/*
+**/.terraform.lock.hcl
