@@ -1,36 +1,17 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
 import logging
-import os
 from typing import Any, Dict, List, Literal, Optional, Set
 
 import yaml
 from charmlibs.interfaces.otlp import OtlpEndpoint
 
 from config_builder import Component, ConfigBuilder, Port, build_port_map
-from constants import CGROUP_MEMORY_MAX, FILE_STORAGE_DIRECTORY
+from constants import FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
+from utils import total_memory_mib
 
 logger = logging.getLogger(__name__)
-
-
-def _total_memory_mib() -> int:
-    """Return the total memory available to this process in MiB.
-
-    Reads the cgroup memory limit, which reflects container/LXD limits.
-    Falls back to physical RAM when the cgroup file is absent or reads "max"
-    (meaning no limit is set).
-
-    We need this function until this issue is closed:
-        - https://github.com/canonical/opentelemetry-collector-operator/issues/256
-    """
-    try:
-        raw = open(CGROUP_MEMORY_MAX).read().strip()
-        if raw != "max":
-            return int(raw) // (1024 * 1024)
-    except (OSError, ValueError):
-        pass
-    return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
 
 
 def tail_sampling_config(
@@ -633,6 +614,8 @@ class ConfigManager:
                     f"traces/{self._unit_name}",
                 ],
             )
+            if processor_name == "memory_limiter":
+                self.config.remove_component("memory_limiter", Component.processor)
 
     def update_jobs_with_ca_paths(
         self, metrics_consumer_jobs: List[Dict], cert_paths: Dict[str, str]
@@ -750,34 +733,30 @@ class ConfigManager:
                         "component type: '%s', name: '%s' added to config", config_type, comp_name
                     )
 
-    def add_memory_limiter_processing(self, limit_percentage_request) -> None:
+    def add_memory_limiter_processor(self, limit_percentage_request) -> None:
         """Configure the memory limiter processor.
 
-        The time between measurements of memory usage is hardcoded to 1 second
-        as recommended by the processor's documentation.
+        https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor
 
-        The resulting limit_percentage (hard limit) is clamped to [0, 100] as a
-        percentage of total memory. The spike_limit_percentage is hardcoded to
-        20% of the hard limit. A hard limit of 0% means no memory limit is
-        enforced.
-
-        When memory usage exceeds the soft limit, the processor starts refusing
-        data by returning errors to the preceding component in the pipeline.
-        When memory usage exceeds the hard limit, the processor additionally
-        forces garbage collection.
+        The limit_percentage_request is converted to a limit_mib and
+        spike_limit_mib in the processor config. The spike_limit_mib is
+        hardcoded to 20% of the calculated limit_mib. The calculated limits are
+        clamped as follows:
 
         | user input (%) | hard limit (% of total) | soft limit (% of hard) |
         | -10            | 0                       | 0                      |
         | 50             | 50                      | 40                     |
-        | 100            | 100                     | 80                     |
+        | 110            | 100                     | 80                     |
+
+        The time between measurements of memory usage is hardcoded to 1 second
+        as recommended by the processor's documentation.
 
         Args:
-            limit_percentage_request: The hard limit, clamped to [0, 100],
-            as a percentage of total memory at which the processor forces GC.
+            limit_percentage_request: The requested hard limit as a percentage
+            of total memory at which the processor forces GC.
         """
-        total_mib = _total_memory_mib()
         hard_limit_percentage = max(0, min(limit_percentage_request, 100))
-        hard_limit_mib = hard_limit_percentage * total_mib // 100
+        hard_limit_mib = hard_limit_percentage * total_memory_mib() // 100
         spike_limit_mib = hard_limit_mib * 20 // 100
         self.config.add_component(
             Component.processor,

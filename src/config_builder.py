@@ -318,6 +318,16 @@ class ConfigBuilder:
         if pipelines:
             self._add_to_pipeline(name, component, pipelines)
 
+    def remove_component(self, name: str, component: Component) -> None:
+        """Remove a component from the configuration and all pipelines.
+
+        Args:
+            name: Unique identifier of the component to remove
+            component: Type of the component (receiver, processor, etc.)
+        """
+        self._config[component.value].pop(name, None)
+        self._remove_from_pipelines(name, component)
+
     def add_extension(self, name: str, extension_config: Dict[str, Any]):
         """Add an extension to the config.
 
@@ -372,6 +382,18 @@ class ConfigBuilder:
                 [],
             ):
                 self._config["service"]["pipelines"][pipeline][component.value].append(name)
+
+    def _remove_from_pipelines(self, name: str, component: Component):
+        """Remove a component from all pipelines.
+
+        Args:
+            name: Unique identifier of the component to remove
+            component: Type of the component (receiver, processor, etc.)
+        """
+        for pipeline in self._config["service"]["pipelines"].values():
+            items = pipeline.get(component.value, [])
+            if name in items:
+                items.remove(name)
 
     def _add_missing_nop_exporters(self):
         """Add nopexporter(s) to any pipeline that has no exporters.

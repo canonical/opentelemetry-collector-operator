@@ -372,32 +372,27 @@ config:
     memory_limit_percentage:
       type: string
       description: |
-        Configure the hard limit for the collector's memory limiter processor,
-        applied to all of the collector's pipelines.
+        Request a hard limit for the collector's memory limiter processor as a
+        percentage of the total available memory. The resulting processor
+        config will be applied to all of the collector's pipelines.
         
-        The resulting hard limit is clamped to [0, 100] percent. The soft limit
-        is always 80% of the hard limit percentage. A hard limit of 0% means no
-        memory limit is enforced.
+        Ref: https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor
+        
+        The collector measures memory usage every second to determine if the
+        limits are being exceeded. The calculated (by the charm) hard limit is
+        clamped to [0, 100] percent of the total available memory and the soft
+        limit is always 80% of the hard limit percentage. A requested limit of
+        0% means no memory limit is enforced. For example:
 
         | user input (%) | hard limit (% of total) | soft limit (% of hard) |
-        | -10            | 0                       | 0                      |
+        | -10            | 0 (no limit)            | 0                      |
+        | 0              | 0 (no limit)            | 0                      |
         | 50             | 50                      | 40                     |
         | 100            | 100                     | 80                     |
 
-        The processor will enter memory limited mode and will start
-        refusing the data when memory usage exceeds the soft limit by returning
-        errors to the preceding component in the pipeline that made the
-        telemetry function call. This is a non-permanent error. When receivers
-        see this error they are expected to retry sending the same data or
-        apply backpressure to their own data sources in order to slow the
-        inflow of data into the Collector, and to allow memory usage to go
-        below the set limits. When the memory usage is above the hard limit the
-        processor will additionally force garbage collection to be performed.
-
         > Warning: Incoming data can consume additional memory in a Collector
         before the memory limiter processor is able to reject it. Be sure to
-        consider this when setting your limits, particularly for non-OTLP
-        receivers.
+        consider this when setting your limits.
 
         The total available memory is determined by reading the cgroup memory
         limit from `/sys/fs/cgroup/memory.max`. If the file is not present or

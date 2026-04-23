@@ -49,6 +49,7 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+from utils import parse_memory_limit
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -570,7 +571,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
-        if isinstance(limits_processor, InvalidMemoryLimiterConfig):
+        if type(limits_processor) is InvalidMemoryLimiterConfig:
             self.unit.status = BlockedStatus(
                 "Invalid memory_limit_percentage config value, see debug-log"
             )
@@ -796,16 +797,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         self, config_manager: ConfigManager
     ) -> None | InvalidMemoryLimiterConfig:
         try:
-            limit = int(cast(str, self.config.get("memory_limit_percentage")))
-            if limit < 0 or limit > 100:
-                raise ValueError("memory_limit_percentage value must be [0, 100]")
-            config_manager.add_memory_limiter_processing(limit)
+            limit = parse_memory_limit(self.config.get("memory_limit_percentage"))
+            config_manager.add_memory_limiter_processor(limit)
         except ValueError:
-            logger.warning(
-                "Invalid memory_limit_percentage config value, defaulting to 100. "
-                "Valid values are [0, 100]"
-            )
-            config_manager.add_memory_limiter_processing(100)
+            config_manager.add_memory_limiter_processor(100)
             return InvalidMemoryLimiterConfig()
 
     def _cleanup_certificates_on_remove(self):

@@ -66,6 +66,63 @@ def test_add_to_pipeline(pipelines, component):
         assert "foo" in config._config["service"]["pipelines"][pipeline][component.value]
 
 
+@pytest.mark.parametrize(
+    "component",
+    (Component.receiver, Component.exporter, Component.connector, Component.processor),
+)
+def test_remove_component(component):
+    """remove_component removes the component definition and all pipeline references."""
+    # GIVEN a config with a component added to multiple pipelines
+    config = ConfigBuilder("", "", "", "")
+    pipelines = ["logs", "metrics", "traces"]
+    config.add_component(
+        component=component,
+        name="foo",
+        config={"a": "b"},
+        pipelines=pipelines,
+    )
+    assert "foo" in config._config[component.value]
+    # WHEN removing the component
+    config.remove_component("foo", component)
+    # THEN the component is removed from the top-level config
+    assert "foo" not in config._config[component.value]
+    # AND the component is removed from all pipelines
+    for pipeline in pipelines:
+        assert "foo" not in config._config["service"]["pipelines"][pipeline].get(
+            component.value, []
+        )
+
+
+@pytest.mark.parametrize(
+    "component",
+    (Component.receiver, Component.exporter, Component.connector, Component.processor),
+)
+def test_remove_component_leaves_others(component):
+    """remove_component does not affect other components in the same pipelines."""
+    # GIVEN a config with two components in the same pipelines
+    config = ConfigBuilder("", "", "", "")
+    pipelines = ["logs", "metrics"]
+    config.add_component(component=component, name="foo", config={}, pipelines=pipelines)
+    config.add_component(component=component, name="bar", config={}, pipelines=pipelines)
+    # WHEN removing only one
+    config.remove_component("foo", component)
+    # THEN the other component remains
+    assert "bar" in config._config[component.value]
+    for pipeline in pipelines:
+        assert "bar" in config._config["service"]["pipelines"][pipeline][component.value]
+
+
+def test_remove_component_nonexistent():
+    """remove_component is a no-op for a component that was never added."""
+    # GIVEN an empty config
+    config = ConfigBuilder("", "", "", "")
+    config_copy = deepcopy(config)
+    # WHEN removing a component that doesn't exist
+    config.remove_component("nonexistent", Component.processor)
+    # THEN no error is raised and the config is unchanged
+    assert config._config == config_copy._config
+
+
 def test_add_extension():
     # GIVEN an empty config
     config = ConfigBuilder("", "", "", "")
@@ -127,7 +184,7 @@ def test_receivers_tls_no_protocols():
     # TODO When we impl fluent config (with immutable builder), then we won't need to copy anymore, because we would:
     #  yaml1 = config.enable_receiver_tls("foo", "bar").yaml
     #  yaml2 = config.yaml
-    config_copy = copy.deepcopy(config)
+    config_copy = deepcopy(config)
 
     # WHEN tls is enabled
     config._add_tls_to_all_receivers("/some/cert.crt", "/some/private.key")
@@ -145,7 +202,7 @@ def test_receivers_tls_unknown_protocols():
         {"protocols": {"unknown_protocol_name": {"endpoint": "0.0.0.0:1234"}}},
         pipelines=["metrics"],
     )
-    config_copy = copy.deepcopy(config)
+    config_copy = deepcopy(config)
 
     # WHEN tls is enabled
     config._add_tls_to_all_receivers("/some/cert.crt", "/some/private.key")
@@ -475,7 +532,7 @@ def test_sanitize_escape_prometheus_scrape_configs_no_mutation():
     """Test that the original input is not mutated (deep copy guarantee)."""
     # GIVEN a scrape config with bare $ signs
     original = [{"relabel_configs": [{"replacement": "${1}.host"}]}]
-    original_copy = copy.deepcopy(original)
+    original_copy = deepcopy(original)
 
     # WHEN sanitize_escape_prometheus_scrape_configs is called
     ConfigBuilder._sanitize_escape_prometheus_scrape_configs(original)
