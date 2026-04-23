@@ -616,6 +616,10 @@ class ConfigManager:
             )
             if processor_name == "memory_limiter":
                 self.config.remove_component("memory_limiter", Component.processor)
+                logger.info(
+                    "A custom 'memory_limiter' processor was defined, overriding the default one. "
+                    "Make sure to configure it with appropriate limits to avoid OOM kills."
+                )
 
     def update_jobs_with_ca_paths(
         self, metrics_consumer_jobs: List[Dict], cert_paths: Dict[str, str]

@@ -5,10 +5,14 @@
 
 import logging
 import os
-
-from constants import CGROUP_MEMORY_MAX
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def _get_cgroup_memory_max_path() -> Path:
+    # TODO: this should accept a snap name or PID as an arg
+    return Path("/sys/fs/cgroup/memory.max")
 
 
 def total_memory_mib() -> int:
@@ -22,7 +26,7 @@ def total_memory_mib() -> int:
         - https://github.com/canonical/opentelemetry-collector-operator/issues/256
     """
     try:
-        raw = open(CGROUP_MEMORY_MAX).read().strip()
+        raw = _get_cgroup_memory_max_path().read_text().strip()
         if raw != "max":
             return int(raw) // (1024 * 1024)
     except (OSError, ValueError):
@@ -30,16 +34,11 @@ def total_memory_mib() -> int:
     return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
 
 
-def parse_memory_limit(config_value: str) -> int:
+def parse_memory_limit(config_value: int) -> int:
     """Parse the memory limit percentage from config and validate it."""
-    try:
-        limit = int(config_value)
-        if limit < 0 or limit > 100:
-            raise ValueError("memory_limit_percentage value must be [0, 100]")
-        return limit
-    except ValueError:
+    if config_value < 0 or config_value > 100:
         logger.warning(
-            "Invalid memory_limit_percentage config value, defaulting to 100. "
-            "Valid values are [0, 100]"
+            "Invalid memory_limit_percentage config value. Valid values are [0, 100]"
         )
-        raise
+        raise ValueError
+    return config_value

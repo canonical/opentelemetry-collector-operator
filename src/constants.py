@@ -34,4 +34,3 @@ NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
     "processes",
     "sysctl",
 }
-CGROUP_MEMORY_MAX: Final[str] = "/sys/fs/cgroup/memory.max"

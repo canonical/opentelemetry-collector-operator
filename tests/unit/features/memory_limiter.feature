@@ -6,14 +6,15 @@ Feature: Memory limiter processor configuration
 
   Background:
     Given total available memory is 1024 MiB
+    And the spike percentage is 20
 
   # --- Config manager unit tests ---
 
-  Scenario Outline: Hard limit is clamped to [0, 100] and spike is 20% of hard limit
+  Scenario Outline: Hard limit is clamped to [0, 100] and spike is a percentage of hard limit
     Given a user requested hard limit percentage of <user_input>
     When the memory limiter processor is added to the config
     Then the hard limit is <clamped_percentage>% of total memory
-    And the spike limit is 20% of the hard limit
+    And the spike limit is 20 percent of the hard limit
 
     Examples:
       | user_input | clamped_percentage |
@@ -29,14 +30,7 @@ Feature: Memory limiter processor configuration
     Given a user provides no value for the memory_limit_percentage config option
     When any event executes the reconciler
     Then the hard limit in the generated config is 100% of total memory
-    And the spike limit is 20% of the hard limit
-
-  Scenario: Invalid config defaults hard limit to 100% and blocks
-    Given a user provides "invalid" for the memory_limit_percentage config option
-    When any event executes the reconciler
-    Then the hard limit in the generated config is 100% of total memory
-    And the spike limit is 20% of the hard limit
-    And the charm is in BlockedStatus
+    And the spike limit is 20 percent of the hard limit
 
   Scenario: Memory limiter is the first processor in every pipeline
     Given no config options are set
@@ -44,7 +38,7 @@ Feature: Memory limiter processor configuration
     Then memory_limiter is the first processor in all pipelines
 
   Scenario Outline: Out-of-range config values cause BlockedStatus
-    Given a user provides "<value>" for the memory_limit_percentage config option
+    Given a user provides <value> for the memory_limit_percentage config option
     When any event executes the reconciler
     Then the charm is in BlockedStatus
 
