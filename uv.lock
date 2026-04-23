@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -700,7 +700,6 @@ dev = [
     { name = "pytest" },
     { name = "pytest-jubilant" },
     { name = "ruff" },
-    { name = "sh" },
 ]
 
 [package.metadata]
@@ -723,7 +722,6 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "sh" },
-    { name = "sh", marker = "extra == 'dev'" },
     { name = "tenacity" },
     { name = "urllib3" },
 ]
