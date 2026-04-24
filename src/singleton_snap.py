@@ -48,7 +48,7 @@ class SnapRegistrationFile:
     Example: LCK..opentelemetry-collector--rev10__otelcol_0
 
     Attributes:
-        unit_name: Normalized name of the unit registering the snap (slashes replaced with underscores)
+        unit_name: Name of the unit registering the snap (slashes will be replaced with underscores)
         snap_name: Name of the snap being registered
         snap_revision: Revision of the snap being registered
     """
