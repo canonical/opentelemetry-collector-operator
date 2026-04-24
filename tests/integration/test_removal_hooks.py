@@ -8,7 +8,7 @@ import pathlib
 import jubilant
 
 from constants import CONFIG_FOLDER
-from singleton_snap import SnapRegistrationFile
+from singleton_snap import normalize_unit_name
 import os
 
 from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname
@@ -43,7 +43,7 @@ def test_deploy(juju: jubilant.Juju, charm: str):
     assert get_snap_service_status(juju, "0") == "active"
 
     # AND the name of the OTLP receiver defined in the config file should include the machine hostname
-    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/0')}.yaml"
+    config_filename = f"{normalize_unit_name('otelcol/0')}.yaml"
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
 
 def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
@@ -89,7 +89,7 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     assert get_snap_service_status(juju, "0") == "active"
 
     # AND the configs for both units should have an OTLP receiver which includes the machine hostname
-    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/2')}.yaml"
+    config_filename = f"{normalize_unit_name('otelcol/2')}.yaml"
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
 
 
@@ -115,7 +115,7 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     assert juju.status().get_units("otelcol").keys() == {"otelcol/1"}
 
     # AND the otelcol config file for the second otelcol unit is now removed from disk
-    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/2')}.yaml"
+    config_filename = f"{normalize_unit_name('otelcol/2')}.yaml"
     otelcol_config = juju.ssh(
         "ubuntu/0",
         command=f'test -e {os.path.join(CONFIG_FOLDER, config_filename)} || echo "does not exist"',
@@ -146,7 +146,7 @@ def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
 
     # AND the configs for both units should have an OTLP receiver which includes the machine hostname
     # otelcol/4 is related to ubuntu/2 which is on machine 1
-    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/4')}.yaml"
+    config_filename = f"{normalize_unit_name('otelcol/4')}.yaml"
     assert get_receiver_config(juju, "ubuntu/2", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '2')}"
 
     # WHEN the relation is removed

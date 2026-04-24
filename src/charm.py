@@ -41,7 +41,7 @@ from constants import (
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
 )
-from singleton_snap import SingletonSnapManager, SnapRegistrationFile
+from singleton_snap import SingletonSnapManager, normalize_unit_name
 from snap_fstab import SnapFstab
 from snap_management import (
     SnapMap,
@@ -170,7 +170,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         super().__init__(framework)
         self.external_configs: List[Dict[str, Any]] = []
         self.external_secret_files: Dict[str, str] = {}
-        if event() in ("install", "upgrade"):
+        if event() in ("install", "upgrade-charm"):
             self._install_snaps()
         elif event() == "remove":
             # NOTE: We need to clean up the config file and uninstall the snap(s). If we do this
@@ -509,7 +509,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_custom_processors(custom_processors)
 
         # Push the config and Push the config and deploy/update
-        config_filename = f"{SnapRegistrationFile._normalize_name(self.unit.name)}.yaml"
+        config_filename = f"{normalize_unit_name(self.unit.name)}.yaml"
         config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(config_manager.config.build())
@@ -616,8 +616,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """Coordinate node-exporter snap removal."""
         manager = SingletonSnapManager(self.unit.name)
         snap_name = "node-exporter"
-        snap_revision = SnapMap.get_revision(snap_name)
-        manager.unregister(snap_name, snap_revision)
+        manager.unregister_all_for_unit(snap_name)
         if not manager.is_used_by_other_units(snap_name):
             self._remove_snap(snap_name)
 
@@ -625,10 +624,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """Coordinate opentelemetry-collector snap and config file removal."""
         manager = SingletonSnapManager(self.unit.name)
         snap_name = "opentelemetry-collector"
-        snap_revision = SnapMap.get_revision(snap_name)
-        manager.unregister(snap_name, snap_revision)
+        manager.unregister_all_for_unit(snap_name)
         if manager.is_used_by_other_units(snap_name):
-            config_filename = f"{SnapRegistrationFile._normalize_name(self.unit.name)}.yaml"
+            config_filename = f"{normalize_unit_name(self.unit.name)}.yaml"
             config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
             try:
                 config_path.unlink()
