@@ -22,15 +22,9 @@ def _get_registrations(
     Malformed files and files for other snaps are silently skipped.
     """
     result = []
-    try:
-        filenames = os.listdir(lock_dir)
-    except FileNotFoundError:
-        return result
-    for filename in filenames:
-        if not filename.startswith(SnapRegistrationFile.PREFIX):
-            continue
+    for path in lock_dir.glob(f"{SnapRegistrationFile.PREFIX}*"):
         try:
-            reg = SnapRegistrationFile.from_filename(filename)
+            reg = SnapRegistrationFile.from_filename(path.name)
         except (ValueError, IndexError):
             continue
         if reg.snap_name == snap_name:
