@@ -633,6 +633,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             if existed:
                 logger.info(f"removed node-exporter info metric file: {path}")
         except OSError as e:
+            # Emit warning and suppress error
             logger.warning(f"failed to remove node-exporter info metric file {path}: {e}")
 
 
