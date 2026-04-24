@@ -167,3 +167,18 @@ def test_get_units_skips_malformed_files(lock_dir):
     (lock_dir / "LCK..opentelemetry-collector--rev1__unit-0").touch()
     # THEN get_units skips the malformed file and returns only the valid unit
     assert SingletonSnapManager.get_units(snap_name) == {"unit-0"}
+
+
+def test_register_lockfile_revision_matches_registered_revision(lock_dir):
+    snap_name = "node-exporter"
+    manager = SingletonSnapManager("otelcol/0")
+    # GIVEN a unit registered with an old revision (simulating pre-refresh state)
+    manager.register(snap_name, snap_revision=1904)
+    # WHEN the charm refreshes and registers a new revision
+    manager.register(snap_name, snap_revision=2154)
+    # THEN exactly one lockfile exists for this unit and snap
+    lockfiles = list(lock_dir.glob(f"LCK..{snap_name}*otelcol_0"))
+    assert len(lockfiles) == 1
+    # AND that lockfile encodes the new revision
+    reg = SnapRegistrationFile.from_filename(lockfiles[0].name)
+    assert reg.snap_revision == 2154
