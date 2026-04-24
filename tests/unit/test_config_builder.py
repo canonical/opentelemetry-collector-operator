@@ -7,7 +7,6 @@ from copy import deepcopy
 
 import pytest
 import yaml
-import copy
 
 from src.config_builder import ConfigBuilder, Component, Port, build_port_map
 
@@ -64,6 +63,38 @@ def test_add_to_pipeline(pipelines, component):
         assert not config._config["service"]["pipelines"]
     for pipeline in pipelines:
         assert "foo" in config._config["service"]["pipelines"][pipeline][component.value]
+
+
+@pytest.mark.parametrize(
+    "component",
+    (Component.receiver, Component.exporter, Component.connector, Component.processor),
+)
+def test_remove_component_leaves_others(component):
+    """remove_component does not affect other components in the same pipelines."""
+    # GIVEN a config with two components in the same pipelines
+    config = ConfigBuilder("", "", "", "")
+    pipelines = ["logs", "metrics", "traces"]
+    config.add_component(component=component, name="foo/one", config={}, pipelines=pipelines)
+    config.add_component(component=component, name="foo/two", config={}, pipelines=pipelines)
+    # WHEN removing only one
+    config.remove_component("foo/one", component)
+    # THEN the other component remains
+    assert "foo/one" not in config._config[component.value]
+    assert "foo/two" in config._config[component.value]
+    for pipeline in pipelines:
+        assert "foo/one" not in config._config["service"]["pipelines"][pipeline][component.value]
+        assert "foo/two" in config._config["service"]["pipelines"][pipeline][component.value]
+
+
+def test_remove_component_nonexistent():
+    """remove_component is a no-op for a component that was never added."""
+    # GIVEN an empty config
+    config = ConfigBuilder("", "", "", "")
+    config_copy = deepcopy(config)
+    # WHEN removing a component that doesn't exist
+    config.remove_component("nonexistent", Component.processor)
+    # THEN no error is raised and the config is unchanged
+    assert config._config == config_copy._config
 
 
 def test_add_extension():
@@ -127,7 +158,7 @@ def test_receivers_tls_no_protocols():
     # TODO When we impl fluent config (with immutable builder), then we won't need to copy anymore, because we would:
     #  yaml1 = config.enable_receiver_tls("foo", "bar").yaml
     #  yaml2 = config.yaml
-    config_copy = copy.deepcopy(config)
+    config_copy = deepcopy(config)
 
     # WHEN tls is enabled
     config._add_tls_to_all_receivers("/some/cert.crt", "/some/private.key")
@@ -145,7 +176,7 @@ def test_receivers_tls_unknown_protocols():
         {"protocols": {"unknown_protocol_name": {"endpoint": "0.0.0.0:1234"}}},
         pipelines=["metrics"],
     )
-    config_copy = copy.deepcopy(config)
+    config_copy = deepcopy(config)
 
     # WHEN tls is enabled
     config._add_tls_to_all_receivers("/some/cert.crt", "/some/private.key")
@@ -475,7 +506,7 @@ def test_sanitize_escape_prometheus_scrape_configs_no_mutation():
     """Test that the original input is not mutated (deep copy guarantee)."""
     # GIVEN a scrape config with bare $ signs
     original = [{"relabel_configs": [{"replacement": "${1}.host"}]}]
-    original_copy = copy.deepcopy(original)
+    original_copy = deepcopy(original)
 
     # WHEN sanitize_escape_prometheus_scrape_configs is called
     ConfigBuilder._sanitize_escape_prometheus_scrape_configs(original)

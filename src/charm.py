@@ -49,6 +49,7 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+from utils import parse_memory_limit
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -252,11 +253,16 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             ports=port_map,
         )
 
+        # Memory limiter setup
+        valid_memory_limit = self._configure_limits_processor(config_manager)
+
         # Self-mon logging
         self._configure_logrotate()
 
         # Tracing setup
-        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready(), ports=port_map)
+        requested_tracing_protocols = integrations.receive_traces(
+            self, tls=is_tls_ready(), ports=port_map
+        )
         config_manager.add_traces_ingestion(requested_tracing_protocols)
         # Add default processors to traces
         config_manager.add_traces_processing(
@@ -304,9 +310,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                             "scrape_interval": "60s",
                             "static_configs": [
                                 {
-                                    "targets": [
-                                        f"0.0.0.0:{port_map[Port.node_exporter.name]}"
-                                    ],
+                                    "targets": [f"0.0.0.0:{port_map[Port.node_exporter.name]}"],
                                     "labels": {
                                         "instance": socket.getfqdn(),
                                         "juju_charm": topology.charm_name,
@@ -412,9 +416,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
             )
 
-
         # External-config setup
-        self.external_configs, self.external_secret_files = integrations.receive_external_configs(self)
+        self.external_configs, self.external_secret_files = integrations.receive_external_configs(
+            self
+        )
         self._write_secrets_to_disk(self.external_secret_files)
         self._configure_external_configs(config_manager)
 
@@ -563,6 +568,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Mandatory relation pairs
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
+
+        if not valid_memory_limit:
+            self.unit.status = BlockedStatus(
+                "Invalid memory_limit_percentage config value: defaulting to 100, see debug-log"
+            )
 
         # Workload version
         self.unit.set_workload_version(self._otelcol_version or "")
@@ -780,6 +790,22 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def _configure_external_configs(self, config_manager: ConfigManager):
         config_manager.add_external_configs(self.external_configs)
+
+    def _configure_limits_processor(self, config_manager: ConfigManager) -> bool:
+        """Configure the memory limiter processor.
+
+        Returns:
+            True if the config value was valid, False otherwise.
+        """
+        try:
+            limit = parse_memory_limit(cast(int, self.config.get("memory_limit_percentage")))
+        except ValueError:
+            limit = 100
+        else:
+            config_manager.add_memory_limiter_processor(limit)
+            return True
+        config_manager.add_memory_limiter_processor(limit)
+        return False
 
     def _cleanup_certificates_on_remove(self):
         """Clean up certificates during charm removal.

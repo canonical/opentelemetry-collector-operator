@@ -367,6 +367,37 @@ config:
         Example — override only the ports that conflict with other services:
           juju config opentelemetry-collector ports="loki_http=3501,otlp_grpc=4320"
       default: ""
+    memory_limit_percentage:
+      type: int
+      description: |
+        Request a hard limit for the collector's memory limiter processor as a
+        percentage of the total available memory. The resulting processor
+        config will be applied to all of the collector's pipelines.
+        
+        Ref: https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor
+        
+        The collector measures memory usage every second to determine if the
+        limits are being exceeded. If the requested limit is invalid, the charm
+        goes into blocked status and the hard limit defaults to 100% of the
+        total available memory. The soft limit is always 80% of the hard limit
+        percentage. A requested limit of 0% means no memory limit is enforced.
+        For example:
+
+        | user input (%) | hard limit (% of total) | soft limit (% of hard) |
+        | -10            | 0 (no limit)            | 0                      |
+        | 0              | 0 (no limit)            | 0                      |
+        | 50             | 50                      | 40                     |
+        | 100            | 100                     | 80                     |
+
+        > Warning: Incoming data can consume additional memory in a Collector
+        before the memory limiter processor is able to reject it. Be sure to
+        consider this when setting your limits.
+
+        The total available memory is determined by reading the cgroup memory
+        limit from `/sys/fs/cgroup/memory.max`. If the file is not present or
+        contains "max", the total physical memory of the machine is used
+        instead.
+      default: 100
 
 actions:
   reconcile:
