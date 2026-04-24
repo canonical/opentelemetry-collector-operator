@@ -1,13 +1,14 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Regression test: charm refresh correctly updates snaps and lockfiles.
+"""Integration tests for snap refresh behaviour.
 
-This test verifies the fix for the bug where `juju refresh` failed to update
-the installed snaps. The root cause was that charm.py checked for
-event() == "upgrade" instead of the correct "upgrade-charm", so _install_snaps()
-was never called during a charm refresh. The result was a BlockedStatus with
-"Mismatching snap revisions" on subsequent refreshes.
+Test progression:
+- GIVEN the charm deployed at an old revision with its snaps and lockfiles in place
+- WHEN the charm is refreshed to a locally built version
+- THEN the managed snaps are updated to the new revisions
+- AND no unit is blocked with "Mismatching snap revisions"
+- AND each lockfile revision matches the installed snap revision
 """
 
 import subprocess
