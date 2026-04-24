@@ -17,7 +17,7 @@ def normalize_unit_name(name: str) -> str:
 def _get_registrations(
     lock_dir: Path, snap_name: str
 ) -> List["SnapRegistrationFile"]:
-    """Return all SnapRegistrationFile objects for well-formed lockfiles matching snap_name.
+    """Return all SnapRegistrationFile objects across all units for well-formed lockfiles matching snap_name.
 
     Malformed files and files for other snaps are silently skipped.
     """
