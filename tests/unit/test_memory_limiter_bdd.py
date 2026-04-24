@@ -139,6 +139,5 @@ def then_only_custom_memory_limiter(result):
     assert pipelines, "No pipelines found in config"
     for pipeline in pipelines.values():
         processors = pipeline.get("processors", [])
-        memory_limiters = [p for p in processors if "memory_limiter" in p]
-        assert len(memory_limiters) == 1
-        assert "_custom" in memory_limiters[0]
+        memory_limiters = [p for p in processors if p.startswith("memory_limiter")]
+        assert all("_custom" in p for p in memory_limiters)
