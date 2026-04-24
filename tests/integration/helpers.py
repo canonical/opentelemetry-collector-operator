@@ -76,3 +76,8 @@ def get_receiver_config(
         if receiver_name in name:
             return name
     return ""
+
+
+def textfile_filename(unit_name: str) -> str:
+    """Return the .prom filename the charm writes for a given unit."""
+    return unit_name.replace("/", "_") + ".prom"
