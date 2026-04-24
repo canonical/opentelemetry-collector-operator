@@ -11,13 +11,7 @@ from charm import OpenTelemetryCollectorCharm
 
 
 def test_install_snaps_called_on_upgrade_charm(ctx):
-    """Regression: _install_snaps must be called on upgrade-charm, not skipped.
-
-    Before the fix, the code checked for event() == "upgrade" which is not a
-    valid Juju hook name (the correct name is "upgrade-charm"). This caused
-    snaps to never be updated on charm refresh, leaving stale lockfiles pointing
-    to old revisions and blocking the charm with a "Mismatching snap revisions" error.
-    """
+    """_install_snaps is called on upgrade-charm."""
     with (
         patch("charm.event", return_value="upgrade-charm"),
         patch.object(OpenTelemetryCollectorCharm, "_install_snaps") as mock_install,

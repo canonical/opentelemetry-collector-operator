@@ -116,6 +116,19 @@ def test_is_used_by_other_units_with_juju_style_names():
     assert manager_b.is_used_by_other_units(snap_name)
 
 
+def test_is_used_by_other_units_ignores_revision():
+    snap_name = "node-exporter"
+    # GIVEN two units registered with different revisions
+    manager_a = SingletonSnapManager("otelcol/2")
+    manager_b = SingletonSnapManager("otelcol/3")
+    manager_a.register(snap_name, snap_revision=1904)
+    manager_b.register(snap_name, snap_revision=2154)
+    # THEN is_used_by_other_units returns True regardless of revision mismatch
+    # (it only checks whether another unit is registered, not whether revisions match)
+    assert manager_a.is_used_by_other_units(snap_name)
+    assert manager_b.is_used_by_other_units(snap_name)
+
+
 def test_unregister_all_for_unit_removes_all_revisions(lock_dir):
     snap_name = "node-exporter"
     manager = SingletonSnapManager("unit-0")
