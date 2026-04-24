@@ -633,7 +633,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             existed = path.exists()
             path.unlink(missing_ok=True)
             if existed:
-                logger.info(f"removed node-exporter info metric file: {path}")
+                logger.debug(f"removed node-exporter info metric file: {path}")
         except OSError as e:
             # Emit warning and suppress error
             logger.warning(f"failed to remove node-exporter info metric file {path}: {e}")
@@ -675,7 +675,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             "collectors": " ".join(sorted(NODE_EXPORTER_ENABLED_COLLECTORS)),
             "no-collectors": " ".join(sorted(NODE_EXPORTER_DISABLED_COLLECTORS)),
             "web.listen-address": f":{port}",
-            "collector.textfile.directory": NODE_EXPORTER_TEXTFILE_DIRECTORY,
         }
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
