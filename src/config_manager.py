@@ -604,6 +604,13 @@ class ConfigManager:
         the OpenTelemetry Collector configuration.
         """
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
+            # "memory_limiter" is the name (and type) of the default processor we add
+            if processor_name == "memory_limiter" or processor_name.startswith("memory_limiter/"):
+                self.config.remove_component("memory_limiter", Component.processor)
+                logger.info(
+                    "A custom 'memory_limiter' processor was defined, overriding the default one. "
+                    "Make sure to configure it with appropriate limits to avoid OOM kills."
+                )
             self.config.add_component(
                 Component.processor,
                 f"{processor_name}/{self._unit_name}/_custom",
@@ -614,12 +621,6 @@ class ConfigManager:
                     f"traces/{self._unit_name}",
                 ],
             )
-            if processor_name == "memory_limiter":
-                self.config.remove_component("memory_limiter", Component.processor)
-                logger.info(
-                    "A custom 'memory_limiter' processor was defined, overriding the default one. "
-                    "Make sure to configure it with appropriate limits to avoid OOM kills."
-                )
 
     def update_jobs_with_ca_paths(
         self, metrics_consumer_jobs: List[Dict], cert_paths: Dict[str, str]

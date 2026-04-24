@@ -69,46 +69,21 @@ def test_add_to_pipeline(pipelines, component):
     "component",
     (Component.receiver, Component.exporter, Component.connector, Component.processor),
 )
-def test_remove_component(component):
-    """remove_component removes the component definition and all pipeline references."""
-    # GIVEN a config with a component added to multiple pipelines
-    config = ConfigBuilder("", "", "", "")
-    pipelines = ["logs", "metrics", "traces"]
-    config.add_component(
-        component=component,
-        name="foo",
-        config={"a": "b"},
-        pipelines=pipelines,
-    )
-    assert "foo" in config._config[component.value]
-    # WHEN removing the component
-    config.remove_component("foo", component)
-    # THEN the component is removed from the top-level config
-    assert "foo" not in config._config[component.value]
-    # AND the component is removed from all pipelines
-    for pipeline in pipelines:
-        assert "foo" not in config._config["service"]["pipelines"][pipeline].get(
-            component.value, []
-        )
-
-
-@pytest.mark.parametrize(
-    "component",
-    (Component.receiver, Component.exporter, Component.connector, Component.processor),
-)
 def test_remove_component_leaves_others(component):
     """remove_component does not affect other components in the same pipelines."""
     # GIVEN a config with two components in the same pipelines
     config = ConfigBuilder("", "", "", "")
-    pipelines = ["logs", "metrics"]
-    config.add_component(component=component, name="foo", config={}, pipelines=pipelines)
-    config.add_component(component=component, name="bar", config={}, pipelines=pipelines)
+    pipelines = ["logs", "metrics", "traces"]
+    config.add_component(component=component, name="foo/one", config={}, pipelines=pipelines)
+    config.add_component(component=component, name="foo/two", config={}, pipelines=pipelines)
     # WHEN removing only one
-    config.remove_component("foo", component)
+    config.remove_component("foo/one", component)
     # THEN the other component remains
-    assert "bar" in config._config[component.value]
+    assert "foo/one" not in config._config[component.value]
+    assert "foo/two" in config._config[component.value]
     for pipeline in pipelines:
-        assert "bar" in config._config["service"]["pipelines"][pipeline][component.value]
+        assert "foo/one" not in config._config["service"]["pipelines"][pipeline][component.value]
+        assert "foo/two" in config._config["service"]["pipelines"][pipeline][component.value]
 
 
 def test_remove_component_nonexistent():

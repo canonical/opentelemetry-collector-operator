@@ -59,7 +59,7 @@ def given_config_value(value):
 def given_processors_config_value():
     return State(
         leader=True,
-        config={"processors": "memory_limiter:\n  limit_mib: 9999\n"},
+        config={"processors": "memory_limiter:\n  limit_mib: 9999\nmemory_limiter/foo:\n  limit_mib: 512\n  spike_limit_mib: 128\n"},
     )
 
 
