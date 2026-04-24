@@ -59,6 +59,12 @@ def get_snap_service_status(juju: jubilant.Juju, machine: str) -> str:
     return parts[2].lower()
 
 
+def get_otelcol_config(juju: jubilant.Juju, unit: str, config_file: str) -> dict:
+    """Read and parse the otelcol YAML config file from a unit."""
+    raw = juju.ssh(unit, f"cat {config_file}")
+    return yaml.safe_load(raw)
+
+
 def get_receiver_config(
     juju: jubilant.Juju, unit: str, receiver_name: str, otelcol_config_file: str
 ) -> str:

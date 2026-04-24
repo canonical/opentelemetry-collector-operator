@@ -2,9 +2,16 @@ output "app_name" {
   value = juju_application.opentelemetry_collector.name
 }
 
-output "endpoints" {
+output "provides" {
   value = {
-    # Requires
+    grafana_dashboards_provider = "grafana-dashboards-provider",
+    receive_loki_logs           = "receive-loki-logs",
+    receive_traces              = "receive-traces",
+  }
+}
+
+output "requires" {
+  value = {
     cloud_config                = "cloud-config",
     cos_agent                   = "cos-agent",
     grafana_dashboards_consumer = "grafana-dashboards-consumer",
@@ -17,10 +24,5 @@ output "endpoints" {
     send_otlp                   = "send-otlp",
     send_remote_write           = "send-remote-write",
     send_traces                 = "send-traces",
-
-    # Provides
-    grafana_dashboards_provider = "grafana-dashboards-provider",
-    receive_loki_logs           = "receive-loki-logs",
-    receive_traces              = "receive-traces",
   }
 }
