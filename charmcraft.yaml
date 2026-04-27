@@ -383,11 +383,11 @@ config:
         percentage. A requested limit of 0% means no memory limit is enforced.
         For example:
 
-        | user input (%) | hard limit (% of total) | soft limit (% of hard) |
-        | -10            | 0 (no limit)            | 0                      |
-        | 0              | 0 (no limit)            | 0                      |
-        | 50             | 50                      | 40                     |
-        | 100            | 100                     | 80                     |
+        | user input (%) | hard limit (% of total) | soft limit (% of total) |
+        | -10            | 0 (no limit)            | 0                       |
+        | 0              | 0 (no limit)            | 0                       |
+        | 50             | 50                      | 40                      |
+        | 100            | 100                     | 80                      |
 
         > Warning: Incoming data can consume additional memory in a Collector
         before the memory limiter processor is able to reject it. Be sure to

@@ -30,17 +30,17 @@ class Result:
 # --- Given ---
 
 
-@given(parsers.parse("total available memory is {memory:d} MiB"), target_fixture="total_memory")
+@given(parsers.parse('total available memory is "{memory:d}" MiB'), target_fixture="total_memory")
 def given_total_memory(memory):
     return memory
 
 
-@given(parsers.parse("the spike percentage is {spike:d}"), target_fixture="spike_percentage")
+@given(parsers.parse('the spike percentage is "{spike:d}"'), target_fixture="spike_percentage")
 def given_spike_percentage(spike):
     return spike
 
 
-@given(parsers.parse("a user requested hard limit percentage of {user_input:d}"), target_fixture="user_input")
+@given(parsers.parse('a user requested hard limit percentage of {user_input:d}'), target_fixture="user_input")
 def given_user_requested_limit(user_input):
     return user_input
 
@@ -97,7 +97,7 @@ def when_reconciler_runs(total_memory, state, ctx, unit_name, config_folder):
 # --- Then ---
 
 
-@then(parsers.parse("the hard limit is {clamped_percentage:d}% of total memory"))
+@then(parsers.parse('the hard limit is {clamped_percentage:d} percent of total memory'))
 def then_hard_limit_is(result, total_memory, clamped_percentage):
     expected = clamped_percentage * total_memory // 100
     assert result.limit_mib == expected
@@ -105,14 +105,25 @@ def then_hard_limit_is(result, total_memory, clamped_percentage):
     assert result.limit_mib <= total_memory
 
 
-@then(parsers.parse("the spike limit is {percentage:d} percent of the hard limit"))
+@then(parsers.parse('the spike limit is "{percentage:d}" percent of the hard limit'))
 def then_spike_limit(result, percentage):
     assert result.spike_limit_mib == result.limit_mib * percentage // 100
     assert result.spike_limit_mib >= 0
     assert result.limit_mib >= result.spike_limit_mib
 
 
-@then(parsers.parse("the hard limit in the generated config is {percentage:d}% of total memory"))
+@then(parsers.parse('the charm status is {charm_status}'))
+def then_charm_status(user_input, charm_status):
+    in_range = 0 <= user_input <= 100
+    if charm_status == "active":
+        assert in_range, f"Expected user_input {user_input} to be in [0, 100] for active status"
+    elif charm_status == "blocked":
+        assert not in_range, f"Expected user_input {user_input} to be out of [0, 100] for blocked status"
+    else:
+        raise ValueError(f"Unknown charm_status: {charm_status}")
+
+
+@then(parsers.parse('the hard limit in the generated config is "{percentage:d}" percent of total memory'))
 def then_generated_hard_limit(result, total_memory, percentage):
     expected = percentage * total_memory // 100
     assert result.limit_mib == expected

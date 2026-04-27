@@ -604,13 +604,6 @@ class ConfigManager:
         the OpenTelemetry Collector configuration.
         """
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
-            # "memory_limiter" is the name (and type) of the default processor we add
-            if processor_name == "memory_limiter" or processor_name.startswith("memory_limiter/"):
-                self.config.remove_component("memory_limiter", Component.processor)
-                logger.info(
-                    "A custom 'memory_limiter' processor was defined, overriding the default one. "
-                    "Make sure to configure it with appropriate limits to avoid OOM kills."
-                )
             self.config.add_component(
                 Component.processor,
                 f"{processor_name}/{self._unit_name}/_custom",
@@ -760,6 +753,11 @@ class ConfigManager:
             limit_percentage_request: The requested hard limit as a percentage
             of total memory at which the processor forces GC.
         """
+        # Skip if a custom memory_limiter was already configured via add_custom_processors
+        processors = self.config._config.get("processors", {})
+        if any(k.startswith("memory_limiter") and "/_custom" in k for k in processors):
+            return
+
         hard_limit_percentage = max(0, min(limit_percentage_request, 100))
         hard_limit_mib = hard_limit_percentage * total_memory_mib() // 100
         spike_limit_mib = hard_limit_mib * 20 // 100
@@ -776,4 +774,5 @@ class ConfigManager:
                 f"logs/{self._unit_name}",
                 f"traces/{self._unit_name}",
             ],
+            first_in_pipeline=True,
         )

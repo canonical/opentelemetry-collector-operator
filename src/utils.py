@@ -32,13 +32,3 @@ def total_memory_mib() -> int:
     except (OSError, ValueError):
         pass
     return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 * 1024)
-
-
-def parse_memory_limit(config_value: int) -> int:
-    """Parse the memory limit percentage from config and validate it."""
-    if config_value < 0 or config_value > 100:
-        logger.warning(
-            "Invalid memory_limit_percentage config value. Valid values are [0, 100]"
-        )
-        raise ValueError
-    return config_value

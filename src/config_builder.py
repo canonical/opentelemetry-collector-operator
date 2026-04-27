@@ -296,6 +296,7 @@ class ConfigBuilder:
         name: str,
         config: Dict[str, Any],
         pipelines: Optional[List[str]] = None,
+        first_in_pipeline: bool = False,
     ) -> None:
         """Add a component to the configuration.
 
@@ -313,10 +314,11 @@ class ConfigBuilder:
             pipelines: List of pipeline types ('logs', 'metrics', 'traces') to add
                      this component to. If None, the component is defined but not
                      added to any pipeline.
+            first_in_pipeline: Whether this component should be the first in the pipeline.
         """
         self._config[component.value][name] = config
         if pipelines:
-            self._add_to_pipeline(name, component, pipelines)
+            self._add_to_pipeline(name, component, pipelines, first_in_pipeline)
 
     def remove_component(self, name: str, component: Component) -> None:
         """Remove a component from the configuration and all pipelines.
@@ -359,7 +361,7 @@ class ConfigBuilder:
         # https://opentelemetry.io/docs/collector/internal-telemetry
         self._config["service"]["telemetry"][category] = telem_config
 
-    def _add_to_pipeline(self, name: str, component: Component, pipelines: List[str]):
+    def _add_to_pipeline(self, name: str, component: Component, pipelines: List[str], first_in_pipeline: bool = False):
         """Add a pipeline component to the service::pipelines config.
 
         Args:
@@ -367,6 +369,7 @@ class ConfigBuilder:
             component: Type of the component (receiver, processor, etc.)
             pipelines: List of pipeline types ('logs', 'metrics', 'traces') to add
                      the component to
+            first_in_pipeline: Whether this component should be the first in the pipeline.
         """
         # Create the pipeline dict key chain if it doesn't exist
         for pipeline in pipelines:
@@ -381,7 +384,10 @@ class ConfigBuilder:
                 component.value,
                 [],
             ):
-                self._config["service"]["pipelines"][pipeline][component.value].append(name)
+                if first_in_pipeline:
+                    self._config["service"]["pipelines"][pipeline][component.value].insert(0, name)
+                else:
+                    self._config["service"]["pipelines"][pipeline][component.value].append(name)
 
     def _remove_from_pipelines(self, name: str, component: Component):
         """Remove a component from all pipelines.

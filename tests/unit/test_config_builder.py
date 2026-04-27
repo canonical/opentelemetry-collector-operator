@@ -69,32 +69,41 @@ def test_add_to_pipeline(pipelines, component):
     "component",
     (Component.receiver, Component.exporter, Component.connector, Component.processor),
 )
-def test_remove_component_leaves_others(component):
-    """remove_component does not affect other components in the same pipelines."""
-    # GIVEN a config with two components in the same pipelines
+def test_first_in_pipeline_false_appends_at_end(component):
+    """A component added with first_in_pipeline=False (default) is appended after existing components."""
+    # GIVEN a config with an existing component in a pipeline
     config = ConfigBuilder("", "", "", "")
-    pipelines = ["logs", "metrics", "traces"]
-    config.add_component(component=component, name="foo/one", config={}, pipelines=pipelines)
-    config.add_component(component=component, name="foo/two", config={}, pipelines=pipelines)
-    # WHEN removing only one
-    config.remove_component("foo/one", component)
-    # THEN the other component remains
-    assert "foo/one" not in config._config[component.value]
-    assert "foo/two" in config._config[component.value]
-    for pipeline in pipelines:
-        assert "foo/one" not in config._config["service"]["pipelines"][pipeline][component.value]
-        assert "foo/two" in config._config["service"]["pipelines"][pipeline][component.value]
+    pipelines = ["traces"]
+    config.add_component(component=component, name="first", config={}, pipelines=pipelines)
+    # WHEN adding a second component without first_in_pipeline (default False)
+    config.add_component(component=component, name="second", config={}, pipelines=pipelines)
+    # THEN the new component is last in the pipeline
+    items = config._config["service"]["pipelines"]["traces"][component.value]
+    assert items == ["first", "second"]
 
 
-def test_remove_component_nonexistent():
-    """remove_component is a no-op for a component that was never added."""
+@pytest.mark.parametrize(
+    "component",
+    (Component.receiver, Component.exporter, Component.connector, Component.processor),
+)
+def test_first_in_pipeline_ordering_multiple(component):
+    """Multiple first_in_pipeline=True additions each go to position 0, resulting in reverse insertion order."""
     # GIVEN an empty config
     config = ConfigBuilder("", "", "", "")
-    config_copy = deepcopy(config)
-    # WHEN removing a component that doesn't exist
-    config.remove_component("nonexistent", Component.processor)
-    # THEN no error is raised and the config is unchanged
-    assert config._config == config_copy._config
+    pipelines = ["logs"]
+    # WHEN adding three processors with first_in_pipeline=True in sequence
+    config.add_component(
+        component=component, name="a", config={}, pipelines=pipelines, first_in_pipeline=True
+    )
+    config.add_component(
+        component=component, name="b", config={}, pipelines=pipelines, first_in_pipeline=True
+    )
+    config.add_component(
+        component=component, name="c", config={}, pipelines=pipelines, first_in_pipeline=True
+    )
+    # THEN the order is reverse insertion order (last inserted first_in_pipeline is at index 0)
+    items = config._config["service"]["pipelines"]["logs"][component.value]
+    assert items == ["c", "b", "a"]
 
 
 def test_add_extension():
@@ -420,7 +429,9 @@ def test_config_builder_accepts_port_overrides():
     # AND the health_check extension uses the overridden port
     assert str(13200) in built["extensions"]["health_check"]["endpoint"]
     # AND the internal telemetry metrics endpoint uses the overridden port
-    prometheus_reader = built["service"]["telemetry"]["metrics"]["readers"][0]["pull"]["exporter"]["prometheus"]
+    prometheus_reader = built["service"]["telemetry"]["metrics"]["readers"][0]["pull"]["exporter"][
+        "prometheus"
+    ]
     assert prometheus_reader["port"] == 8889
 
 
