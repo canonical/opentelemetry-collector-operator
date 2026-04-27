@@ -71,7 +71,14 @@ parts:
   charm:
     source: .
     plugin: uv
-    build-packages: [git]
+    build-packages:
+      - git
+      # There's no cryptography wheel for s390x, so need to build from source
+      - to s390x:
+        - libffi-dev
+        - libssl-dev
+        - libyaml-dev
+        - pkg-config
     build-snaps: [astral-uv]
     override-build: |
       craftctl default
