@@ -774,5 +774,4 @@ class ConfigManager:
                 f"logs/{self._unit_name}",
                 f"traces/{self._unit_name}",
             ],
-            first_in_pipeline=True,
         )

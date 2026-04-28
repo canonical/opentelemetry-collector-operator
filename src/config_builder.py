@@ -301,7 +301,6 @@ class ConfigBuilder:
         name: str,
         config: Dict[str, Any],
         pipelines: Optional[List[str]] = None,
-        first_in_pipeline: bool = False,
     ) -> None:
         """Add a component to the configuration.
 
@@ -319,7 +318,6 @@ class ConfigBuilder:
             pipelines: List of pipeline types ('logs', 'metrics', 'traces') to add
                      this component to. If None, the component is defined but not
                      added to any pipeline.
-            first_in_pipeline: Whether this component should be the first in the pipeline.
         """
         self._config[component.value][name] = config
         if pipelines:

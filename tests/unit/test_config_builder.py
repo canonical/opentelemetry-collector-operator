@@ -65,47 +65,6 @@ def test_add_to_pipeline(pipelines, component):
         assert "foo" in config._config["service"]["pipelines"][pipeline][component.value]
 
 
-@pytest.mark.parametrize(
-    "component",
-    (Component.receiver, Component.exporter, Component.connector, Component.processor),
-)
-def test_first_in_pipeline_false_appends_at_end(component):
-    """A component added with first_in_pipeline=False (default) is appended after existing components."""
-    # GIVEN a config with an existing component in a pipeline
-    config = ConfigBuilder("", "", "", "")
-    pipelines = ["traces"]
-    config.add_component(component=component, name="first", config={}, pipelines=pipelines)
-    # WHEN adding a second component without first_in_pipeline (default False)
-    config.add_component(component=component, name="second", config={}, pipelines=pipelines)
-    # THEN the new component is last in the pipeline
-    items = config._config["service"]["pipelines"]["traces"][component.value]
-    assert items == ["first", "second"]
-
-
-@pytest.mark.parametrize(
-    "component",
-    (Component.receiver, Component.exporter, Component.connector, Component.processor),
-)
-def test_first_in_pipeline_ordering_multiple(component):
-    """Multiple first_in_pipeline=True additions each go to position 0, resulting in reverse insertion order."""
-    # GIVEN an empty config
-    config = ConfigBuilder("", "", "", "")
-    pipelines = ["logs"]
-    # WHEN adding three processors with first_in_pipeline=True in sequence
-    config.add_component(
-        component=component, name="a", config={}, pipelines=pipelines, first_in_pipeline=True
-    )
-    config.add_component(
-        component=component, name="b", config={}, pipelines=pipelines, first_in_pipeline=True
-    )
-    config.add_component(
-        component=component, name="c", config={}, pipelines=pipelines, first_in_pipeline=True
-    )
-    # THEN the order is reverse insertion order (last inserted first_in_pipeline is at index 0)
-    items = config._config["service"]["pipelines"]["logs"][component.value]
-    assert items == ["c", "b", "a"]
-
-
 def test_add_extension():
     # GIVEN an empty config
     config = ConfigBuilder("", "", "", "")
