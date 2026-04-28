@@ -792,7 +792,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         """Default the memory limit percentage to 100 if input is not in [0, 100]."""
         if config_value < 0 or config_value > 100:
             logger.warning(
-                "Invalid memory_limit_percentage config value. Valid values are [0, 100]"
+                "Invalid memory_limit_percentage charm config option, must be in the range [0, 100]."
             )
             return 100
         return config_value
