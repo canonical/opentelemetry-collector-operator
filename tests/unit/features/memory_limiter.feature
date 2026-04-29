@@ -43,3 +43,4 @@ Feature: Memory limiter processor configuration
     Given a user provides a memory_limiter in the processors config option
     When any event executes the reconciler
     Then only the custom memory_limiter processors are in the pipelines
+    Then memory_limiter processors are first in all pipelines
