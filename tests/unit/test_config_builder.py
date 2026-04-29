@@ -3,10 +3,9 @@
 
 """Feature: Opentelemetry-collector config builder."""
 
-from copy import deepcopy
-
 import pytest
 import yaml
+import copy
 
 from src.config_builder import ConfigBuilder, Component, Port, build_port_map
 
@@ -126,7 +125,7 @@ def test_receivers_tls_no_protocols():
     # TODO When we impl fluent config (with immutable builder), then we won't need to copy anymore, because we would:
     #  yaml1 = config.enable_receiver_tls("foo", "bar").yaml
     #  yaml2 = config.yaml
-    config_copy = deepcopy(config)
+    config_copy = copy.deepcopy(config)
 
     # WHEN tls is enabled
     config._add_tls_to_all_receivers("/some/cert.crt", "/some/private.key")
@@ -144,7 +143,7 @@ def test_receivers_tls_unknown_protocols():
         {"protocols": {"unknown_protocol_name": {"endpoint": "0.0.0.0:1234"}}},
         pipelines=["metrics"],
     )
-    config_copy = deepcopy(config)
+    config_copy = copy.deepcopy(config)
 
     # WHEN tls is enabled
     config._add_tls_to_all_receivers("/some/cert.crt", "/some/private.key")
@@ -224,7 +223,7 @@ def test_receivers_tls_known_protocols():
 def test_insecure_skip_verify():
     # GIVEN an empty config without exporters
     config = ConfigBuilder("", "", "", "")
-    config_copy = deepcopy(config)
+    config_copy = copy.deepcopy(config)
     # WHEN updating the tls::insecure_skip_verify exporter configuration
     config._add_exporter_insecure_skip_verify(False)
     # THEN it has no effect on the rendered config
@@ -388,9 +387,7 @@ def test_config_builder_accepts_port_overrides():
     # AND the health_check extension uses the overridden port
     assert str(13200) in built["extensions"]["health_check"]["endpoint"]
     # AND the internal telemetry metrics endpoint uses the overridden port
-    prometheus_reader = built["service"]["telemetry"]["metrics"]["readers"][0]["pull"]["exporter"][
-        "prometheus"
-    ]
+    prometheus_reader = built["service"]["telemetry"]["metrics"]["readers"][0]["pull"]["exporter"]["prometheus"]
     assert prometheus_reader["port"] == 8889
 
 
@@ -476,7 +473,7 @@ def test_sanitize_escape_prometheus_scrape_configs_no_mutation():
     """Test that the original input is not mutated (deep copy guarantee)."""
     # GIVEN a scrape config with bare $ signs
     original = [{"relabel_configs": [{"replacement": "${1}.host"}]}]
-    original_copy = deepcopy(original)
+    original_copy = copy.deepcopy(original)
 
     # WHEN sanitize_escape_prometheus_scrape_configs is called
     ConfigBuilder._sanitize_escape_prometheus_scrape_configs(original)

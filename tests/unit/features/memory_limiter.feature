@@ -37,9 +37,9 @@ Feature: Memory limiter processor configuration
   Scenario: Memory limiter is the first processor in every pipeline
     Given no config options are set
     When any event executes the reconciler
-    Then memory_limiter is the first processor in all pipelines
+    Then memory_limiter processors are first in all pipelines
 
   Scenario: User-provided memory_limiter overrides the default
     Given a user provides a memory_limiter in the processors config option
     When any event executes the reconciler
-    Then only the custom memory_limiter processor is in the pipelines
+    Then only the custom memory_limiter processors are in the pipelines

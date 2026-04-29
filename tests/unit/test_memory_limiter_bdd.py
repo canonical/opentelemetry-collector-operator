@@ -7,12 +7,13 @@ from dataclasses import dataclass, field
 from typing import Optional
 from unittest.mock import patch
 
+from helpers import get_otelcol_config_file
 from ops.testing import State
 from pytest_bdd import given, parsers, scenarios, then, when
 from scenario import BlockedStatus
 
-from helpers import get_otelcol_config_file
 from src.config_manager import ConfigManager
+from src.constants import CUSTOM_COMPONENT_ID
 
 scenarios("features/memory_limiter.feature")
 
@@ -134,21 +135,23 @@ def then_blocked_status(result):
     assert type(result.state_out.unit_status) is BlockedStatus
 
 
-@then("memory_limiter is the first processor in all pipelines")
+@then("memory_limiter processors are first in all pipelines")
 def then_memory_limiter_first(result):
     pipelines = result.cfg.get("service", {}).get("pipelines", {})
     assert pipelines, "No pipelines found in config"
     for pipeline in pipelines.values():
         processors = pipeline.get("processors", [])
         assert processors, "No processors found in pipeline"
-        assert processors[0] == "memory_limiter"
+        ml = [p for p in processors if p.startswith("memory_limiter")]
+        non_ml = [p for p in processors if not p.startswith("memory_limiter")]
+        assert processors == ml + non_ml
 
 
-@then("only the custom memory_limiter processor is in the pipelines")
+@then("only the custom memory_limiter processors are in the pipelines")
 def then_only_custom_memory_limiter(result):
     pipelines = result.cfg.get("service", {}).get("pipelines", {})
     assert pipelines, "No pipelines found in config"
     for pipeline in pipelines.values():
         processors = pipeline.get("processors", [])
         memory_limiters = [p for p in processors if p.startswith("memory_limiter")]
-        assert all("_custom" in p for p in memory_limiters)
+        assert all(CUSTOM_COMPONENT_ID in p for p in memory_limiters)

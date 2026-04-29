@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Literal, Optional, Set, Union, cast
 
 import yaml
 
-from constants import INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
+from constants import CUSTOM_COMPONENT_ID, INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +217,7 @@ class ConfigBuilder:
         Returns:
             str: A YAML string representing the complete configuration.
         """
+        self._config = self._memory_limiter_processor_housekeeping()
         self._add_missing_nop_exporters()
         if self._receiver_tls:
             self._add_tls_to_all_receivers()
@@ -323,16 +324,6 @@ class ConfigBuilder:
         if pipelines:
             self._add_to_pipeline(name, component, pipelines)
 
-    def remove_component(self, name: str, component: Component) -> None:
-        """Remove a component from the configuration and all pipelines.
-
-        Args:
-            name: Unique identifier of the component to remove
-            component: Type of the component (receiver, processor, etc.)
-        """
-        self._config[component.value].pop(name, None)
-        self._remove_from_pipelines(name, component)
-
     def add_extension(self, name: str, extension_config: Dict[str, Any]):
         """Add an extension to the config.
 
@@ -373,8 +364,6 @@ class ConfigBuilder:
             pipelines: List of pipeline types ('logs', 'metrics', 'traces') to add
                      the component to
         """
-        # Certain components need to be first in the pipeline
-        priority_components = {"memory_limiter": Component.processor}
         # Create the pipeline dict key chain if it doesn't exist
         for pipeline in pipelines:
             self._config["service"]["pipelines"].setdefault(
@@ -385,27 +374,7 @@ class ConfigBuilder:
             if name not in self._config["service"]["pipelines"][pipeline].setdefault(
                 component.value, []
             ):
-                component_type = name.split("/")[0]
-                first_in_pipeline = (
-                    component_type in priority_components
-                    and component == priority_components[component_type]
-                )
-                if first_in_pipeline:
-                    self._config["service"]["pipelines"][pipeline][component.value].insert(0, name)
-                else:
-                    self._config["service"]["pipelines"][pipeline][component.value].append(name)
-
-    def _remove_from_pipelines(self, name: str, component: Component):
-        """Remove a component from all pipelines.
-
-        Args:
-            name: Unique identifier of the component to remove
-            component: Type of the component (receiver, processor, etc.)
-        """
-        for pipeline in self._config["service"]["pipelines"].values():
-            items = pipeline.get(component.value, [])
-            if name in items:
-                items.remove(name)
+                self._config["service"]["pipelines"][pipeline][component.value].append(name)
 
     def _add_missing_nop_exporters(self):
         """Add nopexporter(s) to any pipeline that has no exporters.
@@ -512,3 +481,44 @@ class ConfigBuilder:
                     scrape_configs
                 )
                 receiver["config"]["scrape_configs"] = sanitized_scrape_configs
+
+    def _memory_limiter_processor_housekeeping(self) -> Dict[str, Any]:
+        config = self._prioritize_user_memory_limiter_processors(self._config)
+        config = self._memory_limiter_processors_to_first_in_pipelines(config)
+        return config
+
+    def _memory_limiter_processors_to_first_in_pipelines(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure that memory_limiter processors are first in the pipelines."""
+        config_copy = copy.deepcopy(config)
+        for pipeline in config_copy.get("service", {}).get("pipelines", {}).values():
+            processors = pipeline.get("processors", [])
+            mem_limiters = [p for p in processors if p.startswith("memory_limiter")]
+            others = [p for p in processors if not p.startswith("memory_limiter")]
+            pipeline["processors"] = mem_limiters + others
+        return config_copy
+
+    @classmethod
+    def _prioritize_user_memory_limiter_processors(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure that the correct memory_limiter processors are configured.
+
+        The user can manage the memory_limiter processors via the `memory_limit_percentage` and
+        `processors` config options. If multiple memory_limiter processors are configured, this
+        method removes the default one and keeps the user-defined one(s); shifting the
+        responsibility to the user.
+        """
+        config_copy = copy.deepcopy(config)
+        processors = config_copy.get("processors", {})
+        mem_limiter_names = [name for name in processors if name.startswith("memory_limiter")]
+        only_default_exists = len(mem_limiter_names) == 1 and mem_limiter_names[0] == "memory_limiter"
+        if only_default_exists:
+            return config_copy
+
+        # user-defined memory limiter exists, remove the default one.
+        for name in mem_limiter_names:
+            default = name.startswith("memory_limiter") and CUSTOM_COMPONENT_ID not in name
+            if default:
+                config_copy.get("processors", {}).pop(name)
+                for pipeline in config_copy.get("service", {}).get("pipelines", {}).values():
+                    if name in pipeline.get("processors", []):
+                        pipeline["processors"].remove(name)
+        return config_copy

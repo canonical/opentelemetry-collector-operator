@@ -7,7 +7,7 @@ import yaml
 from charmlibs.interfaces.otlp import OtlpEndpoint
 
 from config_builder import Component, ConfigBuilder, Port, build_port_map
-from constants import FILE_STORAGE_DIRECTORY
+from constants import CUSTOM_COMPONENT_ID, FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
 from utils import total_memory_mib
 
@@ -606,7 +606,7 @@ class ConfigManager:
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
             self.config.add_component(
                 Component.processor,
-                f"{processor_name}/{self._unit_name}/_custom",
+                f"{processor_name}/{self._unit_name}/{CUSTOM_COMPONENT_ID}",
                 processor_config,
                 pipelines=[
                     f"metrics/{self._unit_name}",
@@ -753,11 +753,6 @@ class ConfigManager:
             limit_percentage_request: The requested hard limit as a percentage
             of total memory at which the processor forces GC.
         """
-        # Skip if a custom memory_limiter was already configured via add_custom_processors
-        processors = self.config._config.get("processors", {})
-        if any(k.startswith("memory_limiter") and "/_custom" in k for k in processors):
-            return
-
         hard_limit_percentage = max(0, min(limit_percentage_request, 100))
         hard_limit_mib = hard_limit_percentage * total_memory_mib() // 100
         spike_limit_mib = hard_limit_mib * 20 // 100
