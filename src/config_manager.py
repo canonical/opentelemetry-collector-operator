@@ -4,11 +4,11 @@ import logging
 from typing import Any, Dict, List, Literal, Optional, Set
 
 import yaml
-from charmlibs.interfaces.otlp import OtlpEndpoint
 
 from config_builder import Component, ConfigBuilder, Port, build_port_map
 from constants import CUSTOM_COMPONENT_ID, FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
+from charmlibs.interfaces.otlp import OtlpEndpoint
 from utils import total_memory_mib
 
 logger = logging.getLogger(__name__)
