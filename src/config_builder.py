@@ -77,9 +77,7 @@ def _parse_port_override(pair: str, valid_names: Set[str]) -> tuple:
     name, _, raw_value = pair.partition("=")
     name = name.strip()
     if name not in valid_names:
-        raise ValueError(
-            f"Unknown port name '{name}'. Valid names: {', '.join(sorted(valid_names))}"
-        )
+        raise ValueError(f"Unknown port name '{name}'. Valid names: {', '.join(sorted(valid_names))}")
     try:
         value = int(raw_value.strip())
     except ValueError:
@@ -132,7 +130,6 @@ def build_port_map(overrides: str = "") -> Dict[str, int]:
             ports[name] = value
     _check_no_duplicate_ports(ports)
     return ports
-
 
 @unique
 class Component(str, Enum):
@@ -263,9 +260,7 @@ class ConfigBuilder:
         )
         # FIXME https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11780
         # Add TLS config to extensions
-        self.add_extension(
-            "health_check", {"endpoint": f"0.0.0.0:{self._ports[Port.health.name]}"}
-        )
+        self.add_extension("health_check", {"endpoint": f"0.0.0.0:{self._ports[Port.health.name]}"})
         self.add_telemetry(
             "logs",
             {
@@ -368,11 +363,14 @@ class ConfigBuilder:
         for pipeline in pipelines:
             self._config["service"]["pipelines"].setdefault(
                 pipeline,
-                {component.value: [name]},
+                {
+                    component.value: [name],
+                },
             )
             # Add to pipeline if it doesn't exist in the list already
             if name not in self._config["service"]["pipelines"][pipeline].setdefault(
-                component.value, []
+                component.value,
+                [],
             ):
                 self._config["service"]["pipelines"][pipeline][component.value].append(name)
 
@@ -445,7 +443,7 @@ class ConfigBuilder:
         """Recursively escape bare `$` signs in strings within a nested structure."""
         match value:
             case str():
-                return re.sub(r"(?<!\$)\$(?!\$)", "$$", value)
+                return re.sub(r'(?<!\$)\$(?!\$)', '$$', value)
             case dict():
                 return {k: cls._escape_dollars(v) for k, v in value.items()}
             case list():
@@ -477,9 +475,7 @@ class ConfigBuilder:
         for name, receiver in self._config.get("receivers", {}).items():
             if name.startswith("prometheus/"):
                 scrape_configs = receiver.get("config", {}).get("scrape_configs", [])
-                sanitized_scrape_configs = self._sanitize_escape_prometheus_scrape_configs(
-                    scrape_configs
-                )
+                sanitized_scrape_configs = self._sanitize_escape_prometheus_scrape_configs(scrape_configs)
                 receiver["config"]["scrape_configs"] = sanitized_scrape_configs
 
     def _memory_limiter_processor_housekeeping(self) -> Dict[str, Any]:
