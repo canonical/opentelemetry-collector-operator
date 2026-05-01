@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Literal, Optional, Set, Union, cast
 
 import yaml
 
-from constants import INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
+from constants import CUSTOM_COMPONENT_ID, INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +103,43 @@ def _check_no_duplicate_ports(ports: Dict[str, int]) -> None:
                 f"Duplicate port {port_value}: assigned to both '{seen[port_value]}' and '{port_name}'"
             )
         seen[port_value] = port_name
+
+
+def _memory_limiter_processors_to_first_in_pipelines(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure that memory_limiter processors are first in the pipelines."""
+    config_copy = copy.deepcopy(config)
+    for pipeline in config_copy.get("service", {}).get("pipelines", {}).values():
+        processors = pipeline.get("processors", [])
+        mem_limiters = [p for p in processors if p.startswith("memory_limiter")]
+        others = [p for p in processors if not p.startswith("memory_limiter")]
+        pipeline["processors"] = mem_limiters + others
+    return config_copy
+
+
+def _prioritize_user_memory_limiter_processors(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure that the correct memory_limiter processors are configured.
+
+    The user can manage the memory_limiter processors via the `memory_limit_percentage` and
+    `processors` config options. If multiple memory_limiter processors are configured, this
+    method removes the default one and keeps the user-defined one(s); shifting the
+    responsibility to the user.
+    """
+    config_copy = copy.deepcopy(config)
+    processors = config_copy.get("processors", {})
+    mem_limiter_names = [name for name in processors if name.startswith("memory_limiter")]
+    only_default_exists = len(mem_limiter_names) == 1 and mem_limiter_names[0] == "memory_limiter"
+    if only_default_exists:
+        return config_copy
+
+    # user-defined memory limiter exists, remove the default one.
+    for name in mem_limiter_names:
+        default = name.startswith("memory_limiter") and CUSTOM_COMPONENT_ID not in name
+        if default:
+            config_copy.get("processors", {}).pop(name)
+            for pipeline in config_copy.get("service", {}).get("pipelines", {}).values():
+                if name in pipeline.get("processors", []):
+                    pipeline["processors"].remove(name)
+    return config_copy
 
 
 def build_port_map(overrides: str = "") -> Dict[str, int]:
@@ -223,6 +260,8 @@ class ConfigBuilder:
         )
         self._sanitize_prometheus_scrape_configs()
         self._add_exporter_insecure_skip_verify(self._exporter_skip_verify)
+        config = _memory_limiter_processors_to_first_in_pipelines(self._config)
+        self._config = _prioritize_user_memory_limiter_processors(config)
         return yaml.safe_dump(self._config)
 
     @property

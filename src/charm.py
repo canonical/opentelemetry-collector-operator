@@ -508,7 +508,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if custom_processors := cast(str, self.config.get("processors")):
             config_manager.add_custom_processors(custom_processors)
 
-        # Push the config and Push the config and deploy/update
+        # Memory limiter setup
+        valid_mem_limit = self._configure_limits_processor(config_manager)
+
+        # Push the config and deploy/update
         config_filename = f"{normalize_unit_name(self.unit.name)}.yaml"
         config_path = LocalPath(os.path.join(CONFIG_FOLDER, config_filename))
         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -559,6 +562,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         self._configure_node_exporter(port_map[Port.node_exporter.name])
         self.unit.status = ActiveStatus()
+
+        if not valid_mem_limit:
+            self.unit.status = BlockedStatus(
+                "Invalid memory_limit_percentage config value: defaulting to 100, see debug-log"
+            )
 
         # Mandatory relation pairs
         if missing_relations := _get_missing_mandatory_relations(self):
@@ -778,6 +786,26 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def _configure_external_configs(self, config_manager: ConfigManager):
         config_manager.add_external_configs(self.external_configs)
+
+    def _clamp_memory_limit(self, config_value: int) -> int:
+        """Default the memory limit percentage to 100 if input is not in [0, 100]."""
+        if config_value < 0 or config_value > 100:
+            logger.warning(
+                "Invalid memory_limit_percentage charm config option, must be in the range [0, 100]."
+            )
+            return 100
+        return config_value
+
+    def _configure_limits_processor(self, config_manager: ConfigManager) -> bool:
+        """Configure the memory limiter processor.
+
+        Returns:
+            True if the config value was valid, False otherwise.
+        """
+        raw_limit = cast(int, self.config.get("memory_limit_percentage"))
+        limit = self._clamp_memory_limit(raw_limit)
+        config_manager.add_memory_limiter_processor(limit)
+        return raw_limit == limit
 
     def _cleanup_certificates_on_remove(self):
         """Clean up certificates during charm removal.

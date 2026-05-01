@@ -3,8 +3,6 @@
 
 """Feature: Opentelemetry-collector config builder."""
 
-from copy import deepcopy
-
 import pytest
 import yaml
 import copy
@@ -225,7 +223,7 @@ def test_receivers_tls_known_protocols():
 def test_insecure_skip_verify():
     # GIVEN an empty config without exporters
     config = ConfigBuilder("", "", "", "")
-    config_copy = deepcopy(config)
+    config_copy = copy.deepcopy(config)
     # WHEN updating the tls::insecure_skip_verify exporter configuration
     config._add_exporter_insecure_skip_verify(False)
     # THEN it has no effect on the rendered config
