@@ -88,11 +88,12 @@ def test_extra_metrics_alerts_config(ctx):
     remote_write_relation = Relation("send-remote-write", remote_app_name="prometheus")
     state = State(
         leader=True,
+        model=MODEL,
         relations=[
             metrics_endpoint_relation,
             remote_write_relation,
         ],
-        config=config1,  # type: ignore
+        config=config1,
     )
     # WHEN a relation_changed followed by a relation_joined hook executes
     out_0 = ctx.run(ctx.on.relation_changed(relation=metrics_endpoint_relation), state)
@@ -107,12 +108,7 @@ def test_extra_metrics_alerts_config(ctx):
 
     # GIVEN the config option for extra alert labels is unset
     config2: ConfigDict = {"extra_alert_labels": ""}
-    next_state = State(
-        leader=True,
-        relations=out_1.relations,
-        containers=out_1.containers,
-        config=config2,
-    )
+    next_state = State(leader=True, model=MODEL, relations=out_1.relations, config=config2)
     # WHEN a config_changed hook executes
     out_2 = ctx.run(ctx.on.config_changed(), next_state)
     # THEN the only labels present in the rules are the JujuTopology labels
@@ -134,11 +130,12 @@ def test_extra_loki_alerts_config(ctx):
     send_loki_logs_relation = Relation("send-loki-logs", remote_app_name="loki")
     state = State(
         leader=True,
+        model=MODEL,
         relations=[
             receive_loki_logs_relation,
             send_loki_logs_relation,
         ],
-        config=config1,  # type: ignore
+        config=config1,
     )
     # WHEN a relation_changed followed by a relation_joined hook executes
     out_0 = ctx.run(ctx.on.relation_changed(relation=receive_loki_logs_relation), state)
@@ -153,12 +150,7 @@ def test_extra_loki_alerts_config(ctx):
 
     # GIVEN the config option for extra alert labels is unset
     config2: ConfigDict = {"extra_alert_labels": ""}
-    next_state = State(
-        leader=True,
-        relations=out_1.relations,
-        containers=out_1.containers,
-        config=config2,
-    )
+    next_state = State(leader=True, model=MODEL, relations=out_1.relations, config=config2)
     # WHEN a config_changed hook executes
     out_2 = ctx.run(ctx.on.config_changed(), next_state)
     # THEN the only labels present in the rules are the JujuTopology labels
@@ -168,7 +160,7 @@ def test_extra_loki_alerts_config(ctx):
     _assert_extra_labels(alert_rules_mod, extra_labels, present=False)
 
 
-def test_extra_otlp_alerts_config(ctx, otelcol_container, all_rules):
+def test_extra_otlp_alerts_config(ctx, all_rules):
     # GIVEN a new key-value pair of extra alerts labels
     # * receive and send otlp relations
     # * rules in the receive relation databag
@@ -183,8 +175,7 @@ def test_extra_otlp_alerts_config(ctx, otelcol_container, all_rules):
         leader=True,
         model=MODEL,
         relations=[receive_otlp_relation, send_otlp_relation],
-        containers=otelcol_container,
-        config=config1,  # type: ignore
+        config=config1,
     )
     # WHEN a relation_changed followed by a relation_joined hook executes
     out_0 = ctx.run(ctx.on.relation_changed(relation=receive_otlp_relation), state)
@@ -201,13 +192,7 @@ def test_extra_otlp_alerts_config(ctx, otelcol_container, all_rules):
 
     # GIVEN the config option for extra alert labels is unset
     config2: ConfigDict = {"extra_alert_labels": ""}
-    next_state = State(
-        leader=True,
-        model=MODEL,
-        relations=out_1.relations,
-        containers=out_1.containers,
-        config=config2,
-    )
+    next_state = State(leader=True, model=MODEL, relations=out_1.relations, config=config2)
     # WHEN a config_changed hook executes
     out_2 = ctx.run(ctx.on.config_changed(), next_state)
     # THEN the only labels present in the decompressed rules are the JujuTopology labels
