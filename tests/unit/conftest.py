@@ -267,6 +267,7 @@ def config_manager():
         insecure_skip_verify=True,
     )
 
+
 @pytest.fixture(autouse=True)
 def patch_hostname():
     with patch("socket.gethostname", return_value="juju-abcde-0"):
@@ -279,8 +280,10 @@ def mock_socket_with_occupied_ports():
 
     Returns a function that takes a list of occupied ports and returns a configured mock.
     """
+
     def _create_mock(occupied_ports):
         """Create a mock socket that raises OSError for occupied ports."""
+
         def mock_bind(address):
             if address[1] in occupied_ports:
                 raise OSError("[Errno 98] Address already in use")
