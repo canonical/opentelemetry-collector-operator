@@ -20,8 +20,8 @@ ZINC_TOPOLOGY_LABELS = {
     "juju_model_uuid": MODEL_UUID,
 }
 OTLP_TOPOLOGY_LABELS = {
-    "juju_application": "opentelemetry-collector-k8s",
-    "juju_charm": "opentelemetry-collector-k8s",
+    "juju_application": "otelcol",
+    "juju_charm": "opentelemetry-collector",
     "juju_model": MODEL_NAME,
     "juju_model_uuid": MODEL_UUID,
 }
@@ -166,39 +166,32 @@ def test_extra_otlp_alerts_config(ctx, all_rules):
     # * rules in the receive relation databag
     extra_labels = {"environment": "PRODUCTION", "zone": "Mars"}
     config1: ConfigDict = {"extra_alert_labels": "environment: PRODUCTION, zone=Mars"}
-    receive_otlp_relation = Relation(
-        "receive-otlp",
-        remote_app_data={"rules": json.dumps(all_rules, sort_keys=True), "metadata": "{}"},
-    )
     send_otlp_relation = Relation("send-otlp")
     state = State(
         leader=True,
         model=MODEL,
-        relations=[receive_otlp_relation, send_otlp_relation],
+        relations=[send_otlp_relation],
         config=config1,
     )
-    # WHEN a relation_changed followed by a relation_joined hook executes
-    out_0 = ctx.run(ctx.on.relation_changed(relation=receive_otlp_relation), state)
-    out_1 = ctx.run(
-        ctx.on.relation_joined(relation=out_0.get_relation(send_otlp_relation.id)), out_0
-    )
+    # WHEN a relation_joined hook executes
+    out_0 = ctx.run(ctx.on.relation_joined(relation=send_otlp_relation), state)
     # THEN the labels in the decompressed rules contain JujuTopology and user-defined labels
-    compressed_rules = out_1.get_relation(send_otlp_relation.id).local_app_data.get("rules")
+    compressed_rules = out_0.get_relation(send_otlp_relation).local_app_data.get("rules")
     assert compressed_rules
     decompressed = json.loads(LZMABase64.decompress(json.loads(compressed_rules)))
-    assert decompressed.get("logql") or decompressed.get("promql")
-    for groups in decompressed.get("logql", {}), decompressed.get("promql", {}):
-        _assert_extra_labels(groups, extra_labels, present=True)
+    assert not decompressed.get("logql"), "If otelcol features `receive-otlp` or bundled logql rules, add them to the label assertions"
+    assert decompressed.get("promql")
+    _assert_extra_labels(decompressed.get("promql", {}), extra_labels, present=True)
 
     # GIVEN the config option for extra alert labels is unset
     config2: ConfigDict = {"extra_alert_labels": ""}
-    next_state = State(leader=True, model=MODEL, relations=out_1.relations, config=config2)
+    next_state = State(leader=True, model=MODEL, relations=out_0.relations, config=config2)
     # WHEN a config_changed hook executes
     out_2 = ctx.run(ctx.on.config_changed(), next_state)
     # THEN the only labels present in the decompressed rules are the JujuTopology labels
-    compressed_rules_mod = out_2.get_relation(send_otlp_relation.id).local_app_data.get("rules")
+    compressed_rules_mod = out_2.get_relation(send_otlp_relation).local_app_data.get("rules")
     assert compressed_rules_mod
     decompressed_mod = json.loads(LZMABase64.decompress(json.loads(compressed_rules_mod)))
-    assert decompressed_mod.get("logql") or decompressed_mod.get("promql")
-    for groups in decompressed_mod.get("logql", {}), decompressed_mod.get("promql", {}):
-        _assert_extra_labels(groups, extra_labels, present=False)
+    assert not decompressed_mod.get("logql"), "If otelcol features `receive-otlp` or bundled logql rules, add them to the label assertions"
+    assert decompressed_mod.get("promql")
+    _assert_extra_labels(decompressed_mod.get("promql", {}), extra_labels, present=False)
