@@ -179,7 +179,9 @@ def test_extra_otlp_alerts_config(ctx, all_rules):
     compressed_rules = out_0.get_relation(send_otlp_relation).local_app_data.get("rules")
     assert compressed_rules
     decompressed = json.loads(LZMABase64.decompress(json.loads(compressed_rules)))
-    assert not decompressed.get("logql"), "If otelcol features `receive-otlp` or bundled logql rules, add them to the label assertions"
+    assert not decompressed.get("logql"), (
+        "If otelcol features `receive-otlp` or bundled logql rules, add them to the label assertions"
+    )
     assert decompressed.get("promql")
     _assert_extra_labels(decompressed.get("promql", {}), extra_labels, present=True)
 
@@ -192,6 +194,8 @@ def test_extra_otlp_alerts_config(ctx, all_rules):
     compressed_rules_mod = out_2.get_relation(send_otlp_relation).local_app_data.get("rules")
     assert compressed_rules_mod
     decompressed_mod = json.loads(LZMABase64.decompress(json.loads(compressed_rules_mod)))
-    assert not decompressed_mod.get("logql"), "If otelcol features `receive-otlp` or bundled logql rules, add them to the label assertions"
+    assert not decompressed_mod.get("logql"), (
+        "If otelcol features `receive-otlp` or bundled logql rules, add them to the label assertions"
+    )
     assert decompressed_mod.get("promql")
     _assert_extra_labels(decompressed_mod.get("promql", {}), extra_labels, present=False)
