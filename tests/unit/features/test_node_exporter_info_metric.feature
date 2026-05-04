@@ -9,8 +9,8 @@ Feature: Node exporter info metric file
   Scenario Outline: Info metric contains principal unit from subordinate relation
     Given a <relation_name> relation to a principal app named ubuntu
     When an update-status hook runs
-    Then the info metric file contains the principal unit ubuntu/0
-    And the info metric file contains the principal app ubuntu
+    Then the info metric file contains the related unit ubuntu/0
+    And the info metric file contains the related app ubuntu
 
     Examples:
       | relation_name |

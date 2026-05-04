@@ -857,10 +857,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     @property
     def _info_metric(self) -> str:
-        subordinate_unit = self.unit.name
-        subordinate_app = self.app.name
-        principal_unit = "UNKNOWN"
-        principal_app = "UNKNOWN"
+        otelcol_unit = self.unit.name
+        otelcol_app = self.app.name
+        related_unit = "UNKNOWN"
+        related_app = "UNKNOWN"
 
         for relation_name in ["cos-agent", "juju-info"]:
             for relation in self.model.relations.get(relation_name, []):
@@ -868,17 +868,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     continue
 
                 remote_unit = next(iter(relation.units))
-                principal_unit = remote_unit.name
-                principal_app = remote_unit.app.name
+                related_unit = remote_unit.name
+                related_app = remote_unit.app.name
                 break
             else:
                 continue
             break
 
         return dedent(f"""\
-        # HELP subordinate_charm_info Subordinate charm information
-        # TYPE subordinate_charm_info gauge
-        subordinate_charm_info{{subordinate_app="{subordinate_app}", subordinate_unit="{subordinate_unit}", principal_app="{principal_app}", principal_unit="{principal_unit}"}} 1
+        # HELP otelcol_subordinate_charm_info Subordinate charm information
+        # TYPE otelcol_subordinate_charm_info gauge
+        otelcol_subordinate_charm_info{{otelcol_app="{otelcol_app}", otelcol_unit="{otelcol_unit}", related_app="{related_app}", related_unit="{related_unit}"}} 1
         """)
 
 

@@ -68,19 +68,19 @@ def info_metric_file_exists(tmp_path):
 @then("the file contains the subordinate unit name")
 def file_contains_subordinate_unit(tmp_path, unit_name):
     content = (tmp_path / "textfile-collector.d" / "otelcol_0.prom").read_text()
-    assert f'subordinate_unit="{unit_name}"' in content
+    assert f'otelcol_unit="{unit_name}"' in content
 
 
-@then(parsers.parse("the info metric file contains the principal unit {principal_unit}"))
-def file_contains_principal_unit(tmp_path, principal_unit):
+@then(parsers.parse("the info metric file contains the related unit {related_unit}"))
+def file_contains_related_unit(tmp_path, related_unit):
     content = (tmp_path / "textfile-collector.d" / "otelcol_0.prom").read_text()
-    assert f'principal_unit="{principal_unit}"' in content
+    assert f'related_unit="{related_unit}"' in content
 
 
-@then(parsers.parse("the info metric file contains the principal app {principal_app}"))
-def file_contains_principal_app(tmp_path, principal_app):
+@then(parsers.parse("the info metric file contains the related app {related_app}"))
+def file_contains_related_app(tmp_path, related_app):
     content = (tmp_path / "textfile-collector.d" / "otelcol_0.prom").read_text()
-    assert f'principal_app="{principal_app}"' in content
+    assert f'related_app="{related_app}"' in content
 
 
 @then("the info metric file does not exist")

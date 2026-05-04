@@ -114,10 +114,10 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "1 - sum without (cpu, mode) (irate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\",mode=\"idle\"}[$__rate_interval])) / on (instance) group_left () sum without (cpu, mode) ((irate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\"}[$__rate_interval]))) * on (instance, juju_model, juju_model_uuid) group_right () subordinate_charm_info{juju_model=~\"$juju_model\",principal_app=~\"$juju_application\",principal_unit=~\"$juju_unit\"}",
+          "expr": "1 - sum without (cpu, mode) (irate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\",mode=\"idle\"}[$__rate_interval])) / on (instance) group_left () sum without (cpu, mode) ((irate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\"}[$__rate_interval]))) * on (instance, juju_model, juju_model_uuid) group_right () otelcol_subordinate_charm_info{juju_model=~\"$juju_model\",related_app=~\"$juju_application\",related_unit=~\"$juju_unit\"}",
           "hide": false,
           "instant": false,
-          "legendFormat": "{{principal_app}} - {{principal_unit}}",
+          "legendFormat": "{{related_app}} - {{related_unit}}",
           "range": true,
           "refId": "C"
         }
@@ -168,7 +168,7 @@
           "type": "prometheus",
           "uid": "${prometheusds}"
         },
-        "definition": "label_values(subordinate_charm_info{juju_model=~\"$juju_model\", juju_application=~\"$juju_application\"},principal_unit)",
+        "definition": "label_values(otelcol_subordinate_charm_info{juju_model=~\"$juju_model\", related_app=~\"$juju_application\"},related_unit)",
         "description": "",
         "includeAll": true,
         "label": "Juju unit",
@@ -177,7 +177,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(subordinate_charm_info{juju_model=~\"$juju_model\", juju_application=~\"$juju_application\"},principal_unit)",
+          "query": "label_values(otelcol_subordinate_charm_info{juju_model=~\"$juju_model\", related_app=~\"$juju_application\"},related_unit)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -200,7 +200,7 @@
           "type": "prometheus",
           "uid": "${prometheusds}"
         },
-        "definition": "label_values(subordinate_charm_info,juju_model)",
+        "definition": "label_values(otelcol_subordinate_charm_info,juju_model)",
         "description": "",
         "includeAll": true,
         "label": "Juju model",
@@ -209,7 +209,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(subordinate_charm_info,juju_model)",
+          "query": "label_values(otelcol_subordinate_charm_info,juju_model)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -230,7 +230,7 @@
           "type": "prometheus",
           "uid": "${prometheusds}"
         },
-        "definition": "label_values(subordinate_charm_info{juju_model=~\"$juju_model\"},principal_app)",
+        "definition": "label_values(otelcol_subordinate_charm_info{juju_model=~\"$juju_model\"},related_app)",
         "description": "",
         "includeAll": true,
         "label": "Juju application",
@@ -239,7 +239,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(subordinate_charm_info{juju_model=~\"$juju_model\"},principal_app)",
+          "query": "label_values(otelcol_subordinate_charm_info{juju_model=~\"$juju_model\"},related_app)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
