@@ -127,7 +127,6 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
 
     # AND the otelcol config file for the second otelcol unit is now removed from disk
     # AND node-exporter's textfile collector file is removed from disk
-    config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/2')}.yaml"
     config_filename = f"{normalize_unit_name('otelcol/2')}.yaml"
     otelcol_config = juju.ssh(
         "ubuntu/0",
