@@ -63,7 +63,7 @@ def run_hook(ctx, state, hook):
 
 @when("the remove hook runs", target_fixture="state_out")
 def run_remove(ctx, state):
-    with patch("singleton_snap.SingletonSnapManager.unregister"):
+    with patch("singleton_snap.SingletonSnapManager.unregister_all_for_unit"):
         return ctx.run(ctx.on.remove(), state)
 
 
