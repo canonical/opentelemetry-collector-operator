@@ -29,6 +29,15 @@ def state_with_relation(relation_name, app_name):
     return State(relations=[rel])
 
 
+@given(
+    parsers.parse("also a {relation_name} relation to a principal app named {app_name}"),
+    target_fixture="state",
+)
+def state_with_additional_relation(state, relation_name, app_name):
+    rel = SubordinateRelation(relation_name, remote_app_name=app_name, remote_unit_id=0)
+    return State(relations=[*state.relations, rel])
+
+
 @given("the info metric file exists", target_fixture="state")
 def state_with_existing_metric_file(tmp_path):
     prom_file = tmp_path / "textfile-collector.d" / "otelcol_0.prom"

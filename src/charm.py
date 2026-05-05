@@ -10,7 +10,7 @@ import shutil
 import socket
 import subprocess
 from pathlib import Path
-from textwrap import dedent
+
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
@@ -856,30 +856,35 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         return LocalPath(NODE_EXPORTER_TEXTFILE_DIRECTORY) / f"{self.unit.name.replace('/','_')}.prom"
 
     @property
+    def _related_unit_pairs(self) -> list[tuple[str, str]]:
+        """Return (unit_name, app_name) for all units related via cos-agent or juju-info.
+
+        Returns [("UNKNOWN", "UNKNOWN")] if no units are currently related.
+        """
+        pairs = sorted(
+            {
+                (unit.name, unit.app.name)
+                for rel_name in ("cos-agent", "juju-info")
+                for rel in self.model.relations.get(rel_name, [])
+                for unit in rel.units
+            }
+        )
+        return pairs or [("UNKNOWN", "UNKNOWN")]
+
+    @property
     def _info_metric(self) -> str:
         otelcol_unit = self.unit.name
         otelcol_app = self.app.name
-        related_unit = "UNKNOWN"
-        related_app = "UNKNOWN"
 
-        for relation_name in ["cos-agent", "juju-info"]:
-            for relation in self.model.relations.get(relation_name, []):
-                if not relation.units:
-                    continue
-
-                remote_unit = next(iter(relation.units))
-                related_unit = remote_unit.name
-                related_app = remote_unit.app.name
-                break
-            else:
-                continue
-            break
-
-        return dedent(f"""\
-        # HELP otelcol_subordinate_charm_info Subordinate charm information
-        # TYPE otelcol_subordinate_charm_info gauge
-        otelcol_subordinate_charm_info{{otelcol_app="{otelcol_app}", otelcol_unit="{otelcol_unit}", related_app="{related_app}", related_unit="{related_unit}"}} 1
-        """)
+        lines = [
+            "# HELP otelcol_subordinate_charm_info Subordinate charm information",
+            "# TYPE otelcol_subordinate_charm_info gauge",
+        ]
+        for related_unit, related_app in self._related_unit_pairs:
+            lines.append(
+                f'otelcol_subordinate_charm_info{{otelcol_app="{otelcol_app}", otelcol_unit="{otelcol_unit}", related_app="{related_app}", related_unit="{related_unit}"}} 1'
+            )
+        return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":  # pragma: nocover
