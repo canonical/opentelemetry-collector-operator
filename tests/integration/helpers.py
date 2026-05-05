@@ -18,6 +18,7 @@ ENABLE_BASIC_DEBUG_EXPORTERS: Final[Dict[str, str]] = {
     "debug_exporter_for_metrics": "true",
 }
 SNAP_STATUS_COMMAND: Final[str] = "sudo snap services opentelemetry-collector"
+NODE_EXPORTER_PORT: Final[int] = 9100
 
 
 @retry(stop=stop_after_attempt(20), wait=wait_fixed(10))
@@ -81,3 +82,10 @@ def get_receiver_config(
 def textfile_filename(unit_name: str) -> str:
     """Return the .prom filename the charm writes for a given unit."""
     return unit_name.replace("/", "_") + ".prom"
+
+
+def get_subordinate_charm_info_metrics(
+    juju: jubilant.Juju, unit: str, port: int = NODE_EXPORTER_PORT
+) -> str:
+    """Fetch otelcol_subordinate_charm_info lines from node-exporter on the given unit."""
+    return juju.ssh(unit, f"curl -s localhost:{port}/metrics | grep otelcol_subordinate_charm_info || true")

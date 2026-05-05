@@ -11,7 +11,7 @@ from constants import CONFIG_FOLDER, NODE_EXPORTER_TEXTFILE_DIRECTORY
 from singleton_snap import SnapRegistrationFile
 import os
 
-from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname, textfile_filename
+from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname, textfile_filename, get_subordinate_charm_info_metrics
 
 CONFIG_FILE_PATH = "/etc/otelcol/config.d"
 OTLP_RECEIVER_NAME = "otlp"
@@ -47,10 +47,10 @@ def test_deploy(juju: jubilant.Juju, charm: str):
     config_filename = f"{SnapRegistrationFile._normalize_name('otelcol/0')}.yaml"
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
 
-    node_exporter_textfile = juju.ssh(
-        "ubuntu/0", command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/0")} || echo "does not exist"'
-    )
-    assert node_exporter_textfile.strip() == ""
+    # AND the metric is exposed by node-exporter with the expected labels
+    metrics = get_subordinate_charm_info_metrics(juju, "ubuntu/0")
+    assert 'otelcol_unit="otelcol/0"' in metrics
+    assert 'related_unit="ubuntu/0"' in metrics
 
 def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     # GIVEN only 1 unit of the otelcol charm
@@ -133,19 +133,13 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
         "ubuntu/0",
         command=f'test -e {os.path.join(CONFIG_FOLDER, config_filename)} || echo "does not exist"',
     )
-    node_exporter_textfile = juju.ssh(
-        "ubuntu/0",
-        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/2")} || echo "does not exist"'
-    )
     assert otelcol_config.strip() == "does not exist"
-    assert node_exporter_textfile.strip() == "does not exist"
 
-    # AND the node-exporter textfile for the surviving unit (otelcol/1) remains on disk
-    node_exporter_textfile_surviving = juju.ssh(
-        "ubuntu/0",
-        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/1")} || echo "does not exist"'
-    )
-    assert node_exporter_textfile_surviving.strip() == ""
+    # AND the metric for the removed unit is no longer exposed by node-exporter
+    # AND the surviving unit's metric is still exposed
+    metrics = get_subordinate_charm_info_metrics(juju, "ubuntu/0")
+    assert 'otelcol_unit="otelcol/2"' not in metrics
+    assert 'otelcol_unit="otelcol/1"' in metrics
 
     # AND the otelcol config directory remains on disk
     otelcol_config_dir = juju.ssh(
