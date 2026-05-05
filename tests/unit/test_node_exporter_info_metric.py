@@ -55,9 +55,10 @@ def state_without_metric_file(tmp_path):
 # --- WHEN ---
 
 
-@when("an update-status hook runs", target_fixture="state_out")
-def run_update_status(ctx, state):
-    return ctx.run(ctx.on.update_status(), state)
+@when(parsers.parse('a "{hook}" hook runs'), target_fixture="state_out")
+def run_hook(ctx, state, hook):
+    event_method = getattr(ctx.on, hook.replace("-", "_"))
+    return ctx.run(event_method(), state)
 
 
 @when("the remove hook runs", target_fixture="state_out")
@@ -69,15 +70,14 @@ def run_remove(ctx, state):
 # --- THEN ---
 
 
-@then("the info metric file exists")
-def info_metric_file_exists(tmp_path):
-    assert (tmp_path / "textfile-collector.d" / "otelcol_0.prom").exists()
+@then(parsers.parse('the info metric file "{path}" exists'))
+def info_metric_file_exists(tmp_path, path):
+    assert (tmp_path / path).exists()
 
 
-@then("the file contains the subordinate unit name")
-def file_contains_subordinate_unit(tmp_path, unit_name):
-    content = (tmp_path / "textfile-collector.d" / "otelcol_0.prom").read_text()
-    assert f'otelcol_unit="{unit_name}"' in content
+@then(parsers.parse('the file "{path}" contains "{content}"'))
+def file_contains(tmp_path, path, content):
+    assert content in (tmp_path / path).read_text()
 
 
 @then(parsers.parse("the info metric file contains the related unit {related_unit}"))
@@ -92,6 +92,6 @@ def file_contains_related_app(tmp_path, related_app):
     assert f'related_app="{related_app}"' in content
 
 
-@then("the info metric file does not exist")
-def info_metric_file_does_not_exist(tmp_path):
-    assert not (tmp_path / "textfile-collector.d" / "otelcol_0.prom").exists()
+@then(parsers.parse('the info metric file "{path}" does not exist'))
+def info_metric_file_does_not_exist(tmp_path, path):
+    assert not (tmp_path / path).exists()
