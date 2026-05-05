@@ -205,3 +205,42 @@ def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     assert node_exporter_textfile_machine0.strip() == "does not exist"
     assert node_exporter_textfile_machine1.strip() == "does not exist"
 
+
+def test_two_subordinates_same_machine_expose_separate_metrics(juju: jubilant.Juju):
+    # GIVEN otelcol related to ubuntu (ubuntu/0 on machine 0, ubuntu/2 on machine 1)
+    juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
+    juju.wait(
+        lambda status: jubilant.all_active(status, "ubuntu"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
+    juju.wait(
+        lambda status: jubilant.all_blocked(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
+    # AND a second ubuntu app deployed on machine 0, co-located with ubuntu/0
+    juju.deploy("ubuntu", app="ubuntu2", channel="latest/stable", base="ubuntu@24.04", to="0")
+    juju.integrate("otelcol:juju-info", "ubuntu2:juju-info")
+    juju.wait(
+        lambda status: jubilant.all_active(status, "ubuntu2"),
+        error=jubilant.any_error,
+        timeout=420,
+    )
+    juju.wait(
+        lambda status: jubilant.all_blocked(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=420,
+    )
+    juju.wait(
+        lambda status: jubilant.all_agents_idle(status, "ubuntu", "ubuntu2", "otelcol"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
+
+    # THEN node-exporter on machine 0 exposes separate metrics for each co-located otelcol unit,
+    # each correctly identifying its own related principal
+    metrics = get_subordinate_charm_info_metrics(juju, "ubuntu/0")
+    assert 'related_unit="ubuntu/0"' in metrics
+    assert 'related_unit="ubuntu2/0"' in metrics
+
