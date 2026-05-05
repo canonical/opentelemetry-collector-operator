@@ -4,9 +4,9 @@
 # Learn more at: https://juju.is/docs/sdk
 
 
-"""OtelcolIntegrator charm library.
+"""OpentelemetryCollectoIntegrator charm library.
 
-This library provides utilities for integrating with the Otelcol Integrator Charm
+This library provides utilities for integrating with the Opentelemetry Collector Integrator Charm
 through the external-config relation. It supports sharing configuration and secrets
 between charms.
 
@@ -27,7 +27,7 @@ Use this side when your charm provides OpenTelemetry Collector configuration
 to other charms.
 
 ```python
-from charms.otelcol_integrator.v0.otelcol_integrator import (
+from charms.opentelemetry_collector_integrator.v0.opentelemetry_collector_integrator import (
     OtelcolIntegratorProviderAppData,
     OtelcolIntegratorProviderRelationUpdater,
     Pipeline,
@@ -69,7 +69,7 @@ Use this side when your charm consumes OpenTelemetry Collector configuration
 from another charm.
 
 ```python
-from charms.otelcol_integrator.v0.otelcol_integrator import (
+from charms.opentelemetry_collector_integrator.v0.opentelemetry_collector_integrator import (
     OtelcolIntegratorRequirer,
     Pipeline,
 )
@@ -149,7 +149,7 @@ Invalid data will raise a `ValidationError` with a descriptive message.
 For advanced use cases, you can work with secret URIs directly:
 
 ```python
-from charms.otelcol_integrator.v0.otelcol_integrator import SecretURI
+from charms.opentelemetry_collector_integrator.v0.opentelemetry_collector_integrator import SecretURI
 
 # Parse and use a secret URI
 secret = SecretURI.from_uri("secret://model-uuid/secret-id/key?render=inline")
@@ -234,8 +234,7 @@ from ops import Application, Model, ModelError, Relation, SecretNotFoundError
 
 logger = logging.getLogger(__name__)
 
-# The unique Charmhub library identifier, never change it
-LIBID = "c95aa0a5ff7641e18cf76e150e1d266e"
+LIBID = "2080e3929e6a4b8a96f1f69cf660f046"
 
 # Increment this major API version when introducing breaking changes
 LIBAPI = 0
@@ -505,7 +504,7 @@ class OtelcolIntegratorRequirer:
     """Requirer side (e.g. otelcol) of the external-config relation.
 
     This class is used by charms that consume configuration from
-    otelcol-integrator via the external-config relation.
+    opentelemetry-collector-integrator via the external-config relation.
     """
 
     def __init__(self, model: Model, relation_name: str, secrets_dir: str):
