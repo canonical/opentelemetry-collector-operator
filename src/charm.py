@@ -857,9 +857,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _related_unit_pairs(self) -> list[tuple[str, str]]:
         """Return (unit_name, app_name) for all units related via cos-agent or juju-info.
 
-        Returns [("UNKNOWN", "UNKNOWN")] if no units are currently related.
+        Returns an empty list if no units are currently related (e.g. during relation-departed
+        before the subordinate unit is removed).
         """
-        pairs = sorted(
+        return sorted(
             {
                 (unit.name, unit.app.name)
                 for rel_name in ("cos-agent", "juju-info")
@@ -867,7 +868,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 for unit in rel.units
             }
         )
-        return pairs or [("UNKNOWN", "UNKNOWN")]
 
     @property
     def _info_metric(self) -> str:

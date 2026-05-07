@@ -21,7 +21,7 @@ def state_deployed():
 
 
 @given(
-    parsers.parse("a {relation_name} relation to a principal app named {app_name}"),
+    parsers.parse('a {relation_name} relation to a principal app named "{app_name}"'),
     target_fixture="state",
 )
 def state_with_relation(relation_name, app_name):
@@ -30,7 +30,7 @@ def state_with_relation(relation_name, app_name):
 
 
 @given(
-    parsers.parse("also a {relation_name} relation to a principal app named {app_name}"),
+    parsers.parse('also a {relation_name} relation to a principal app named "{app_name}"'),
     target_fixture="state",
 )
 def state_with_additional_relation(state, relation_name, app_name):

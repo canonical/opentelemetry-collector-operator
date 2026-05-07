@@ -4,7 +4,7 @@ Feature: Node exporter info metric file
     Given the charm is deployed
     When a "update-status" hook runs
     Then the info metric file "textfile-collector.d/otelcol_0.prom" exists
-    And the file "textfile-collector.d/otelcol_0.prom" contains "otelcol/0"
+    And the file "textfile-collector.d/otelcol_0.prom" contains "# HELP otelcol_subordinate_charm_info"
 
   Scenario Outline: Info metric contains related unit from subordinate relation
     Given a <relation_name> relation to a principal app named "ubuntu"
@@ -18,8 +18,8 @@ Feature: Node exporter info metric file
       | cos-agent     |
 
   Scenario: Info metric contains one line per related unit when related to multiple apps
-    Given a juju-info relation to a principal app named ubuntu
-    And also a cos-agent relation to a principal app named hardware-observer
+    Given a juju-info relation to a principal app named "ubuntu"
+    And also a cos-agent relation to a principal app named "hardware-observer"
     When a "update-status" hook runs
     Then the info metric file contains the related unit ubuntu/0
     And the info metric file contains the related unit hardware-observer/0
