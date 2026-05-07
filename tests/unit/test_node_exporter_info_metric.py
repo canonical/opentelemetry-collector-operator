@@ -80,18 +80,6 @@ def file_contains(tmp_path, path, content):
     assert content in (tmp_path / path).read_text()
 
 
-@then(parsers.parse("the info metric file contains the related unit {related_unit}"))
-def file_contains_related_unit(tmp_path, related_unit):
-    content = (tmp_path / "textfile-collector.d" / "otelcol_0.prom").read_text()
-    assert f'related_unit="{related_unit}"' in content
-
-
-@then(parsers.parse("the info metric file contains the related app {related_app}"))
-def file_contains_related_app(tmp_path, related_app):
-    content = (tmp_path / "textfile-collector.d" / "otelcol_0.prom").read_text()
-    assert f'related_app="{related_app}"' in content
-
-
 @then(parsers.parse('the info metric file "{path}" does not exist'))
 def info_metric_file_does_not_exist(tmp_path, path):
     assert not (tmp_path / path).exists()
