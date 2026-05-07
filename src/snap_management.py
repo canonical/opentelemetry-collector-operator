@@ -45,12 +45,14 @@ class SnapMap:
             ("strict", "amd64"): 47,  # 0.130.1
             ("strict", "arm64"): 48,  # 0.130.1
             ("strict", "s390x"): 45,  # 0.130.1
+            ("strict", "ppc64el"): 46,  # 0.130.1
         },
         "node-exporter": {
             # (confinement, arch): revision
             ("strict", "amd64"): 2154,  # v1.10.2
             ("strict", "arm64"): 2157,  # v1.10.2
             ("strict", "s390x"): 2158,  # v1.10.2
+            ("strict", "ppc64el"): 2155,  # v1.10.2
         },
     }
 
