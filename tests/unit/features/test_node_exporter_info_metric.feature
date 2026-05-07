@@ -7,7 +7,7 @@ Feature: Node exporter info metric file
     And the file "textfile-collector.d/otelcol_0.prom" contains "otelcol/0"
 
   Scenario Outline: Info metric contains related unit from subordinate relation
-    Given a <relation_name> relation to a principal app named ubuntu
+    Given a <relation_name> relation to a principal app named "ubuntu"
     When a "update-status" hook runs
     Then the info metric file contains the related unit ubuntu/0
     And the info metric file contains the related app ubuntu
