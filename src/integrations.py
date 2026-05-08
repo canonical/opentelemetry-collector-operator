@@ -483,8 +483,14 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
         .add_promql_path(charm_root.joinpath(METRICS_RULES_SRC_PATH), recursive=True)
     )
     # Publish rules for the provider
-    # NOTE: we set aggregator_peer_relation_name to ensure aggregator generic rules are published
-    OtlpRequirer(charm, aggregator_peer_relation_name="peers", rules=rules).publish()
+    extra_alert_labels = cast(str, charm.model.config.get("extra_alert_labels", ""))
+    OtlpRequirer(
+        charm,
+        # NOTE: we set aggregator_peer_relation_name to ensure aggregator generic rules are published
+        aggregator_peer_relation_name="peers",
+        rules=rules,
+        extra_alert_labels=key_value_pair_string_to_dict(extra_alert_labels),
+    ).publish()
 
     # Access the provider's endpoints
     return OtlpRequirer(
