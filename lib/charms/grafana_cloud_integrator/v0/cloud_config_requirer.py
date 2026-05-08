@@ -165,6 +165,5 @@ class GrafanaCloudConfigRequirer(Object):
     @property
     def _data(self):
         for relation in self._charm.model.relations[self._relation_name]:
-            logger.info("%s %s %s", relation, self._relation_name, relation.data[relation.app])
             return relation.data[relation.app]
         return {}
