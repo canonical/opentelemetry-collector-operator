@@ -35,6 +35,6 @@ def test_deploy(juju: jubilant.Juju, charm_22_04: str):
 
 
 def test_traces_are_scraped(juju: jubilant.Juju):
-    grep_filters = ["ScopeTraces", "postgresql-charm"]
+    grep_filters = ["ResourceTraces", "postgresql"]
     result = is_pattern_in_debug_logs(juju, grep_filters)
     assert result
