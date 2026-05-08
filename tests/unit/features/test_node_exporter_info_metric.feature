@@ -25,9 +25,9 @@ Feature: Node exporter info metric file
     And the file "textfile-collector.d/otelcol_0.prom" contains "hardware-observer/0"
 
   Scenario: Info metric file is removed on charm removal
-    Given the info metric file exists
-    When the remove hook runs
-    Then the info metric file "textfile-collector.d/otelcol_0.prom" does not exist
+    Given the file "textfile-collector.d/otelcol_0.prom" exists
+    When the "remove hook" runs
+    Then the file "textfile-collector.d/otelcol_0.prom" does not exist
 
   Scenario: Removing info metric file is a no-op when it does not exist
     Given the info metric file does not exist
