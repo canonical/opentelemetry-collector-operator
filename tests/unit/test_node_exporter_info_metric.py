@@ -38,17 +38,23 @@ def state_with_additional_relation(state, relation_name, app_name):
     return State(relations=[*state.relations, rel])
 
 
-@given("the info metric file exists", target_fixture="state")
-def state_with_existing_metric_file(tmp_path):
-    prom_file = tmp_path / "textfile-collector.d" / "otelcol_0.prom"
-    prom_file.write_text("existing content")
+@given(
+    parsers.parse('the file "{path}" exists'),
+    target_fixture="state",
+)
+def state_with_file(tmp_path, path):
+    file = tmp_path / path
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text("existing content")
     return State()
 
 
-@given("the info metric file does not exist", target_fixture="state")
-def state_without_metric_file(tmp_path):
-    prom_file = tmp_path / "textfile-collector.d" / "otelcol_0.prom"
-    assert not prom_file.exists()
+@given(
+    parsers.parse('the file "{path}" does not exist'),
+    target_fixture="state",
+)
+def state_without_file(tmp_path, path):
+    assert not (tmp_path / path).exists()
     return State()
 
 
@@ -61,10 +67,11 @@ def run_hook(ctx, state, hook):
     return ctx.run(event_method(), state)
 
 
-@when("the remove hook runs", target_fixture="state_out")
-def run_remove(ctx, state):
+@when(parsers.parse('the "{hook}" hook runs'), target_fixture="state_out")
+def run_named_hook(ctx, state, hook):
     with patch("singleton_snap.SingletonSnapManager.unregister_all_for_unit"):
-        return ctx.run(ctx.on.remove(), state)
+        event_method = getattr(ctx.on, hook.replace("-", "_"))
+        return ctx.run(event_method(), state)
 
 
 # --- THEN ---
@@ -80,6 +87,6 @@ def file_contains(tmp_path, path, content):
     assert content in (tmp_path / path).read_text()
 
 
-@then(parsers.parse('the info metric file "{path}" does not exist'))
-def info_metric_file_does_not_exist(tmp_path, path):
+@then(parsers.parse('the file "{path}" does not exist'))
+def file_does_not_exist(tmp_path, path):
     assert not (tmp_path / path).exists()

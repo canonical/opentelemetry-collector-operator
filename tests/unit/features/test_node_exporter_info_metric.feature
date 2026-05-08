@@ -19,14 +19,14 @@ Feature: Node exporter info metric file
 
   Scenario: Info metric contains one line per related unit when related to multiple apps
     Given a juju-info relation to a principal app named "ubuntu"
-    And a "cos-agent" relation to a principal app named "hardware-observer"
+    And also a cos-agent relation to a principal app named "hardware-observer"
     When a "update-status" hook runs
     Then the file "textfile-collector.d/otelcol_0.prom" contains "ubuntu/0"
     And the file "textfile-collector.d/otelcol_0.prom" contains "hardware-observer/0"
 
   Scenario: Info metric file is removed on charm removal
     Given the file "textfile-collector.d/otelcol_0.prom" exists
-    When the "remove hook" runs
+    When the "remove" hook runs
     Then the file "textfile-collector.d/otelcol_0.prom" does not exist
 
   Scenario: Removing info metric file is a no-op when it does not exist
