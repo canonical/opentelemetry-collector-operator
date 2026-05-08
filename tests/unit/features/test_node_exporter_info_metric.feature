@@ -19,7 +19,7 @@ Feature: Node exporter info metric file
 
   Scenario: Info metric contains one line per related unit when related to multiple apps
     Given a juju-info relation to a principal app named "ubuntu"
-    And also a cos-agent relation to a principal app named "hardware-observer"
+    And a "cos-agent" relation to a principal app named "hardware-observer"
     When a "update-status" hook runs
     Then the file "textfile-collector.d/otelcol_0.prom" contains "ubuntu/0"
     And the file "textfile-collector.d/otelcol_0.prom" contains "hardware-observer/0"
