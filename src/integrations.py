@@ -460,10 +460,14 @@ def forward_dashboards(charm: CharmBase):
 class CloudIntegratorData:
     """Wrapper around the data returned by GrafanaCloudIntegrator."""
 
-    username: Optional[str]
-    password: Optional[str]
+    prometheus_username: Optional[str]
+    prometheus_password: Optional[str]
     prometheus_url: Optional[str]
+    loki_username: Optional[str]
+    loki_password: Optional[str]
     loki_url: Optional[str]
+    tempo_username: Optional[str]
+    tempo_password: Optional[str]
     tempo_url: Optional[str]
 
 
@@ -473,18 +477,35 @@ def cloud_integrator(charm: CharmBase) -> CloudIntegratorData:
     # we decided that we should only get certs from receive-ca-cert.
     cloud_integrator = GrafanaCloudConfigRequirer(charm, relation_name="cloud-config")
     charm.__setattr__("cloud_integrator", cloud_integrator)
-    username, password = (
-        (cloud_integrator.credentials.username, cloud_integrator.credentials.password)
-        if cloud_integrator.credentials
+    prometheus_username, prometheus_password = (
+        (
+            cloud_integrator.prometheus_credentials.username,
+            cloud_integrator.prometheus_credentials.password,
+        )
+        if cloud_integrator.prometheus_credentials
+        else (None, None)
+    )
+    loki_username, loki_password = (
+        (cloud_integrator.loki_credentials.username, cloud_integrator.loki_credentials.password)
+        if cloud_integrator.loki_credentials
+        else (None, None)
+    )
+    tempo_username, tempo_password = (
+        (cloud_integrator.tempo_credentials.username, cloud_integrator.tempo_credentials.password)
+        if cloud_integrator.tempo_credentials
         else (None, None)
     )
     return CloudIntegratorData(
-        username=username,
-        password=password,
+        prometheus_username=prometheus_username,
+        prometheus_password=prometheus_password,
         prometheus_url=cloud_integrator.prometheus_url
         if cloud_integrator.prometheus_ready
         else None,
+        loki_username=loki_username,
+        loki_password=loki_password,
         loki_url=cloud_integrator.loki_url if cloud_integrator.loki_ready else None,
+        tempo_username=tempo_username,
+        tempo_password=tempo_password,
         tempo_url=cloud_integrator.tempo_url if cloud_integrator.tempo_ready else None,
     )
 

@@ -492,38 +492,43 @@ class ConfigManager:
 
     def add_cloud_integrator(
         self,
-        username: Optional[str],
-        password: Optional[str],
+        prometheus_username: Optional[str],
+        prometheus_password: Optional[str],
         prometheus_url: Optional[str],
+        loki_username: Optional[str],
+        loki_password: Optional[str],
         loki_url: Optional[str],
+        tempo_username: Optional[str],
+        tempo_password: Optional[str],
         tempo_url: Optional[str],
     ) -> None:
         """Configure forwarding telemetry to the endpoints provided by a cloud-integrator charm.
 
         Args:
-            username: Username for basic authentication (if required)
-            password: Password for basic authentication (if required)
+            prometheus_username: Username for Prometheus basic authentication
+            prometheus_password: Password for Prometheus basic authentication
             prometheus_url: URL for forwarding metrics (e.g., Prometheus remote write)
+            loki_username: Username for Loki basic authentication
+            loki_password: Password for Loki basic authentication
             loki_url: URL for forwarding logs to Loki
+            tempo_username: Username for Tempo basic authentication
+            tempo_password: Password for Tempo basic authentication
             tempo_url: URL for forwarding traces to Tempo
 
         Note:
-            If both username and password are provided, they will be used for
-            basic authentication with all configured endpoints. The TLS settings
-            (including insecure_skip_verify) will be inherited from the ConfigManager.
+            Each configured signal gets its own basic-auth extension so per-signal
+            credentials can be used when provided. The TLS settings inherit from
+            the ConfigManager.
         """
-        exporter_auth_config = {}
-        if username and password:
-            self.config.add_extension(
-                "basicauth/cloud-integrator",
-                {
-                    "client_auth": {
-                        "username": username,
-                        "password": password,
-                    }
-                },
-            )
-            exporter_auth_config = {"auth": {"authenticator": "basicauth/cloud-integrator"}}
+        prometheus_auth_config = self._cloud_integrator_auth_config(
+            "prometheus", prometheus_username, prometheus_password
+        )
+        loki_auth_config = self._cloud_integrator_auth_config(
+            "loki", loki_username, loki_password
+        )
+        tempo_auth_config = self._cloud_integrator_auth_config(
+            "tempo", tempo_username, tempo_password
+        )
         if prometheus_url:
             self.config.add_component(
                 Component.exporter,
@@ -531,7 +536,7 @@ class ConfigManager:
                 {
                     "endpoint": prometheus_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
-                    **exporter_auth_config,
+                    **prometheus_auth_config,
                     **self.prometheus_remotewrite_wal_config,
                 },
                 pipelines=[f"metrics/{self._unit_name}"],
@@ -545,7 +550,7 @@ class ConfigManager:
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     "default_labels_enabled": {"exporter": False, "job": True},
                     "headers": {"Content-Encoding": "snappy"},  # TODO: check if this is needed
-                    **exporter_auth_config,
+                    **loki_auth_config,
                     **self.sending_queue_config,
                 },
                 pipelines=[f"logs/{self._unit_name}"],
@@ -557,11 +562,30 @@ class ConfigManager:
                 {
                     "endpoint": tempo_url,
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
-                    **exporter_auth_config,
+                    **tempo_auth_config,
                     **self.sending_queue_config,
                 },
                 pipelines=[f"traces/{self._unit_name}"],
             )
+
+    def _cloud_integrator_auth_config(
+        self, signal_name: str, username: Optional[str], password: Optional[str]
+    ) -> Dict[str, Any]:
+        """Add and return auth config for a cloud-integrator exporter when creds exist."""
+        if not username or not password:
+            return {}
+
+        extension_name = f"basicauth/cloud-integrator-{signal_name}"
+        self.config.add_extension(
+            extension_name,
+            {
+                "client_auth": {
+                    "username": username,
+                    "password": password,
+                }
+            },
+        )
+        return {"auth": {"authenticator": extension_name}}
 
     def add_custom_processors(self, processors_raw: str) -> None:
         """Add custom processors from Juju configuration.
