@@ -267,6 +267,7 @@ def config_manager():
         insecure_skip_verify=True,
     )
 
+
 @pytest.fixture(autouse=True)
 def patch_hostname():
     with patch("socket.gethostname", return_value="juju-abcde-0"):
@@ -279,8 +280,10 @@ def mock_socket_with_occupied_ports():
 
     Returns a function that takes a list of occupied ports and returns a configured mock.
     """
+
     def _create_mock(occupied_ports):
         """Create a mock socket that raises OSError for occupied ports."""
+
         def mock_bind(address):
             if address[1] in occupied_ports:
                 raise OSError("[Errno 98] Address already in use")
@@ -293,3 +296,68 @@ def mock_socket_with_occupied_ports():
         return MagicMock(return_value=mock_sock)
 
     return _create_mock
+
+
+@pytest.fixture
+def logql_alert_rule():
+    return {
+        "name": "otelcol_f4d59020_charm_x_foo_alerts",
+        "rules": [
+            {
+                "alert": "HighLogVolume",
+                "expr": 'count_over_time({job=~".+"}[30s]) > 100',
+                "labels": {"severity": "high"},
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def logql_record_rule():
+    return {
+        "name": "otelcol_f4d59020_charm_x_foobar_alerts",
+        "rules": [
+            {
+                "record": "log:error_rate:rate5m",
+                "expr": 'sum by (service) (rate({job=~".+"} | json | level="error" [5m]))',
+                "labels": {"severity": "high"},
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def promql_alert_rule():
+    return {
+        "name": "otelcol_f4d59020_charm_x_bar_alerts",
+        "rules": [
+            {
+                "alert": "Workload Missing",
+                "expr": 'up{job=~".+"} == 0',
+                "for": "0m",
+                "labels": {"severity": "critical"},
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def promql_record_rule():
+    return {
+        "name": "otelcol_f4d59020_charm_x_barfoo_alerts",
+        "rules": [
+            {
+                "record": "code:prometheus_http_requests_total:sum",
+                "expr": 'sum by (code) (prometheus_http_requests_total{job=~".+"})',
+                "labels": {"severity": "high"},
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def all_rules(logql_alert_rule, logql_record_rule, promql_alert_rule, promql_record_rule):
+    return {
+        "logql": {"groups": [logql_alert_rule, logql_record_rule]},
+        "promql": {"groups": [promql_alert_rule, promql_record_rule]},
+    }
