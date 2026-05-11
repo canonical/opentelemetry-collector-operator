@@ -128,6 +128,20 @@ def event() -> str:
     """
     return os.environ.get("JUJU_HOOK_NAME") or os.environ.get("JUJU_ACTION_NAME", "")
 
+
+def _get_snap_config_value(configs: Mapping[str, Any], key: str) -> Any:
+    """Return a snap config value, supporting dotted keys in nested config output."""
+    if key in configs:
+        return configs[key]
+
+    value: Any = configs
+    for part in key.split("."):
+        if not isinstance(value, Mapping):
+            return None
+        value = value.get(part)
+    return value
+
+
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
     """Check whether mandatory relations are in place.
 
@@ -639,6 +653,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             "web.listen-address": f":{port}",
         }
         ne_snap = self.snap("node-exporter")
+        current_configs = ne_snap.get("", typed=True)
+        if all(
+            str(_get_snap_config_value(current_configs, key) or "") == str(value)
+            for key, value in configs.items()
+        ):
+            return
         self._set_snap_configs_with_retry(ne_snap, configs)
 
     def _configure_logrotate(self):
