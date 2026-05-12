@@ -8,15 +8,18 @@ default:
 
 # Find the merge-base between the current branch and `ref`, then print all commits since.
 [group("release")]
+[arg("ref", help="Branch (or generic ref) from to get the changelog from")]
 changelog ref:
     #!/usr/bin/env bash
-    # We should only generate the changelog from the latest track/ branch
     set -euo pipefail
+    # Sanitize the ref so that either a branch or a commit is valid
     resolved="{{ ref }}"
     if ! git rev-parse --verify "${resolved}" >/dev/null 2>&1; then
         resolved="origin/{{ ref }}"
     fi
+    # Find the merge-base 
     base=$(git merge-base HEAD "${resolved}")
+    # Parse all commit messages into a "conventional commits" category
     breaking=""
     features=""
     fixes=""
@@ -32,6 +35,9 @@ changelog ref:
             others="${others}- ${msg}"$'\n'
         fi
     done < <(git log --format=%s "${base}..HEAD")
+    # Print the commits in a Markdown changelog format
+    echo "# Changelog"
+    echo ""
     if [ -n "${breaking}" ]; then
         echo "## Breaking Changes"
         echo ""
@@ -62,6 +68,6 @@ refresh:
     api_path="repos/canonical/observability/contents/$refresh_folder"
     for file in charms.just; do
       echo "Fetching latest '$file' from canonical/observability ..."
-      gh api "$api_path/$file?ref=feat/charms-blueprints" --jq '.content' | base64 --decode > "$file"
+      gh api "$api_path/$file" --jq '.content' | base64 --decode > "$file"
       echo "✓ $file updated"
     done
