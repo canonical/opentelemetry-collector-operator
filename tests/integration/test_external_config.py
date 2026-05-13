@@ -153,7 +153,7 @@ def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm: str):
 
 def test_configure_and_relate_otelcol_integrator(juju: jubilant.Juju):
     # GIVEN otelcol-integrator is deployed and configured with external receiver/processor/exporter
-    juju.deploy("otelcol-integrator", channel="latest/edge")
+    juju.deploy("opentelemetry-collector-integrator", app="otelcol-integrator", channel="latest/edge")
     juju.config(
         "otelcol-integrator",
         values={
