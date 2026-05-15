@@ -75,6 +75,6 @@ def charm_22_04() -> str:
 
 @pytest.fixture(scope="module")
 def juju(request):
-    keep_models: bool = request.config.getoption("--keep-models") or os.environ.get("KEEP_MODELS") is not None
+    keep_models: bool = request.config.getoption("keep_models") or os.environ.get("KEEP_MODELS") is not None
     with jubilant.temp_model(keep=keep_models) as juju:
         yield juju
