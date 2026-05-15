@@ -9,6 +9,7 @@ import re
 import shutil
 import socket
 import subprocess
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, cast
 
@@ -128,6 +129,34 @@ def event() -> str:
     - https://github.com/juju/juju/blob/cbb05654c7444dd6bee29e49aff16339f02c34f9/docs/reference/hook.md?plain=1#L1088
     """
     return os.environ.get("JUJU_HOOK_NAME") or os.environ.get("JUJU_ACTION_NAME", "")
+
+
+def wait_for_snap_ready(snap_name: str, timeout: int = 60) -> None:
+    """Block until snapd has no pending changes for the given snap.
+
+    This prevents race conditions between snapd's automatic refresh mechanism
+    and charm operations that interact with the snap (e.g., start, restart).
+
+    Args:
+        snap_name: Name of the snap to wait for.
+        timeout: Maximum seconds to wait before giving up.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        result = subprocess.run(
+            ["snap", "changes"],
+            capture_output=True,
+            text=True,
+        )
+        lines_with_snap = [
+            line for line in result.stdout.splitlines()
+            if snap_name in line and "Doing" in line
+        ]
+        if not lines_with_snap:
+            return
+        logger.debug("Waiting for snap %s to settle (pending changes found)", snap_name)
+        time.sleep(2)
+    logger.warning("Timed out waiting for snap %s to settle", snap_name)
 
 
 def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
@@ -538,6 +567,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if feature_gates:
             self.snap("opentelemetry-collector").set({"feature-gates": feature_gates})
 
+        # Wait for any pending snap changes before starting to avoid race with auto-refresh
+        wait_for_snap_ready("opentelemetry-collector")
         # Start the otelcol snap in case it was stopped while waiting for certificates
         self.snap("opentelemetry-collector").start()
 
@@ -594,6 +625,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 # Install the snap
                 self.unit.status = MaintenanceStatus(f"Installing {snap_name} snap")
                 install_snap(snap_name)
+                # Wait for any pending snap changes before starting
+                wait_for_snap_ready(snap_name)
                 # Start the snap
                 self.unit.status = MaintenanceStatus(f"Starting {snap_name} snap")
                 try:
