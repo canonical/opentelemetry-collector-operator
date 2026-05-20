@@ -4,6 +4,7 @@
 """Feature: Ingested traces are pushed to Tempo via COS Agent."""
 
 import pathlib
+
 import jubilant
 from helpers import PATH_EXCLUDE, is_pattern_in_debug_logs
 
@@ -23,14 +24,13 @@ def test_deploy(juju: jubilant.Juju, charm_22_04: str):
     juju.integrate("otelcol:cos-agent", "postgresql:cos-agent")
     # THEN all units are active/blocked
     juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
+        lambda status: (
+            jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_active(status, "postgresql")
+            and jubilant.all_agents_idle(status, "otelcol", "postgresql")
+        ),
         error=jubilant.any_error,
-        timeout=420,
-    )
-    juju.wait(
-        lambda status: jubilant.all_active(status, "postgresql"),
-        error=jubilant.any_error,
-        timeout=420,
+        timeout=600,
     )
 
 
