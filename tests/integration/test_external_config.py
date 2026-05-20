@@ -137,7 +137,7 @@ def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm: str):
             and jubilant.all_active(status, "ubuntu")
             and jubilant.all_agents_idle(status, "ubuntu", "otelcol")
         ),
-        error=lambda status: jubilant.any_error,
+        error=jubilant.any_error,
         timeout=600,
     )
 
@@ -172,7 +172,7 @@ def test_configure_and_relate_otelcol_integrator(juju: jubilant.Juju):
             and jubilant.all_active(status, "ubuntu", "otelcol-integrator")
             and jubilant.all_agents_idle(status, "ubuntu", "otelcol", "otelcol-integrator")
         ),
-        error=lambda status: jubilant.any_error,
+        error=jubilant.any_error,
         timeout=600,
     )
 
