@@ -6,9 +6,10 @@ from typing import Any, Dict, List, Literal, Optional, Set
 import yaml
 
 from config_builder import Component, ConfigBuilder, Port, build_port_map
-from constants import FILE_STORAGE_DIRECTORY
+from constants import CUSTOM_COMPONENT_ID, FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
 from charmlibs.interfaces.otlp import OtlpEndpoint
+from utils import total_memory_mib
 
 logger = logging.getLogger(__name__)
 
@@ -605,7 +606,7 @@ class ConfigManager:
         for processor_name, processor_config in yaml.safe_load(processors_raw).items():
             self.config.add_component(
                 Component.processor,
-                f"{processor_name}/{self._unit_name}/_custom",
+                f"{processor_name}/{self._unit_name}/{CUSTOM_COMPONENT_ID}",
                 processor_config,
                 pipelines=[
                     f"metrics/{self._unit_name}",
@@ -729,3 +730,43 @@ class ConfigManager:
                     logger.debug(
                         "component type: '%s', name: '%s' added to config", config_type, comp_name
                     )
+
+    def add_memory_limiter_processor(self, limit_percentage_request) -> None:
+        """Configure the memory limiter processor.
+
+        https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor
+
+        The limit_percentage_request is converted to a limit_mib and
+        spike_limit_mib in the processor config. The spike_limit_mib is
+        hardcoded to 20% of the calculated limit_mib. The calculated limits are
+        clamped as follows:
+
+        | user input (%) | hard limit (% of total) | soft limit (% of hard) |
+        | -10            | 0                       | 0                      |
+        | 50             | 50                      | 40                     |
+        | 110            | 100                     | 80                     |
+
+        The time between measurements of memory usage is hardcoded to 1 second
+        as recommended by the processor's documentation.
+
+        Args:
+            limit_percentage_request: The requested hard limit as a percentage
+            of total memory at which the processor forces GC.
+        """
+        hard_limit_percentage = max(0, min(limit_percentage_request, 100))
+        hard_limit_mib = hard_limit_percentage * total_memory_mib() // 100
+        spike_limit_mib = hard_limit_mib * 20 // 100
+        self.config.add_component(
+            Component.processor,
+            "memory_limiter",
+            {
+                "check_interval": "1s",
+                "limit_mib": hard_limit_mib,
+                "spike_limit_mib": spike_limit_mib,
+            },
+            pipelines=[
+                f"metrics/{self._unit_name}",
+                f"logs/{self._unit_name}",
+                f"traces/{self._unit_name}",
+            ],
+        )
