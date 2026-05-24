@@ -8,24 +8,22 @@ import time
 import uuid
 
 import jubilant
-from tenacity import retry, stop_after_attempt, wait_fixed
 from helpers import PATH_EXCLUDE
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 RSYSLOG_OUTPUT_FILE = "/var/log/otelcol-integrator.log"
 RSYSLOG_REMOTE_PORT = 1514
 PATH_EXCLUDE_WITH_REMOTE_LOG = f"{PATH_EXCLUDE};{RSYSLOG_OUTPUT_FILE}*"
-
 ENABLE_IMUDP = (
     "printf '%s\\n' "
     "'module(load=\"imudp\")' "
     "'ruleset(name=\"otelcol_remote_logs\") {' "
-    f"'  action(type=\"omfile\" file=\"{RSYSLOG_OUTPUT_FILE}\")' "
+    f'\'  action(type="omfile" file="{RSYSLOG_OUTPUT_FILE}")\' '
     "'  stop' "
     "'}' "
-    f"'input(type=\"imudp\" port=\"{RSYSLOG_REMOTE_PORT}\" ruleset=\"otelcol_remote_logs\")' "
+    f'\'input(type="imudp" port="{RSYSLOG_REMOTE_PORT}" ruleset="otelcol_remote_logs")\' '
     "| sudo tee /etc/rsyslog.d/00-otelcol-imudp.conf >/dev/null"
 )
-
 OTELCOL_CONFIG = """receivers:
   loki/external:
     protocols:
@@ -64,7 +62,9 @@ def setup_rsyslog(juju: jubilant.Juju):
         "ubuntu/0",
         command=f"sudo ss -lunp | grep ':{RSYSLOG_REMOTE_PORT} ' || true",
     )
-    assert f":{RSYSLOG_REMOTE_PORT} " in listening, f"rsyslog is not listening on :{RSYSLOG_REMOTE_PORT}: {listening}"
+    assert f":{RSYSLOG_REMOTE_PORT} " in listening, (
+        f"rsyslog is not listening on :{RSYSLOG_REMOTE_PORT}: {listening}"
+    )
 
 
 def push_loki_log_to_otelcol(juju: jubilant.Juju, message: str):
@@ -125,11 +125,6 @@ def assert_log_reaches_rsyslog(juju: jubilant.Juju, message: str):
 def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm: str):
     # GIVEN ubuntu and otelcol are deployed and related
     juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04")
-    juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
-        error=lambda status: jubilant.any_error(status, "ubuntu"),
-        timeout=420,
-    )
     juju.deploy(
         charm,
         app="otelcol",
@@ -137,9 +132,13 @@ def test_deploy_and_prepare_otelcol(juju: jubilant.Juju, charm: str):
     )
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
-        error=lambda status: jubilant.any_error(status, "otelcol", "ubuntu"),
-        timeout=420,
+        lambda status: (
+            jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_active(status, "ubuntu")
+            and jubilant.all_agents_idle(status, "ubuntu", "otelcol")
+        ),
+        error=jubilant.any_error,
+        timeout=600,
     )
 
     # WHEN otelcol snap is refreshed and rsyslog is prepared
@@ -161,11 +160,6 @@ def test_configure_and_relate_otelcol_integrator(juju: jubilant.Juju):
             "logs_pipeline": True,
         },
     )
-    juju.wait(
-        lambda status: jubilant.all_active(status, "otelcol-integrator"),
-        error=lambda status: jubilant.any_error(status, "otelcol-integrator"),
-        timeout=420,
-    )
 
     # WHEN otelcol consumes that external-config relation
     juju.integrate("otelcol:external-config", "otelcol-integrator:external-config")
@@ -174,11 +168,12 @@ def test_configure_and_relate_otelcol_integrator(juju: jubilant.Juju):
     # NOTE: otelcol is expected to remain blocked in this scenario (no outbound relation).
     juju.wait(
         lambda status: (
-            jubilant.all_active(status, "ubuntu", "otelcol-integrator")
-            and jubilant.all_blocked(status, "otelcol")
+            jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_active(status, "ubuntu", "otelcol-integrator")
             and jubilant.all_agents_idle(status, "ubuntu", "otelcol", "otelcol-integrator")
         ),
-        timeout=420,
+        error=jubilant.any_error,
+        timeout=600,
     )
 
 

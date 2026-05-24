@@ -3,6 +3,7 @@
 from typing import Final, Set
 
 SERVICE_NAME: Final[str] = "otelcol"
+CUSTOM_COMPONENT_ID: Final[str] = "_custom"
 CERT_DIR: Final[str] = "/var/snap/opentelemetry-collector/common/certs"
 EXTERNAL_CONFIG_SECRETS_DIR: Final[str] = "/var/snap/opentelemetry-collector/common/external_config_secrets"
 SERVER_CERT_PATH: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol-server-cert.crt"
@@ -20,7 +21,6 @@ DASHBOARDS_SRC_PATH: Final[str] = "src/grafana_dashboards"
 DASHBOARDS_DEST_PATH: Final[str] = "grafana_dashboards"
 # NOTE: this file path is hardcoded in src/logrotate.d/otelcol as well
 INTERNAL_TELEMETRY_LOG_FILE: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol.log"
-
 # SNAP_COMMON dir: https://snapcraft.io/docs/data-locations#p-94053-system-data
 FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
 
