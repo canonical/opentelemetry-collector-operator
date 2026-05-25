@@ -7,11 +7,11 @@ import pathlib
 
 import jubilant
 
-from constants import CONFIG_FOLDER
+from constants import CONFIG_FOLDER, NODE_EXPORTER_TEXTFILE_DIRECTORY
 from singleton_snap import normalize_unit_name
 import os
 
-from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname
+from helpers import PATH_EXCLUDE, get_snap_service_status, get_receiver_config, get_hostname, textfile_filename, get_subordinate_charm_info_metrics
 
 CONFIG_FILE_PATH = "/etc/otelcol/config.d"
 OTLP_RECEIVER_NAME = "otlp"
@@ -43,8 +43,14 @@ def test_deploy(juju: jubilant.Juju, charm: str):
     assert get_snap_service_status(juju, "0") == "active"
 
     # AND the name of the OTLP receiver defined in the config file should include the machine hostname
+    # AND node-exporter's textfile collector file is created on disk
     config_filename = f"{normalize_unit_name('otelcol/0')}.yaml"
     assert get_receiver_config(juju, "ubuntu/0", OTLP_RECEIVER_NAME, os.path.join(CONFIG_FOLDER, config_filename)) == f"otlp/{get_hostname(juju, '0')}"
+
+    # AND the metric is exposed by node-exporter with the expected labels
+    metrics = get_subordinate_charm_info_metrics(juju, "ubuntu/0")
+    assert 'otelcol_unit="otelcol/0"' in metrics
+    assert 'related_unit="ubuntu/0"' in metrics
 
 def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     # GIVEN only 1 unit of the otelcol charm
@@ -64,10 +70,15 @@ def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     )
     assert juju.status().get_units("otelcol") == {}
     # AND the otelcol config directory is removed from disk
+    # AND node-exporter's textfile collector file is removed from disk
     otelcol_config_dir = juju.ssh(
         "ubuntu/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
+    node_exporter_textfile = juju.ssh(
+        "ubuntu/0", command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/0")} || echo "does not exist"'
+    )
     assert otelcol_config_dir.strip() == "does not exist"
+    assert node_exporter_textfile.strip() == "does not exist"
 
 
 def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
@@ -115,12 +126,20 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     assert juju.status().get_units("otelcol").keys() == {"otelcol/1"}
 
     # AND the otelcol config file for the second otelcol unit is now removed from disk
+    # AND node-exporter's textfile collector file is removed from disk
     config_filename = f"{normalize_unit_name('otelcol/2')}.yaml"
     otelcol_config = juju.ssh(
         "ubuntu/0",
         command=f'test -e {os.path.join(CONFIG_FOLDER, config_filename)} || echo "does not exist"',
     )
     assert otelcol_config.strip() == "does not exist"
+
+    # AND the metric for the removed unit is no longer exposed by node-exporter
+    # AND the surviving unit's metric is still exposed
+    metrics = get_subordinate_charm_info_metrics(juju, "ubuntu/0")
+    assert 'otelcol_unit="otelcol/2"' not in metrics
+    assert 'otelcol_unit="otelcol/1"' in metrics
+
     # AND the otelcol config directory remains on disk
     otelcol_config_dir = juju.ssh(
         "ubuntu/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
@@ -164,12 +183,64 @@ def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     )
     assert juju.status().get_units("otelcol") == {}
     # AND there are no otelcol config files on disk
+    # AND node-exporter's textfile collector files are removed from disk
     otelcol_config_0 = juju.ssh(
         "ubuntu/0", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
     otelcol_config_1 = juju.ssh(
         "ubuntu/2", command=f'test -e {CONFIG_FOLDER} || echo "does not exist"'
     )
+    # otelcol/1 runs on ubuntu/0 (machine 0)
+    node_exporter_textfile_machine0 = juju.ssh(
+        "ubuntu/0",
+        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/1")} || echo "does not exist"'
+    )
+    # otelcol/4 runs on ubuntu/2 (machine 1)
+    node_exporter_textfile_machine1 = juju.ssh(
+        "ubuntu/2",
+        command=f'test -e {NODE_EXPORTER_TEXTFILE_DIRECTORY}/{textfile_filename("otelcol/4")} || echo "does not exist"'
+    )
     assert otelcol_config_0.strip() == "does not exist"
     assert otelcol_config_1.strip() == "does not exist"
+    assert node_exporter_textfile_machine0.strip() == "does not exist"
+    assert node_exporter_textfile_machine1.strip() == "does not exist"
+
+
+def test_two_subordinates_same_machine_expose_separate_metrics(juju: jubilant.Juju):
+    # GIVEN otelcol related to ubuntu (ubuntu/0 on machine 0, ubuntu/2 on machine 1)
+    juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
+    juju.wait(
+        lambda status: jubilant.all_active(status, "ubuntu"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
+    juju.wait(
+        lambda status: jubilant.all_blocked(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
+    # AND a second ubuntu app deployed on machine 0, co-located with ubuntu/0
+    juju.deploy("ubuntu", app="ubuntu2", channel="latest/stable", base="ubuntu@24.04", to="0")
+    juju.integrate("otelcol:juju-info", "ubuntu2:juju-info")
+    juju.wait(
+        lambda status: jubilant.all_active(status, "ubuntu2"),
+        error=jubilant.any_error,
+        timeout=420,
+    )
+    juju.wait(
+        lambda status: jubilant.all_blocked(status, "otelcol"),
+        error=jubilant.any_error,
+        timeout=420,
+    )
+    juju.wait(
+        lambda status: jubilant.all_agents_idle(status, "ubuntu", "ubuntu2", "otelcol"),
+        error=jubilant.any_error,
+        timeout=240,
+    )
+
+    # THEN node-exporter on machine 0 exposes separate metrics for each co-located otelcol unit,
+    # each correctly identifying its own related principal
+    metrics = get_subordinate_charm_info_metrics(juju, "ubuntu/0")
+    assert 'related_unit="ubuntu/0"' in metrics
+    assert 'related_unit="ubuntu2/0"' in metrics
 
