@@ -16,7 +16,14 @@ from ops.testing import Relation, State
     ],
 )
 def test_refresh_certs_called_on_cert_relation_changed(ctx, relation_name, remote_app_data):
-    """Test that refresh_certs is called on certificate relation-changed hooks."""
+    """Test that refresh_certs is called on certificate relation-changed hooks.
+
+    We patch charm.event to return the real Juju hook name (all-hyphens format),
+    because the ops Scenario framework incorrectly produces a mixed format
+    with underscores in the prefix (e.g. 'receive_ca_cert-relation-changed').
+
+    Ref: https://github.com/canonical/opentelemetry-collector-operator/issues/288
+    """
     # GIVEN a certificate relation exists
     cert_relation = Relation(relation_name, remote_app_data=remote_app_data)
     state = State(
@@ -26,7 +33,8 @@ def test_refresh_certs_called_on_cert_relation_changed(ctx, relation_name, remot
 
     # Mock refresh_certs to track if it's called
     with patch("charm.refresh_certs") as mock_refresh_certs, \
-         patch("integrations._add_alerts"):
+         patch("integrations._add_alerts"), \
+         patch("charm.event", return_value=f"{relation_name}-relation-changed"):
         # WHEN the relation changed event is executed
         ctx.run(ctx.on.relation_changed(cert_relation), state)
 
@@ -63,10 +71,10 @@ def test_refresh_certs_on_reconcile_action_event(ctx):
     # WHEN the `reconcile` action is executed
     with patch("charm.refresh_certs") as mock_refresh_certs, \
          patch("integrations._add_alerts"):
-            ctx.run(
-                ctx.on.action('reconcile'),
-                state,
-            )
+        ctx.run(
+            ctx.on.action('reconcile'),
+            state,
+        )
 
-            # THEN the refresh_certs function MUST have been called once
-            mock_refresh_certs.assert_called_once()
+        # THEN the refresh_certs function MUST have been called once
+        mock_refresh_certs.assert_called_once()
