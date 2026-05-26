@@ -740,20 +740,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         return cert_paths
 
-    def _write_secrets_to_disk(self, external_secret_files: dict[str, str]) -> None:
-        if not external_secret_files:
-            self._remove_external_configs_secrets_dir()
-            return
-        self._ensure_external_configs_secrets_dir()
-        for filepath, secret in external_secret_files.items():
-            filepath = LocalPath(filepath)
-            filepath.parent.mkdir(parents=True, exist_ok=True)
-            filepath.write_text(secret, mode=0o644)
-            logger.debug("secret written to %s", filepath)
-
-    def _configure_external_configs(self, config_manager: ConfigManager):
-        config_manager.add_external_configs(self.external_configs)
-
     def _clamp_memory_limit(self, config_value: int) -> int:
         """Default the memory limit percentage to 100 if input is not in [0, 100]."""
         if config_value < 0 or config_value > 100:
