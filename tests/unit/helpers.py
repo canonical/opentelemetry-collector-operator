@@ -6,11 +6,11 @@ from pathlib import Path
 
 from charmlibs.pathops import LocalPath
 
-from singleton_snap import SnapRegistrationFile
+from singleton_snap import normalize_unit_name
 
 
 def get_otelcol_config_file(unit_name: str, config_folder:str) -> dict:
-    config_filename = f"{SnapRegistrationFile._normalize_name(unit_name)}.yaml"
+    config_filename = f"{normalize_unit_name(unit_name)}.yaml"
     config_path = LocalPath(Path(config_folder)/config_filename)
     assert config_path.exists(), "file does not exist"
     cfg = yaml.safe_load(config_path.read_text())
