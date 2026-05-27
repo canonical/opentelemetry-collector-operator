@@ -206,8 +206,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         if current_event in (
             "upgrade-charm",
-            "receive_ca_cert-relation-changed",
-            "receive_server_cert-relation-changed",
+            "receive-ca-cert-relation-changed",
+            "receive-server-cert-relation-changed",
             "reconcile",
         ):
             refresh_certs()
