@@ -193,7 +193,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # come from peer data, so the leader can access all of them, regardless where multiple
         # principals are located.
         if self.unit.is_leader():
-            integrations.cleanup()
+            integrations.cleanup(self.charm_dir.absolute())
 
         # Integrate with TLS relations
         receive_ca_certs_hash = integrations.receive_ca_cert(
@@ -445,10 +445,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             config_manager.add_log_ingestion()
         config_manager.add_log_forwarding(loki_endpoints, insecure_skip_verify)
 
-        # OTLP setup
-        otlp_endpoints = integrations.send_otlp(self)
-        config_manager.add_otlp_forwarding(otlp_endpoints)
-
         # Metrics setup
         config_manager.add_self_scrape(
             identifier=topology.identifier,
@@ -480,6 +476,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             # This is conditional because otherwise remote_write.endpoints causes error on relation-broken
             remote_write_endpoints = integrations.send_remote_write(self)
             config_manager.add_remote_write(remote_write_endpoints)
+
+        # OTLP setup
+        # NOTE: this must run after the logs/metrics/cos-agent integrations above so that the
+        # *_RULES_DEST_PATH directories contain the alert rules gathered from related applications
+        # (e.g. postgresql). Otherwise those rules would be dropped from the OTLP databag.
+        # See https://github.com/canonical/opentelemetry-collector-operator/issues/297
+        otlp_endpoints = integrations.send_otlp(self)
+        config_manager.add_otlp_forwarding(otlp_endpoints)
 
         # Dashboards setup
         ## COS Agent dashboards

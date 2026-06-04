@@ -66,14 +66,17 @@ logger = logging.getLogger(__name__)
 ProfilingEndpoint = namedtuple("ProfilingEndpoint", "endpoint, insecure")
 
 
-def cleanup():
+def cleanup(charm_root: Path):
     """Cleanup folders for alerts and dashboards.
 
     This function should be called before all integrations to ensure the charm works holistically.
+    The DEST directories are resolved against ``charm_root`` (an absolute path) so that cleanup
+    targets the very same folders that `receive_loki_logs`/`scrape_metrics`/`send_otlp` read and
+    write, regardless of the process' current working directory.
     """
-    shutil.rmtree(METRICS_RULES_DEST_PATH, ignore_errors=True)
-    shutil.rmtree(LOKI_RULES_DEST_PATH, ignore_errors=True)
-    shutil.rmtree(DASHBOARDS_DEST_PATH, ignore_errors=True)
+    shutil.rmtree(charm_root.joinpath(*METRICS_RULES_DEST_PATH.split("/")), ignore_errors=True)
+    shutil.rmtree(charm_root.joinpath(*LOKI_RULES_DEST_PATH.split("/")), ignore_errors=True)
+    shutil.rmtree(charm_root.joinpath(*DASHBOARDS_DEST_PATH.split("/")), ignore_errors=True)
 
 
 def _add_alerts(alerts: Dict, dest_path: Path):
@@ -471,16 +474,25 @@ def send_otlp(charm: CharmBase) -> Dict[int, OtlpEndpoint]:
 
     This provides otelcol with the remote's OTLP endpoint for each relation.
 
-    The bundled rule files (from the src/*_rules directories) are published to the databag.
-    Conditional to the `forward_alert_rules` config, the rules from related OTLP requirer charms
-    are also published to the databag.
+    The rule files staged in the *_RULES_DEST_PATH directories are published to the databag.
+    These directories contain both the charm's own bundled rules (copied from src/*_rules) and,
+    conditional to the `forward_alert_rules` config, the alert rules gathered from related
+    applications. The DEST directories are populated, in order, by:
+      * `scrape_metrics`        -> metrics-endpoint alerts  (METRICS_RULES_DEST_PATH)
+      * `receive_loki_logs`     -> receive-loki-logs alerts (LOKI_RULES_DEST_PATH)
+      * the cos-agent handling in `charm.reconcile` (leader-only) -> cos-agent metrics/logs alerts
+
+    NOTE: This function MUST be called after all of the above have run, so that the DEST
+    directories are fully populated before being forwarded. Otherwise alert rules from related
+    applications (e.g. postgresql) would be silently dropped from the OTLP databag.
+    See https://github.com/canonical/opentelemetry-collector-operator/issues/297
     """
-    # Gather our bundled rules
+    # Gather all staged rules: bundled rules plus the alerts forwarded by related applications.
     charm_root = charm.charm_dir.absolute()
     rules = (
         RuleStore(JujuTopology.from_charm(charm))
-        .add_logql_path(charm_root.joinpath(LOKI_RULES_SRC_PATH), recursive=True)
-        .add_promql_path(charm_root.joinpath(METRICS_RULES_SRC_PATH), recursive=True)
+        .add_logql_path(charm_root.joinpath(LOKI_RULES_DEST_PATH), recursive=True)
+        .add_promql_path(charm_root.joinpath(METRICS_RULES_DEST_PATH), recursive=True)
     )
     # Publish rules for the provider
     extra_alert_labels = cast(str, charm.model.config.get("extra_alert_labels", ""))
