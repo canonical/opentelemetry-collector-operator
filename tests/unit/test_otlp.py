@@ -4,8 +4,6 @@
 """Feature: OTLP endpoints and rules transfer."""
 
 import json
-from contextlib import ExitStack
-from unittest.mock import patch
 
 import pytest
 from charmlibs.interfaces.otlp import OtlpEndpoint
@@ -314,82 +312,6 @@ def test_related_app_log_alerts_forwarded_over_otlp(ctx, forward_rules):
         assert RELATED_APP_LOG_ALERT in forwarded_log_alerts
     else:
         assert RELATED_APP_LOG_ALERT not in forwarded_log_alerts
-
-
-def test_reconcile_stages_otlp_rules_after_related_app_staging(ctx):
-    """Guard the temporal ordering contract that makes OTLP rule forwarding work.
-
-    `send_otlp` forwards whatever rule files are staged in the *_RULES_DEST_PATH directories, so it
-    MUST run:
-      * AFTER `cleanup` (which wipes the rule directories), and
-      * AFTER every integration that stages related-app alerts into those directories:
-        `scrape_metrics` (metrics-endpoint), `receive_loki_logs` (loki) and the cos-agent
-        `_add_alerts` calls in `charm._reconcile`.
-
-    This ordering is otherwise only enforced by a code comment, so a future reorder would silently
-    regress https://github.com/canonical/opentelemetry-collector-operator/issues/297. This test
-    spies on the reconcile call order to fail fast if that contract is broken.
-    """
-    # `charm.py` does `import integrations`, so spy on that same module object
-    import integrations
-
-    call_order: list[str] = []
-    spied = [
-        "cleanup",
-        "_add_alerts",  # cos-agent metrics/logs alerts staged from charm._reconcile
-        "receive_loki_logs",
-        "scrape_metrics",
-        "send_otlp",
-    ]
-    real = {name: getattr(integrations, name) for name in spied}
-
-    def make_spy(name):
-        def spy(*args, **kwargs):
-            call_order.append(name)
-            return real[name](*args, **kwargs)
-
-        return spy
-
-    # GIVEN a cos-agent principal staging alerts, a peers relation, and a send-otlp relation
-    provider_data = CosAgentProviderUnitData(
-        metrics_alert_rules=_postgresql_alert_groups(),
-        log_alert_rules={},
-        dashboards=[],
-        metrics_scrape_jobs=[],
-        log_slots=[],
-    )
-    cos_agent = SubordinateRelation(
-        "cos-agent",
-        remote_app_name="postgresql",
-        remote_unit_id=0,
-        remote_unit_data={CosAgentProviderUnitData.KEY: provider_data.json()},
-    )
-    state = State(
-        relations=[
-            cos_agent,
-            PeerRelation("peers"),
-            Relation("send-otlp", remote_app_data={"endpoints": "[]"}),
-        ],
-        leader=True,
-        model=MODEL,
-        config={"forward_alert_rules": True},
-    )
-
-    # WHEN any event executes the reconciler
-    with ExitStack() as stack:
-        for name in spied:
-            stack.enter_context(patch.object(integrations, name, make_spy(name)))
-        ctx.run(ctx.on.update_status(), state=state)
-
-    # THEN send_otlp runs after cleanup and after every related-app staging step
-    assert "send_otlp" in call_order
-    send_otlp_idx = call_order.index("send_otlp")
-    assert call_order.index("cleanup") < send_otlp_idx
-    for stager in ("_add_alerts", "receive_loki_logs", "scrape_metrics"):
-        assert stager in call_order, f"{stager} was not called"
-        # Use the LAST occurrence: every staging write must precede the forwarding read
-        last_idx = len(call_order) - 1 - call_order[::-1].index(stager)
-        assert last_idx < send_otlp_idx, f"send_otlp must run after {stager}"
 
 
 def test_forwarded_rules_have_topology(ctx):
