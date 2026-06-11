@@ -2,8 +2,9 @@
 # See LICENSE file for licensing details.
 
 import json
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, cast
 
+from charms.prometheus_k8s.v1.prometheus_remote_write import PrometheusRemoteWriteConsumer
 from cosl.utils import LZMABase64
 from ops.testing import Model, Relation, State
 
@@ -159,7 +160,6 @@ def test_extra_loki_alerts_config(ctx):
     )
     _assert_extra_labels(alert_rules_mod, extra_labels, present=False)
 
-
 def test_extra_otlp_alerts_config(ctx, all_rules):
     # GIVEN a new key-value pair of extra alerts labels
     # * receive and send otlp relations
@@ -199,3 +199,58 @@ def test_extra_otlp_alerts_config(ctx, all_rules):
     )
     assert decompressed_mod.get("promql")
     _assert_extra_labels(decompressed_mod.get("promql", {}), extra_labels, present=False)
+
+
+class ReverseIteratingSet(set):
+    """Set that exposes a non-sorted iteration order."""
+
+    def __iter__(self):
+        """Iterate in reverse sorted order to exercise deterministic output."""
+        return iter(sorted(super().__iter__(), reverse=True))
+
+
+class FakeCosTool:
+    """Minimal cos-tool fake for alert rule duplication tests."""
+
+    def inject_label_matchers(self, expr, labels):
+        """Return the expression after recording the unit matcher in a stable shape."""
+        return f"{expr}{{juju_unit={labels['juju_unit']}}}"
+
+
+def test_remote_write_alert_rule_duplication_orders_units_deterministically():
+    remote_write = cast(
+        Any, PrometheusRemoteWriteConsumer.__new__(PrometheusRemoteWriteConsumer)
+    )
+    remote_write._tool = FakeCosTool()
+    alert_rules = {
+        "groups": [
+            {
+                "name": "node",
+                "rules": [
+                    {
+                        "alert": "HostMetricsMissing",
+                        "expr": "up == 0",
+                        "labels": {},
+                    }
+                ],
+            }
+        ]
+    }
+    peer_unit_names = ReverseIteratingSet(
+        {
+            "otelcol/2",
+            "otelcol/0",
+            "otelcol/1",
+        }
+    )
+
+    duplicated_rules = remote_write._duplicate_rules_per_unit(
+        alert_rules,
+        peer_unit_names,
+        rule_names_to_duplicate=["HostMetricsMissing"],
+    )
+
+    assert [
+        rule["labels"]["juju_unit"]
+        for rule in duplicated_rules["groups"][0]["rules"]
+    ] == ["otelcol/0", "otelcol/1", "otelcol/2"]
