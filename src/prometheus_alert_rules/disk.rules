@@ -1,0 +1,43 @@
+groups:
+- name: HostDisk
+  rules:
+  - record: used_disk_space
+    expr: |
+      100 * (1 - (
+        node_filesystem_free_bytes / node_filesystem_size_bytes)
+      )
+  - alert: HostDiskSpaceFillsUp
+    expr: predict_linear(used_disk_space{mountpoint=~"/"}[6h], 6*60*60) > 90
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "[Prediction] Host filesystem '{{ $labels.mountpoint }}' is using {{ $value | printf \"%.0f\" }}% of the total space (instance {{ $labels.instance }})"
+      description: >-
+        Host filesystem '{{ $labels.mountpoint }}' usage can potentially reach {{ $value | printf "%.0f" }}% of the total space.
+          VALUE = {{ $value }}
+          LABELS = {{ $labels }}
+        The 6-hour-ahead prediction is made as a linear regression from the last 60 minutes of data.
+  - alert: HostDiskSpace
+    # some fstype are excluded because they are not relevant; see https://github.com/canonical/grafana-agent-operator/pull/233 for details
+    expr: used_disk_space{fstype!~"fuse\\.lxcfs|fuse\\.snapfuse", mountpoint!~"/run.*|/proc|/dev|/var/lib/kubelet/plugins/kubernetes.io/csi/.*"} > 90
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: Host filesystem '{{ $labels.mountpoint }}' is using {{ $value | printf "%.0f" }}% of the total space (instance {{ $labels.instance }})
+      description: >-
+        Host filesystem '{{ $labels.mountpoint }}' is using {{ $value | printf "%.0f" }}% of the total space.
+          VALUE = {{ $value }}
+          LABELS = {{ $labels }}
+  - alert: HostXFSError
+    expr: node_filesystem_device_error{fstype="xfs"} > 0
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: XFS error found for device '{{ $labels.device }}' (instance {{ $labels.instance }})
+      description: >-
+         XFS error found for device '{{ $labels.device }}'.
+           VALUE = {{ $value }}
+           LABELS = {{ $labels }}
