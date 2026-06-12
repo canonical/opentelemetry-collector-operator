@@ -3,9 +3,9 @@ groups:
   rules:
   - alert: HostArpCache
     expr: 100 * node_arp_entries / node_sysctl_net_ipv4_neigh_default_gc_thresh3 >= 80
-    for: 2m
+    for: 15m
     labels:
-      severity: critical
+      severity: warning
     annotations:
       summary: Host arp cache reached {{ $value | printf "%.0f" }}% limit (instance {{ $labels.instance }})
       description: >-

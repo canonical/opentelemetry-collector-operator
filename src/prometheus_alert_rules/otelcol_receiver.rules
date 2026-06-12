@@ -5,7 +5,7 @@ groups:
         expr: sum(rate(otelcol_receiver_refused_log_records_total{}[5m])) > 0
         for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: Some log points have been refused by receiver
           description: Maybe collector has received non standard log points or it reached some limits
@@ -13,7 +13,7 @@ groups:
         expr: sum(rate(otelcol_receiver_refused_metric_points_total{}[5m])) > 0
         for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: Some metric points have been refused by receiver
           description: Maybe collector has received non standard metric points or it reached some limits
