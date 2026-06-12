@@ -5,7 +5,7 @@ groups:
         expr: max(rate(otelcol_process_cpu_seconds_total{}[5m])*100) > 90
         for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: High max CPU usage
           description: Collector needs to scale up

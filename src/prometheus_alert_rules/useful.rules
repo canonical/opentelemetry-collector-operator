@@ -3,9 +3,9 @@ groups:
   rules:
   - alert: HostSystemdFailedScopes
     expr: sum(node_systemd_unit_state{name=~".*.scope", state=~"failed"}) by (instance) >= 50
-    for: 0m
+    for: 5m
     labels:
-      severity: critical
+      severity: info
     annotations:
       summary: Host has {{ $value }} systemd scopes in failed state (instance {{ $labels.instance }})
       description: >-
@@ -14,9 +14,9 @@ groups:
           LABELS = {{ $labels }}
   - alert: HostLoggedInUsers
     expr: sum(node_logind_sessions{class="user"}) by (instance) > 25
-    for: 2m
+    for: 5m
     labels:
-      severity: warning
+      severity: info
     annotations:
       summary: Host has {{ $value }} users logged-in (instance {{ $labels.instance }})
       description: >-

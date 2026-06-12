@@ -3,7 +3,7 @@ groups:
   rules:
   - alert: HostInterfaceMTUSize
     expr: last_over_time(node_network_mtu_bytes[30m]) and changes(node_network_mtu_bytes[30m]) > 0
-    for: 0m
+    for: 15m
     labels:
       severity: warning
     annotations:
@@ -14,7 +14,7 @@ groups:
           LABELS = {{ $labels }}
   - alert: HostInterfaceSpeed
     expr: last_over_time(node_network_speed_bytes[30m]) and changes(node_network_speed_bytes[30m]) > 0
-    for: 0m
+    for: 15m
     labels:
       severity: warning
     annotations:
