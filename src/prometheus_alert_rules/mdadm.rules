@@ -3,9 +3,9 @@ groups:
   rules:
     - alert: RaidDisksFailed  
       expr: node_md_disks{state="failed"} > 0
-      for: 0m
+      for: 15m
       labels:
-        severity: critical
+        severity: warning
       annotations:
         summary: "{{ $value }} disks failed on device {{ $labels.device }}.(instance {{ $labels.instance }})"
         description: >-
@@ -15,9 +15,9 @@ groups:
 
     - alert: RaidDisksSpare
       expr: node_md_disks{state="spare"} > 0
-      for: 0m
+      for: 15m
       labels:
-        severity: warning
+        severity: info
       annotations:
         summary: "{{ $value }} disks marked as spare on device {{ $labels.device }}.(instance {{ $labels.instance }})"
         description: >-
@@ -27,9 +27,9 @@ groups:
 
     - alert: RaidDeviceInactive
       expr: node_md_state{state="inactive"} > 0
-      for: 0m
+      for: 15m
       labels:
-        severity: critical
+        severity: warning
       annotations:
         summary: RAID device {{ $labels.device }} in inactive state.(instance {{ $labels.instance }})
         description: >-
@@ -39,9 +39,9 @@ groups:
 
     - alert: RaidDeviceRecovering
       expr: node_md_state{state="recovering"} > 0
-      for: 0m
+      for: 15m
       labels:
-        severity: warning
+        severity: info
       annotations:
         summary: RAID device {{ $labels.device }} in recovering state.(instance {{ $labels.instance }})
         description: >-

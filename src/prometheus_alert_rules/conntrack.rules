@@ -3,7 +3,7 @@ groups:
   rules:
   - alert: HostConntrackLimit
     expr: 100 * (node_nf_conntrack_entries / node_nf_conntrack_entries_limit) > 80
-    for: 2m
+    for: 15m
     labels:
       severity: warning
     annotations:
