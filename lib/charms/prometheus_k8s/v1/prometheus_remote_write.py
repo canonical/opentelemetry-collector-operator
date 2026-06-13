@@ -529,7 +529,10 @@ class PrometheusRemoteWriteConsumer(Object):
                     alert_rules_as_dict, self._extra_alert_labels
                 )
             )
-        relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
+        relation.data[self._charm.app]["alert_rules"] = json.dumps(
+            alert_rules_as_dict,
+            sort_keys=True,  # sort, to prevent unnecessary relation_changed events
+        )
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
@@ -611,7 +614,7 @@ class PrometheusRemoteWriteConsumer(Object):
                 if rule.get("alert", "") not in rule_names_to_duplicate:
                     new_rules.append(rule)
                 else:
-                    for name in peer_unit_names:
+                    for name in sorted(peer_unit_names):
                         juju_unit = name
                         modified_rule = copy.deepcopy(rule)
 
