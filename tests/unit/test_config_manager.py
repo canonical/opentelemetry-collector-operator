@@ -215,3 +215,44 @@ def test_add_debug_exporters(enabled_pipelines, expected_pipelines):
     ]
     # AND the debug exporter is only attached to the enabled pipelines
     assert expected_pipelines == config_manager.config._config["service"]["pipelines"]
+
+
+def test_add_cloud_integrator_uses_signal_specific_credentials():
+    # GIVEN an empty config
+    config_manager = ConfigManager("otelcol/0", "0", "", "", insecure_skip_verify=True)
+
+    # WHEN cloud-config exporters are added with separate credentials per signal
+    config_manager.add_cloud_integrator(
+        prometheus_username="1076854",
+        prometheus_password="prom-token",
+        prometheus_url="https://prometheus.example/api/prom/push",
+        loki_username="639149",
+        loki_password="loki-token",
+        loki_url="https://logs.example/loki/api/v1/push",
+        tempo_username="tempo-user",
+        tempo_password="tempo-token",
+        tempo_url="https://tempo.example/otlp",
+    )
+
+    # THEN each exporter has its own authenticator extension
+    extensions = config_manager.config._config["extensions"]
+    assert extensions["basicauth/cloud-integrator-prometheus"] == {
+        "client_auth": {"username": "1076854", "password": "prom-token"}
+    }
+    assert extensions["basicauth/cloud-integrator-loki"] == {
+        "client_auth": {"username": "639149", "password": "loki-token"}
+    }
+    assert extensions["basicauth/cloud-integrator-tempo"] == {
+        "client_auth": {"username": "tempo-user", "password": "tempo-token"}
+    }
+
+    exporters = config_manager.config._config["exporters"]
+    assert exporters["prometheusremotewrite/cloud-config"]["auth"] == {
+        "authenticator": "basicauth/cloud-integrator-prometheus"
+    }
+    assert exporters["loki/cloud-config"]["auth"] == {
+        "authenticator": "basicauth/cloud-integrator-loki"
+    }
+    assert exporters["otlphttp/cloud-config"]["auth"] == {
+        "authenticator": "basicauth/cloud-integrator-tempo"
+    }

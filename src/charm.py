@@ -472,10 +472,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # GrafanaCloudIntegrator setup
         cloud_integrator_data = integrations.cloud_integrator(self)
         config_manager.add_cloud_integrator(
-            username=cloud_integrator_data.username,
-            password=cloud_integrator_data.password,
+            prometheus_username=cloud_integrator_data.prometheus_username,
+            prometheus_password=cloud_integrator_data.prometheus_password,
             prometheus_url=cloud_integrator_data.prometheus_url,
+            loki_username=cloud_integrator_data.loki_username,
+            loki_password=cloud_integrator_data.loki_password,
             loki_url=cloud_integrator_data.loki_url,
+            tempo_username=cloud_integrator_data.tempo_username,
+            tempo_password=cloud_integrator_data.tempo_password,
             tempo_url=cloud_integrator_data.tempo_url,
         )
 
