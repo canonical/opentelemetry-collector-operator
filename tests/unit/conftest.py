@@ -169,6 +169,13 @@ def mock_snap_operations():
         yield
 
 
+@pytest.fixture
+def mock_add_alerts():
+    """Suppress alert-rule injection during certificate-related tests."""
+    with patch("integrations._add_alerts"):
+        yield
+
+
 @pytest.fixture(autouse=True)
 def mock_singleton_snap_manager():
     """Mock SingletonSnapManager methods."""

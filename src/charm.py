@@ -26,6 +26,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 import integrations
 from config_builder import Component, Port, build_port_map
 from config_manager import ConfigManager
+from utils import hash_ca_cert_dir
 from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
@@ -195,8 +196,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if self.unit.is_leader():
             integrations.cleanup(self.charm_dir.absolute())
 
-        # Integrate with TLS relations
-        receive_ca_certs_hash = integrations.receive_ca_cert(
+        # Integrate with TLS relations.
+        # NOTE: receive_ca_cert writes the CA files under RECV_CA_CERT_FOLDER_PATH; its
+        # returned hash is intentionally not used as a restart trigger (see the
+        # hash_ca_cert_dir call below, which hashes the materialized files instead).
+        integrations.receive_ca_cert(
             self,
             recv_ca_cert_folder_path=LocalPath(RECV_CA_CERT_FOLDER_PATH),
         )
@@ -524,13 +528,22 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         config_path.write_text(config_manager.config.build())
 
         # If the config file or any cert has changed, a change in the hash
-        # will trigger a restart
+        # will trigger a restart.
+        # NOTE: The CA component is hashed from the files materialized on disk under
+        # RECV_CA_CERT_FOLDER_PATH (after refresh_certs ran update-ca-certificates),
+        # not from the relation data. This keeps the restart aligned with the bytes
+        # the snap will actually load, so a newly trusted CA always forces a restart
+        # even when the certificate_transfer handshake spans multiple hooks.
         hash_file = self.charm_dir.absolute() / "config_hash"
         old_hash = ""
         if hash_file.exists():
             old_hash = hash_file.read_text()
         current_hash = ",".join(
-            [config_manager.config.hash, receive_ca_certs_hash, server_cert_hash]
+            [
+                config_manager.config.hash,
+                hash_ca_cert_dir(RECV_CA_CERT_FOLDER_PATH),
+                server_cert_hash,
+            ]
         )
         if current_hash != old_hash:
             for snap_name in SnapMap.snaps():
