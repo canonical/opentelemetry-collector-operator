@@ -164,8 +164,15 @@ def mock_snap_operations():
     mock_snap.stop.return_value = None
     mock_snap.restart.return_value = None
 
-    # Mock the snap.Snap class to return our mock instance
-    with patch("charm.snap.Snap", return_value=mock_snap):
+    # Create a mock for SnapCache that returns the mock snap
+    mock_cache = MagicMock()
+    mock_cache.__getitem__ = MagicMock(return_value=mock_snap)
+
+    # Mock both snap.Snap and snap.SnapCache to return our mock instance
+    with (
+        patch("charm.snap.Snap", return_value=mock_snap),
+        patch("charm.snap.SnapCache", return_value=mock_cache),
+    ):
         yield
 
 
