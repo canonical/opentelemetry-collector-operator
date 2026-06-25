@@ -348,6 +348,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         otelcol_fstab = SnapFstab(
             LocalPath("/var/lib/snapd/mount/snap.opentelemetry-collector.fstab")
         )
+        path_exclusions = cast(str, self.config.get("path_exclude")).split(";")
         for fstab_entry in otelcol_fstab.entries:
             if fstab_entry.owner not in endpoint_owners.keys():
                 continue
@@ -361,7 +362,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                         if fstab_entry
                         else "/snap/opentelemetry-collector/current/shared-logs/**"
                     ],
-                    exclude=[],
+                    exclude=path_exclusions,
                     attributes={
                         "job": f"{fstab_entry.owner}-{fstab_entry.relative_target}",
                         "juju_application": endpoint_owners[fstab_entry.owner]["juju_application"],
@@ -376,14 +377,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 pipelines=[f"logs/{self.unit.name}"],
             )
         ### Add /var/log scrape job
-        var_log_exclusions = cast(str, self.config.get("path_exclude")).split(";")
         # NOTE: var-log is an expensive receiver, avoid duplicating it with a unit identifier
         config_manager.config.add_component(
             Component.receiver,
             "filelog/var-log",
             _filelog_receiver_config(
                 include=["/var/log/**/*log"],
-                exclude=var_log_exclusions,
+                exclude=path_exclusions,
                 attributes={
                     "job": "opentelemetry-collector-var-log",
                     "juju_application": topology.application,
