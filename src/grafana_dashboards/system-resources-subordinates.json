@@ -114,7 +114,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "1 - sum without (cpu, mode) (irate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\",mode=\"idle\"}[$__rate_interval])) / on (instance) group_left () sum without (cpu, mode) ((irate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\"}[$__rate_interval]))) * on (instance, juju_model, juju_model_uuid) group_right () otelcol_subordinate_charm_info{juju_model=~\"$juju_model\",related_app=~\"$juju_application\",related_unit=~\"$juju_unit\"}",
+          "expr": "1 - sum without (cpu, mode) (rate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\",mode=\"idle\"}[$__rate_interval])) / on (instance) group_left () sum without (cpu, mode) ((rate(node_cpu_seconds_total{instance=~\"$node\",job=~\"$job\",juju_model=~\"$juju_model\"}[$__rate_interval]))) * on (instance, juju_model, juju_model_uuid) group_right () otelcol_subordinate_charm_info{juju_model=~\"$juju_model\",related_app=~\"$juju_application\",related_unit=~\"$juju_unit\"}",
           "hide": false,
           "instant": false,
           "legendFormat": "{{related_app}} - {{related_unit}}",
