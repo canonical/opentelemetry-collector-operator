@@ -170,6 +170,27 @@ class ConfigManager:
         }
 
     @property
+    def remote_write_queue_config(self) -> Dict[str, Any]:
+        """Return the queue and retry configuration for prometheusremotewrite exporters.
+
+        The prometheusremotewrite exporter does not support the standard ``sending_queue``
+        configuration block. Instead it exposes ``remote_write_queue`` for queue control
+        and inherits ``retry_on_failure`` from the exporterhelper.
+
+        See Also:
+            https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/prometheusremotewriteexporter/README.md
+        """
+        return {
+            "remote_write_queue": {
+                "enabled": True,
+                "queue_size": self._queue_size,
+            },
+            "retry_on_failure": {
+                "max_elapsed_time": f"{self._max_elapsed_time_min}m",
+            },
+        }
+
+    @property
     def prometheus_remotewrite_wal_config(self) -> Dict[str, Any]:
         """Return the default WAL configuration for Prometheus remote write.
 
@@ -298,6 +319,7 @@ class ConfigManager:
                         "insecure": endpoint.insecure,
                         "insecure_skip_verify": self._insecure_skip_verify,
                     },
+                    **self.sending_queue_config,
                 },
                 pipelines=["profiles"],
             )
@@ -382,6 +404,7 @@ class ConfigManager:
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     "add_metric_suffixes": False,
                     **self.prometheus_remotewrite_wal_config,
+                    **self.remote_write_queue_config,
                 },
                 pipelines=[f"metrics/{self._unit_name}"],
             )
@@ -414,7 +437,11 @@ class ConfigManager:
             self.config.add_component(
                 Component.exporter,
                 f"{exporter_type}/rel-{rel_id}/{self._unit_name}",
-                {"endpoint": otlp_endpoint.endpoint, "tls": tls_config},
+                {
+                    "endpoint": otlp_endpoint.endpoint,
+                    "tls": tls_config,
+                    **self.sending_queue_config,
+                },
                 pipelines=[f"{_type}/{self._unit_name}" for _type in otlp_endpoint.telemetries],
             )
 
@@ -567,6 +594,7 @@ class ConfigManager:
                     "tls": {"insecure_skip_verify": self._insecure_skip_verify},
                     **exporter_auth_config,
                     **self.prometheus_remotewrite_wal_config,
+                    **self.remote_write_queue_config,
                 },
                 pipelines=[f"metrics/{self._unit_name}"],
             )
