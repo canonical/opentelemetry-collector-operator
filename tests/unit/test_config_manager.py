@@ -107,6 +107,10 @@ def test_add_remote_write():
         "tls": {
             "insecure_skip_verify": True,
         },
+        "retry_on_failure": {
+            "max_elapsed_time": "5m",
+        },
+        "remote_write_queue": {"enabled": True, "queue_size": 1000},
     }
     config_manager.add_remote_write(
         endpoints=[{"url": "http://192.168.1.244/cos-prometheus-0/api/v1/write"}],
@@ -291,14 +295,20 @@ def test_add_otlp_forwarding():
         f"otlp/rel-0/{unit_name}": {
             "endpoint": "1.2.3.4:grpc-port",
             "tls": {"insecure": False, "insecure_skip_verify": True},
+            "retry_on_failure": {"max_elapsed_time": "5m"},
+            "sending_queue": {"enabled": True, "queue_size": 1000, "storage": "file_storage"},
         },
         f"otlphttp/rel-1/{unit_name}": {
             "endpoint": "http://host-1:http-port",
             "tls": {"insecure": True, "insecure_skip_verify": True},
+            "retry_on_failure": {"max_elapsed_time": "5m"},
+            "sending_queue": {"enabled": True, "queue_size": 1000, "storage": "file_storage"},
         },
         f"otlp/rel-2/{unit_name}": {
             "endpoint": "host-2:grpc-port",
             "tls": {"insecure": True, "insecure_skip_verify": True},
+            "retry_on_failure": {"max_elapsed_time": "5m"},
+            "sending_queue": {"enabled": True, "queue_size": 1000, "storage": "file_storage"},
         },
     }
     # AND the exporters are added to the appropriate pipelines
