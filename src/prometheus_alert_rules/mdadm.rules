@@ -7,7 +7,7 @@ groups:
       labels:
         severity: warning
       annotations:
-        summary: "{{ $value }} disks failed on device {{ $labels.device }}.(instance {{ $labels.instance }})"
+        summary: "{{ $value }} disks failed on device {{ $labels.device }}.(application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})"
         description: >-
           Disks failed on raid device {{ $labels.device }}.
             VALUE = {{ $value }}
@@ -19,7 +19,7 @@ groups:
       labels:
         severity: info
       annotations:
-        summary: "{{ $value }} disks marked as spare on device {{ $labels.device }}.(instance {{ $labels.instance }})"
+        summary: "{{ $value }} disks marked as spare on device {{ $labels.device }}.(application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})"
         description: >-
           Disks marked as spare on raid device {{ $labels.device }}.
             VALUE = {{ $value }}
@@ -31,7 +31,7 @@ groups:
       labels:
         severity: warning
       annotations:
-        summary: RAID device {{ $labels.device }} in inactive state.(instance {{ $labels.instance }})
+        summary: RAID device {{ $labels.device }} in inactive state.(application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
         description: >-
           RAID device {{ $labels.device }} in inactive state.
           VALUE = {{ $value }}
@@ -43,7 +43,7 @@ groups:
       labels:
         severity: info
       annotations:
-        summary: RAID device {{ $labels.device }} in recovering state.(instance {{ $labels.instance }})
+        summary: RAID device {{ $labels.device }} in recovering state.(application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
         description: >-
           RAID device {{ $labels.device }} in recovering state.
           VALUE = {{ $value }}

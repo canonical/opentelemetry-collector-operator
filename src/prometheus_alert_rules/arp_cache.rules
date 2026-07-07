@@ -7,7 +7,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Host arp cache reached {{ $value | printf "%.0f" }}% limit (instance {{ $labels.instance }})
+      summary: Host arp cache reached {{ $value | printf "%.0f" }}% limit (application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host arp cache reached {{ $value | printf "%.0f" }}% limit.
           VALUE = {{ $value }}

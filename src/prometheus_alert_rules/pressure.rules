@@ -9,7 +9,7 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Host processes spent too much time waiting for CPU resources (instance {{ $labels.instance }})
+      summary: Host processes spent too much time waiting for CPU resources (application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: The instantanoues time that the processes spent on waiting for CPU resource is too high. This might indicates that the server is under high CPU pressure.\n  VALUE = {{ $value | printf "%.2f" }}\n  LABELS = {{ $labels }}
 
   # Alert for host io pressure - high instantanoues io waiting time
@@ -19,7 +19,7 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Host processes spent too much time waiting due to I/O congestion (instance {{ $labels.instance }})
+      summary: Host processes spent too much time waiting due to I/O congestion (application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: The instantanoues time that the processes spent on waiting for I/O is too high. This might indicates that the server is under high I/O pressure.\n  VALUE = {{ $value | printf "%.2f" }}\n  LABELS = {{ $labels }}
 
   # Alert for host mem pressure - high instantanoues mem waiting time
@@ -29,5 +29,5 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Host processes spent too much time waiting for memory (instance {{ $labels.instance }})
+      summary: Host processes spent too much time waiting for memory (application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: The instantanoues time that the processes spent on waiting for memory is too high. This might indicates that the server is under high memory pressure.\n  VALUE = {{ $value | printf "%.2f" }}\n  LABELS = {{ $labels }}

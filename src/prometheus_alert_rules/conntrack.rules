@@ -7,7 +7,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Host conntrack reached {{ $value | printf "%.0f" }}% (instance {{ $labels.instance }})
+      summary: Host conntrack reached {{ $value | printf "%.0f" }}% (application {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host conntrack reached {{ $value | printf "%.0f" }}% usage.
           VALUE = {{ $value }}
