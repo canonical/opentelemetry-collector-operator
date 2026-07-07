@@ -1,9 +1,12 @@
 """File-based registration for singleton snap operations."""
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_unit_name(name: str) -> str:
@@ -19,13 +22,18 @@ def _get_registrations(
 ) -> List["SnapRegistrationFile"]:
     """Return all SnapRegistrationFile objects across all units for well-formed lockfiles matching snap_name.
 
-    Malformed files and files for other snaps are silently skipped.
+    Malformed files and files for other snaps are silently skipped. A DEBUG log is emitted for any
+    file that cannot be parsed as a SnapRegistrationFile.
     """
     result = []
-    for path in lock_dir.glob(f"{SnapRegistrationFile.PREFIX}*"):
+    for path in lock_dir.iterdir():
         try:
             reg = SnapRegistrationFile.from_filename(path.name)
         except (ValueError, IndexError):
+            logger.debug(
+                "Ignoring file in singleton snap registry with unexpected format: %s",
+                path.name,
+            )
             continue
         if reg.snap_name == snap_name:
             result.append(reg)
