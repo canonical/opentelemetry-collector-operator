@@ -8,4 +8,4 @@ groups:
           severity: warning
         annotations:
           summary: High max CPU usage
-          description: Collector needs to scale up
+          description: Collector needs to scale up (application {{ $labels.juju_application }} in model {{ $labels.juju_model }})

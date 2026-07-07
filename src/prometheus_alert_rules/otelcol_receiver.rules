@@ -15,5 +15,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Some metric points have been refused by receiver
+          summary: Some metric points have been refused by receiver (application {{ $labels.juju_application }} in model {{ $labels.juju_model }})
           description: Maybe collector has received non standard metric points or it reached some limits

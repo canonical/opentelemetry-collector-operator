@@ -23,5 +23,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: The queue is expected to be full within the next hour
+          summary: The queue is expected to be full within the next hour (application {{ $labels.juju_application }} in model {{ $labels.juju_model }})
           description: The exporter may be incorrectly configured for the pipeline, check that the exporter's endpoint is operational
