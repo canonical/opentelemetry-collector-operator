@@ -7,7 +7,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Some log points failed to send by exporter
+          summary: Some log points failed to send by exporter (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
           description: Destination may have a problem or payload is incorrect
       - alert: failed-metrics
         expr: sum(rate(otelcol_exporter_send_failed_metric_points_total{}[5m])) > 0
@@ -15,7 +15,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Some metric points failed to send by exporter
+          summary: Some metric points failed to send by exporter (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
           description: Destination may have a problem or payload is incorrect
       - alert: queue-full-prediction
         expr: predict_linear(otelcol_exporter_queue_size[1h],3600) > otelcol_exporter_queue_capacity
@@ -23,5 +23,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: The queue is expected to be full within the next hour
+          summary: The queue is expected to be full within the next hour (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
           description: The exporter may be incorrectly configured for the pipeline, check that the exporter's endpoint is operational

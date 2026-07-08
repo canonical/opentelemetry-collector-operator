@@ -13,7 +13,7 @@ groups:
     labels:
       severity: critical
     annotations:
-      summary: Host filesystem '{{ $labels.mountpoint }}' is using {{ $value | printf "%.0f" }}% of the total space (instance {{ $labels.instance }})
+      summary: Host filesystem '{{ $labels.mountpoint }}' is using {{ $value | printf "%.0f" }}% of the total space (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host filesystem '{{ $labels.mountpoint }}' is using {{ $value | printf "%.0f" }}% of the total space.
           VALUE = {{ $value }}
@@ -24,7 +24,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: XFS error found for device '{{ $labels.device }}' (instance {{ $labels.instance }})
+      summary: XFS error found for device '{{ $labels.device }}' (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
          XFS error found for device '{{ $labels.device }}'.
            VALUE = {{ $value }}
