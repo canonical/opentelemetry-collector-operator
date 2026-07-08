@@ -9,7 +9,7 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Too many processes on the host machine (instance {{ $labels.instance }})
+      summary: Too many processes on the host machine (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: There are too many processes on the host machine. The current process count is 80% or more of the  max.\n  VALUE = {{ $value | printf "%.2f" }}\n  LABELS = {{ $labels }}
 
   # Alert for processes kept increasing
@@ -19,5 +19,5 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Process count is kept increasing (instance {{ $labels.instance }})
+      summary: Process count is kept increasing (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: The number of processes seem to be growing for the last 5 minutes.\n  VALUE = {{ $value | printf "%.2f"}}\n  LABELS = {{ $labels }}

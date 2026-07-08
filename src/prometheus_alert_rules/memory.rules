@@ -26,7 +26,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: '[Prediction] Host memory usage will increase to {{ $value | printf "%.0f" }}% in the near future (instance {{ $labels.instance }})'
+      summary: '[Prediction] Host memory usage will increase to {{ $value | printf "%.0f" }}% in the near future (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})'
       description: >-
         Host can potentially reach {{ $value | printf "%.0f" }}% memory utilization and risk an OOM kill.
           VALUE = {{ $value }}
@@ -44,7 +44,7 @@ groups:
     labels:
       severity: critical
     annotations:
-      summary: Host memory usage reached {{ $value | printf "%.0f" }}% load (instance {{ $labels.instance }})
+      summary: Host memory usage reached {{ $value | printf "%.0f" }}% load (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host memory usage reached {{ $value | printf "%.0f" }}%
           VALUE = {{ $value }}
@@ -58,7 +58,7 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Host memory and swap usage reached 90% and 50% load (instance {{ $labels.instance }})
+      summary: Host memory and swap usage reached 90% and 50% load (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host memory and swap usage reached 90% and 50% load
           VALUE = {{ $value }}
@@ -69,7 +69,7 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Host memory under memory pressure (instance {{ $labels.instance }})
+      summary: Host memory under memory pressure (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         The node is under heavy memory pressure. High rate of major page faults.
           VALUE = {{ $value }}
