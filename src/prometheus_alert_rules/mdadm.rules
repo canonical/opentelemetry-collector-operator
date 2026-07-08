@@ -7,8 +7,7 @@ groups:
       labels:
         severity: warning
       annotations:
-        summary: "{{ $value }} disks failed on device {{ $labels.device }}.(unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})"
-        description: >-
+        summary: "{{ $value }} disks failed on device {{ $labels.device }} (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})"        description: >-
           Disks failed on raid device {{ $labels.device }}.
             VALUE = {{ $value }}
             LABELS = {{ $labels }}
@@ -31,8 +30,7 @@ groups:
       labels:
         severity: warning
       annotations:
-        summary: RAID device {{ $labels.device }} in inactive state.(unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
-        description: >-
+        summary: RAID device {{ $labels.device }} in inactive state.(unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})        description: >-
           RAID device {{ $labels.device }} in inactive state.
           VALUE = {{ $value }}
           LABELS = {{ $labels }}
