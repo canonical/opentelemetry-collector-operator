@@ -18,7 +18,7 @@ groups:
       labels:
         severity: info
       annotations:
-        summary: "{{ $value }} disks marked as spare on device {{ $labels.device }}.(unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})"
+        summary: "{{ $value }} disks marked as spare on device {{ $labels.device }} (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})"
         description: >-
           Disks marked as spare on raid device {{ $labels.device }}.
             VALUE = {{ $value }}
