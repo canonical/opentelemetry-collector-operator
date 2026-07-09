@@ -7,7 +7,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Some log points have been refused by receiver
+          summary: Some log points have been refused by receiver (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
           description: Maybe collector has received non standard log points or it reached some limits
       - alert: receiver-refused-metrics
         expr: sum(rate(otelcol_receiver_refused_metric_points_total{}[5m])) > 0
@@ -15,5 +15,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Some metric points have been refused by receiver
+          summary: Some metric points have been refused by receiver (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
           description: Maybe collector has received non standard metric points or it reached some limits
