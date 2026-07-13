@@ -2,26 +2,53 @@ groups:
   - name: Exporter
     rules:
       - alert: failed-logs
-        expr: sum(rate(otelcol_exporter_send_failed_log_records_total{}[5m])) > 0
+        expr: sum(rate(otelcol_exporter_send_failed_log_records{}[5m])) > 0
         for: 5m
         labels:
-          severity: warning
+          severity: critical
         annotations:
           summary: Some log points failed to send by exporter
           description: Destination may have a problem or payload is incorrect
       - alert: failed-metrics
-        expr: sum(rate(otelcol_exporter_send_failed_metric_points_total{}[5m])) > 0
+        expr: sum(rate(otelcol_exporter_send_failed_metric_points{}[5m])) > 0
         for: 5m
         labels:
-          severity: warning
+          severity: critical
         annotations:
           summary: Some metric points failed to send by exporter
           description: Destination may have a problem or payload is incorrect
-      - alert: queue-full-prediction
-        expr: predict_linear(otelcol_exporter_queue_size[1h],3600) > otelcol_exporter_queue_capacity
+      - alert: failed-traces
+        expr: sum(rate(otelcol_exporter_send_failed_spans{}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Some spans failed to send by exporter
+          description: Destination may have a problem or payload is incorrect
+      - alert: queue-near-capacity
+        expr: otelcol_exporter_queue_size / otelcol_exporter_queue_capacity > 0.8
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: The queue is expected to be full within the next hour
-          description: The exporter may be incorrectly configured for the pipeline, check that the exporter's endpoint is operational
+          summary: Exporter sending queue is over 80% full
+          description: >
+            The exporter's sending queue has stayed above 80% capacity, meaning the destination
+            can't keep up with incoming telemetry. If the queue reaches capacity, data will be
+            dropped. Check that the exporter's endpoint is operational, or raise the 'queue_size'
+            config option. Note that data is only retried until 'max_elapsed_time_min' elapses,
+            after which it is dropped.
+      - alert: queue-overflow
+        expr: >
+          sum(rate(otelcol_exporter_enqueue_failed_spans{}[5m])) > 0
+          or sum(rate(otelcol_exporter_enqueue_failed_log_records{}[5m])) > 0
+          or sum(rate(otelcol_exporter_enqueue_failed_metric_points{}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Exporter sending queue is full and dropping telemetry
+          description: >
+            The exporter's sending queue is at capacity and rejecting new telemetry at enqueue,
+            causing data loss. Check that the exporter's endpoint is operational, reduce the
+            incoming load, or raise the 'queue_size' config option.

@@ -24,23 +24,21 @@
   "description": "Visualize OpenTelemetry (OTEL) collector metrics",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "gnetId": 15983,
   "graphTooltip": 1,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "grafana"
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
       },
       "gridPos": {
         "h": 2,
-        "w": 8,
+        "w": 24,
         "x": 0,
         "y": 0
       },
-      "id": 85,
+      "id": 90,
       "options": {
         "code": {
           "language": "plaintext",
@@ -50,7 +48,8 @@
         "content": "This dashboard was created with references from [opentelemetry-collector (ID 15983)](https://grafana.com/grafana/dashboards/15983-opentelemetry-collector/)",
         "mode": "markdown"
       },
-      "pluginVersion": "9.5.3",
+      "pluginVersion": "12.4.2",
+      "title": "",
       "type": "text"
     },
     {
@@ -71,18 +70,20 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "Accepted: count/rate of metric points successfully pushed into the pipeline.\nRefused: count/rate of metric points that could not be pushed into the pipeline.",
+      "description": "Accepted: count/rate of log records successfully pushed into the pipeline.\nRefused: count/rate of log records that could not be pushed into the pipeline.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -91,6 +92,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -98,6 +100,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -115,7 +118,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -153,7 +156,7 @@
         "x": 0,
         "y": 3
       },
-      "id": 80,
+      "id": 47,
       "interval": "$minstep",
       "options": {
         "legend": {
@@ -167,11 +170,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -180,7 +184,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_receiver_accepted_metric_points${suffix_total}{receiver=~\"$receiver\",job=\"$job\"}[$__rate_interval])) by (receiver $grouping)",
+          "expr": "sum by (receiver, $grouping) (${metric:value}(otelcol_receiver_accepted_log_records${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",receiver=~\"$receiver\"}[$__rate_interval]))",
           "format": "time_series",
           "interval": "$minstep",
           "intervalFactor": 1,
@@ -195,9 +199,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_receiver_refused_metric_points${suffix_total}{receiver=~\"$receiver\",job=\"$job\"}[$__rate_interval])) by (receiver $grouping)",
+          "expr": "sum by (receiver, $grouping) (${metric:value}(otelcol_receiver_refused_log_records${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",receiver=~\"$receiver\"}[$__rate_interval]))",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Refused: {{receiver}} {{transport}} {{service_instance_id}}",
@@ -205,7 +208,7 @@
           "refId": "B"
         }
       ],
-      "title": "Metric Points ${metric:text}",
+      "title": "Log Records ${metric:text}",
       "type": "timeseries"
     },
     {
@@ -213,18 +216,20 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "Accepted: count/rate of log records successfully pushed into the pipeline.\nRefused: count/rate of log records that could not be pushed into the pipeline.",
+      "description": "Accepted: count/rate of metric points successfully pushed into the pipeline.\nRefused: count/rate of metric points that could not be pushed into the pipeline.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -233,6 +238,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -240,6 +246,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -257,7 +264,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -295,7 +302,7 @@
         "x": 8,
         "y": 3
       },
-      "id": 47,
+      "id": 80,
       "interval": "$minstep",
       "options": {
         "legend": {
@@ -309,11 +316,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -322,7 +330,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_receiver_accepted_log_records${suffix_total}{receiver=~\"$receiver\",job=\"$job\"}[$__rate_interval])) by (receiver $grouping)",
+          "expr": "sum by (receiver, $grouping) (${metric:value}(otelcol_receiver_accepted_metric_points${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",receiver=~\"$receiver\"}[$__rate_interval]))",
           "format": "time_series",
           "interval": "$minstep",
           "intervalFactor": 1,
@@ -337,9 +345,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_receiver_refused_log_records${suffix_total}{receiver=~\"$receiver\",job=\"$job\"}[$__rate_interval])) by (receiver $grouping)",
+          "expr": "sum by (receiver, $grouping) (${metric:value}(otelcol_receiver_refused_metric_points${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",receiver=~\"$receiver\"}[$__rate_interval]))",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Refused: {{receiver}} {{transport}} {{service_instance_id}}",
@@ -347,7 +354,153 @@
           "refId": "B"
         }
       ],
-      "title": "Log Records ${metric:text}",
+      "title": "Metric Points ${metric:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheusds}"
+      },
+      "description": "Accepted: count/rate of spans successfully pushed into the pipeline.\nRefused: count/rate of spans that could not be pushed into the pipeline.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "links": [],
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Refused.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 3
+      },
+      "id": 86,
+      "interval": "$minstep",
+      "options": {
+        "legend": {
+          "calcs": [
+            "min",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (receiver, $grouping) (${metric:value}(otelcol_receiver_accepted_spans${suffix_total}{receiver=~\"$receiver\",job=\"$job\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Accepted: {{receiver}} {{transport}} {{service_instance_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (receiver, $grouping) (${metric:value}(otelcol_receiver_refused_spans${suffix_total}{receiver=~\"$receiver\",job=\"$job\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Refused: {{receiver}} {{transport}} {{service_instance_id}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Spans ${metric:text}",
       "type": "timeseries"
     },
     {
@@ -368,18 +521,20 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "",
+      "description": "Accepted: count/rate of log records successfully pushed into the next component in the pipeline.\nRefused: count/rate of log records that were rejected by the next component in the pipeline.\nDropped: count/rate of log records that were dropped",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -388,6 +543,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -395,6 +551,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -411,7 +568,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -482,11 +639,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -495,11 +653,11 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_processor_incoming_items${suffix_total}{processor=~\"$processor\",job=\"$job\",otel_signal=\"logs\"}[$__rate_interval])) by (processor $grouping)",
+          "expr": "sum by (processor, $grouping) (${metric:value}(otelcol_processor_incoming_items${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",otel_signal=\"logs\",processor=~\"$processor\"}[$__rate_interval]))",
           "format": "time_series",
           "interval": "$minstep",
           "intervalFactor": 1,
-          "legendFormat": "Incomming: {{processor}} {{service_instance_id}}",
+          "legendFormat": "Incoming: {{processor}} {{service_instance_id}}",
           "range": true,
           "refId": "A"
         },
@@ -510,9 +668,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "0-sum(${metric:value}(otelcol_processor_outgoing_items${suffix_total}{processor=~\"$processor\",job=\"$job\",otel_signal=\"logs\"}[$__rate_interval])) by (processor $grouping)",
+          "expr": "0 - sum by (processor, $grouping) (${metric:value}(otelcol_processor_outgoing_items${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",otel_signal=\"logs\",processor=~\"$processor\"}[$__rate_interval]))",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Outgoing: {{processor}} {{service_instance_id}}",
@@ -520,7 +677,335 @@
           "refId": "B"
         }
       ],
-      "title": "Logs Records Rate ${metric:text}",
+      "title": "Logs Records ${metric:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheusds}"
+      },
+      "description": "Accepted: count/rate of metric points successfully pushed into the pipeline.\nRefused: count/rate of metric points that could not be pushed into the pipeline.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "links": [],
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Refused.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Dropped.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 12
+      },
+      "id": 88,
+      "interval": "$minstep",
+      "options": {
+        "legend": {
+          "calcs": [
+            "min",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (processor, $grouping) (${metric:value}(otelcol_processor_incoming_items${suffix_total}{job=\"$job\",otel_signal=\"metrics\",processor=~\"$processor\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Incoming: {{processor}} {{service_instance_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "0 - sum by (processor, $grouping) (${metric:value}(otelcol_processor_outgoing_items${suffix_total}{job=\"$job\",otel_signal=\"metrics\",processor=~\"$processor\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Outgoing: {{processor}} {{service_instance_id}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Metric Points ${metric:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheusds}"
+      },
+      "description": "Accepted: count/rate of spans successfully pushed into the next component in the pipeline.\nRefused: count/rate of spans that were rejected by the next component in the pipeline.\nDropped: count/rate of spans that were dropped",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "links": [],
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Refused.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Dropped.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 12
+      },
+      "id": 87,
+      "interval": "$minstep",
+      "options": {
+        "legend": {
+          "calcs": [
+            "min",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (processor, $grouping) (${metric:value}(otelcol_processor_incoming_items${suffix_total}{job=\"$job\",otel_signal=\"traces\",processor=~\"$processor\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Incoming: {{processor}} {{service_instance_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "0 - sum by (processor, $grouping) (${metric:value}(otelcol_processor_outgoing_items${suffix_total}{job=\"$job\",otel_signal=\"traces\",processor=~\"$processor\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Outgoing: {{processor}} {{service_instance_id}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Spans ${metric:text}",
       "type": "timeseries"
     },
     {
@@ -541,18 +1026,20 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "Sent: count/rate of metric points successfully sent to destination.\nEnqueue: count/rate of metric points failed to be added to the sending queue.\nFailed: count/rate of metric points in failed attempts to send to destination.",
+      "description": "Sent: count/rate of log records successfully sent to destination.\nEnqueue: count/rate of log records failed to be added to the sending queue.\nFailed: count/rate of log records in failed attempts to send to destination.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -561,6 +1048,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -568,6 +1056,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -585,7 +1074,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -623,7 +1112,7 @@
         "x": 0,
         "y": 21
       },
-      "id": 38,
+      "id": 48,
       "interval": "$minstep",
       "options": {
         "legend": {
@@ -637,11 +1126,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -650,7 +1140,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_exporter_sent_metric_points${suffix_total}{exporter=~\"$exporter\",job=\"$job\"}[$__rate_interval])) by (exporter $grouping)",
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_sent_log_records${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "format": "time_series",
           "interval": "$minstep",
           "intervalFactor": 1,
@@ -665,9 +1155,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_exporter_enqueue_failed_metric_points${suffix_total}{exporter=~\"$exporter\",job=\"$job\"}[$__rate_interval])) by (exporter $grouping)",
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_enqueue_failed_log_records${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Enqueue: {{exporter}} {{service_instance_id}}",
@@ -681,9 +1170,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_exporter_send_failed_metric_points${suffix_total}{exporter=~\"$exporter\",job=\"$job\"}[$__rate_interval])) by (exporter $grouping)",
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_send_failed_log_records${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Failed: {{exporter}} {{service_instance_id}}",
@@ -691,7 +1179,7 @@
           "refId": "C"
         }
       ],
-      "title": "Metric Points ${metric:text}",
+      "title": "Log Records ${metric:text}",
       "type": "timeseries"
     },
     {
@@ -699,18 +1187,20 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "Sent: count/rate of log records successfully sent to destination.\nEnqueue: count/rate of log records failed to be added to the sending queue.\nFailed: count/rate of log records in failed attempts to send to destination.",
+      "description": "Sent: count/rate of metric points successfully sent to destination.\nEnqueue: count/rate of metric points failed to be added to the sending queue.\nFailed: count/rate of metric points in failed attempts to send to destination.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -719,6 +1209,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -726,6 +1217,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -743,7 +1235,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -781,7 +1273,7 @@
         "x": 8,
         "y": 21
       },
-      "id": 48,
+      "id": 38,
       "interval": "$minstep",
       "options": {
         "legend": {
@@ -795,11 +1287,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -808,7 +1301,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_exporter_sent_log_records${suffix_total}{exporter=~\"$exporter\",job=\"$job\"}[$__rate_interval])) by (exporter $grouping)",
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_sent_metric_points${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "format": "time_series",
           "interval": "$minstep",
           "intervalFactor": 1,
@@ -823,9 +1316,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_exporter_enqueue_failed_log_records${suffix_total}{exporter=~\"$exporter\",job=\"$job\"}[$__rate_interval])) by (exporter $grouping)",
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_enqueue_failed_metric_points${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Enqueue: {{exporter}} {{service_instance_id}}",
@@ -839,9 +1331,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(${metric:value}(otelcol_exporter_send_failed_log_records${suffix_total}{exporter=~\"$exporter\",job=\"$job\"}[$__rate_interval])) by (exporter $grouping)",
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_send_failed_metric_points${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Failed: {{exporter}} {{service_instance_id}}",
@@ -849,7 +1340,7 @@
           "refId": "C"
         }
       ],
-      "title": "Log Records ${metric:text}",
+      "title": "Metric Points ${metric:text}",
       "type": "timeseries"
     },
     {
@@ -857,18 +1348,20 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "",
+      "description": "Sent: count/rate of spans successfully sent to destination.\nEnqueue: count/rate of spans failed to be added to the sending queue.\nFailed: count/rate of spans in failed attempts to send to destination.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -877,6 +1370,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -884,6 +1378,168 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "links": [],
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Failed:.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 21
+      },
+      "id": 89,
+      "interval": "$minstep",
+      "options": {
+        "legend": {
+          "calcs": [
+            "min",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_sent_spans${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Sent: {{exporter}} {{service_instance_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_enqueue_failed_spans${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Enqueue: {{exporter}} {{service_instance_id}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by (exporter, $grouping) (${metric:value}(otelcol_exporter_send_failed_spans${suffix_total}{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "format": "time_series",
+          "interval": "$minstep",
+          "intervalFactor": 1,
+          "legendFormat": "Failed: {{exporter}} {{service_instance_id}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Spans ${metric:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheusds}"
+      },
+      "description": "Monitor the saturation level of each exporter queue by calculating the ratio of the current queue size against its maximum configured capacity, representing how \"full\" the buffer is from 0% (empty) to 100% (full).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -901,7 +1557,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -916,8 +1572,8 @@
       "gridPos": {
         "h": 9,
         "w": 8,
-        "x": 16,
-        "y": 21
+        "x": 0,
+        "y": 30
       },
       "id": 67,
       "options": {
@@ -932,11 +1588,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -945,7 +1602,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(\r\n    otelcol_exporter_queue_size{\r\n        exporter=~\"$exporter\", job=\"$job\"\r\n    }\r\n) by (exporter $grouping)\r\n/\r\nmin(\r\n    otelcol_exporter_queue_capacity{\r\n        exporter=~\"$exporter\", job=\"$job\"\r\n    }\r\n) by (exporter $grouping)",
+          "expr": "max by (exporter, $grouping) (otelcol_exporter_queue_size{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}) / min by (exporter, $grouping) (otelcol_exporter_queue_capacity{exporter=~\"$exporter\",job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"})",
           "format": "time_series",
           "interval": "$minstep",
           "intervalFactor": 1,
@@ -963,7 +1620,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 39
       },
       "id": 21,
       "panels": [],
@@ -982,11 +1639,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -995,6 +1654,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1002,6 +1662,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -1019,7 +1680,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1101,7 +1762,7 @@
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 31
+        "y": 40
       },
       "id": 39,
       "interval": "$minstep",
@@ -1117,11 +1778,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -1130,9 +1792,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(rate(otelcol_process_cpu_seconds${suffix_total}{job=\"$job\"}[$__rate_interval])*100) by (job $grouping)",
+          "expr": "max by (job, $grouping) (rate(otelcol_process_cpu_seconds${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]) * 100)",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Max CPU usage {{service_instance_id}}",
@@ -1146,9 +1807,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "avg(rate(otelcol_process_cpu_seconds${suffix_total}{job=\"$job\"}[$__rate_interval])*100) by (job $grouping)",
+          "expr": "avg by (job, $grouping) (rate(otelcol_process_cpu_seconds${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]) * 100)",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Avg CPU usage {{service_instance_id}}",
@@ -1162,9 +1822,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "min(rate(otelcol_process_cpu_seconds${suffix_total}{job=\"$job\"}[$__rate_interval])*100) by (job $grouping)",
+          "expr": "min by (job, $grouping) (rate(otelcol_process_cpu_seconds${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]) * 100)",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Min CPU usage {{service_instance_id}}",
@@ -1187,11 +1846,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1200,6 +1861,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1207,6 +1869,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -1224,7 +1887,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1310,7 +1973,7 @@
         "h": 9,
         "w": 8,
         "x": 8,
-        "y": 31
+        "y": 40
       },
       "id": 52,
       "interval": "$minstep",
@@ -1326,11 +1989,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -1339,9 +2003,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(otelcol_process_runtime_total_sys_memory_bytes{job=\"$job\"}) by (job $grouping)",
+          "expr": "max by (job, $grouping) (otelcol_process_runtime_total_sys_memory_bytes{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"})",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Max Memory RSS {{service_instance_id}}",
@@ -1355,7 +2018,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "avg(otelcol_process_runtime_total_sys_memory_bytes{job=\"$job\"}) by (job $grouping)",
+          "expr": "avg by (job, $grouping) (otelcol_process_runtime_total_sys_memory_bytes{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"})",
           "format": "time_series",
           "interval": "$minstep",
           "intervalFactor": 1,
@@ -1370,9 +2033,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "min(otelcol_process_runtime_total_sys_memory_bytes{job=\"$job\"}) by (job $grouping)",
+          "expr": "min by (job, $grouping) (otelcol_process_runtime_total_sys_memory_bytes{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"})",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Min Memory RSS {{service_instance_id}}",
@@ -1388,18 +2050,19 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1408,6 +2071,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1415,6 +2079,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -1432,7 +2097,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1448,7 +2113,7 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 31
+        "y": 40
       },
       "id": 54,
       "interval": "$minstep",
@@ -1464,11 +2129,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -1477,9 +2143,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(otelcol_process_uptime${suffix_seconds}${suffix_total}{service_instance_id=~\".*\",job=\"$job\"}) by (service_instance_id)",
+          "expr": "max by (service_instance_id) (otelcol_process_uptime${suffix_seconds}${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",service_instance_id=~\".*\"})",
           "format": "time_series",
-          "hide": false,
           "interval": "$minstep",
           "intervalFactor": 1,
           "legendFormat": "Service instance uptime: {{service_instance_id}}",
@@ -1495,7 +2160,6 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1505,6 +2169,9 @@
             "align": "auto",
             "cellOptions": {
               "type": "auto"
+            },
+            "footer": {
+              "reducers": []
             },
             "inspect": false
           },
@@ -1516,7 +2183,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1532,23 +2199,15 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 49
       },
       "id": 57,
       "interval": "$minstep",
       "options": {
         "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
         "showHeader": true
       },
-      "pluginVersion": "9.5.3",
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
@@ -1557,9 +2216,8 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(otelcol_process_uptime${suffix_seconds}${suffix_total}{service_instance_id=~\".*\",job=\"$job\",service_version=\".+\"}) by (service_instance_id,service_name,service_version)\r\nor\r\nmax(\r\n  otelcol_process_uptime${suffix_seconds}${suffix_total}{service_instance_id=~\".*\",job=\"$job\"} \r\n  * on(job, instance) \r\n  group_left(service_version) \r\n  (\r\n    target_info \r\n    * on(job, instance) \r\n    group_left \r\n    label_replace(target_info{}, \"service_instance_id\", \"$1\", \"instance\", \"(.*)\")\r\n  )\r\n) by (service_instance_id, service_name, service_version)",
+          "expr": "max by (service_instance_id, service_name, service_version) (otelcol_process_uptime${suffix_seconds}${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",service_instance_id=~\".*\",service_version=\".+\"}) or max by (service_instance_id, service_name, service_version) (otelcol_process_uptime${suffix_seconds}${suffix_total}{job=\"$job\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\",service_instance_id=~\".*\"} * on (job, instance) group_left (service_version) (target_info{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"} * on (job, instance) group_left () label_replace(target_info{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}, \"service_instance_id\", \"$1\", \"instance\", \"(.*)\")))",
           "format": "table",
-          "hide": false,
           "instant": true,
           "interval": "$minstep",
           "intervalFactor": 1,
@@ -1585,9 +2243,9 @@
       "type": "table"
     }
   ],
+  "preload": false,
   "refresh": "",
-  "schemaVersion": 38,
-  "style": "dark",
+  "schemaVersion": 42,
   "tags": [
     "charm: opentelemetry-collector"
   ],
@@ -1599,16 +2257,13 @@
           "text": "default",
           "value": "default"
         },
-        "hide": 0,
         "includeAll": false,
         "label": "Loki datasource",
-        "multi": false,
         "name": "lokids",
         "options": [],
         "query": "loki",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
         "type": "datasource"
       },
       {
@@ -1617,22 +2272,18 @@
           "text": "default",
           "value": "default"
         },
-        "hide": 0,
         "includeAll": false,
         "label": "Prometheus datasource",
-        "multi": false,
         "name": "prometheusds",
         "options": [],
         "query": "prometheus",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
         "type": "datasource"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1640,7 +2291,6 @@
           "uid": "${prometheusds}"
         },
         "definition": "label_values(up{juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\"},juju_unit)",
-        "hide": 0,
         "includeAll": true,
         "label": "Juju unit",
         "multi": true,
@@ -1652,18 +2302,12 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
+        "regexApplyTo": "value",
+        "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1671,7 +2315,6 @@
           "uid": "${prometheusds}"
         },
         "definition": "label_values(up{juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\"},juju_application)",
-        "hide": 0,
         "includeAll": true,
         "label": "Juju application",
         "multi": true,
@@ -1683,18 +2326,12 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
+        "regexApplyTo": "value",
+        "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1702,7 +2339,6 @@
           "uid": "${prometheusds}"
         },
         "definition": "label_values(up{juju_model=~\"$juju_model\"},juju_model_uuid)",
-        "hide": 0,
         "includeAll": true,
         "label": "Juju model uuid",
         "multi": true,
@@ -1714,18 +2350,12 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
+        "regexApplyTo": "value",
+        "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1733,7 +2363,6 @@
           "uid": "${prometheusds}"
         },
         "definition": "label_values(up,juju_model)",
-        "hide": 0,
         "includeAll": true,
         "label": "Juju model",
         "multi": true,
@@ -1745,17 +2374,11 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
+        "regexApplyTo": "value",
+        "type": "query"
       },
       {
         "current": {
-          "selected": false,
           "text": "otelcol",
           "value": "otelcol"
         },
@@ -1764,10 +2387,8 @@
           "uid": "${prometheusds}"
         },
         "definition": "query_result({__name__=~\"otelcol_process_uptime.*\"})",
-        "hide": 0,
         "includeAll": false,
         "label": "Job",
-        "multi": false,
         "name": "job",
         "options": [],
         "query": {
@@ -1777,7 +2398,7 @@
         },
         "refresh": 1,
         "regex": "/.*{.*job=\"([a-zA-Z0-9_-]+)\".*}/",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
@@ -1786,19 +2407,12 @@
         "auto_count": 300,
         "auto_min": "10s",
         "current": {
-          "selected": false,
-          "text": "auto",
-          "value": "$__auto_interval_minstep"
+          "text": "$__auto",
+          "value": "$__auto"
         },
-        "hide": 0,
         "label": "Min step",
         "name": "minstep",
         "options": [
-          {
-            "selected": true,
-            "text": "auto",
-            "value": "$__auto_interval_minstep"
-          },
           {
             "selected": false,
             "text": "10s",
@@ -1822,7 +2436,6 @@
         ],
         "query": "10s,30s,1m,5m",
         "refresh": 2,
-        "skipUrlSync": false,
         "type": "interval"
       },
       {
@@ -1830,31 +2443,17 @@
           "text": "rate",
           "value": "rate"
         },
-        "hide": 0,
         "includeAll": false,
         "label": "Base metric",
-        "multi": false,
         "name": "metric",
-        "options": [
-          {
-            "selected": true,
-            "text": "Rate",
-            "value": "rate"
-          },
-          {
-            "selected": false,
-            "text": "Count",
-            "value": "increase"
-          }
-        ],
+        "options": [],
         "query": "Rate : rate, Count : increase",
-        "skipUrlSync": false,
-        "type": "custom"
+        "type": "custom",
+        "valuesFormat": "csv"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1863,10 +2462,8 @@
           "uid": "${prometheusds}"
         },
         "definition": "query_result(avg by (receiver) ({__name__=~\"otelcol_receiver_.+\",job=\"$job\"}))",
-        "hide": 0,
         "includeAll": true,
         "label": "Receiver",
-        "multi": false,
         "name": "receiver",
         "options": [],
         "query": {
@@ -1876,14 +2473,13 @@
         },
         "refresh": 2,
         "regex": "/.*receiver=\"(.*)\".*/",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1892,10 +2488,8 @@
           "uid": "${prometheusds}"
         },
         "definition": "query_result(avg by (processor) ({__name__=~\"otelcol_processor_.+\",job=\"$job\"}))",
-        "hide": 0,
         "includeAll": true,
         "label": "Processor",
-        "multi": false,
         "name": "processor",
         "options": [],
         "query": {
@@ -1905,14 +2499,13 @@
         },
         "refresh": 2,
         "regex": "/.*processor=\"(.*)\".*/",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1921,10 +2514,8 @@
           "uid": "${prometheusds}"
         },
         "definition": "query_result(avg by (exporter) ({__name__=~\"otelcol_exporter_.+\",job=\"$job\"}))",
-        "hide": 0,
         "includeAll": true,
         "label": "Exporter",
-        "multi": false,
         "name": "exporter",
         "options": [],
         "query": {
@@ -1934,7 +2525,7 @@
         },
         "refresh": 2,
         "regex": "/.*exporter=\"(.*)\".*/",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
@@ -1944,37 +2535,18 @@
           "value": ""
         },
         "description": "Detailed metrics must be configured in the collector configuration. They add grouping by transport protocol (http/grpc) for receivers. ",
-        "hide": 0,
         "includeAll": false,
         "label": "Additional groupping",
-        "multi": false,
         "name": "grouping",
-        "options": [
-          {
-            "selected": true,
-            "text": "None (basic metrics)",
-            "value": ""
-          },
-          {
-            "selected": false,
-            "text": "By transport (detailed metrics)",
-            "value": ",transport"
-          },
-          {
-            "selected": false,
-            "text": "By service instance id",
-            "value": ",service_instance_id"
-          }
-        ],
+        "options": [],
         "query": "None (basic metrics) :  , By transport (detailed metrics) : \\,transport, By service instance id : \\,service_instance_id",
-        "skipUrlSync": false,
-        "type": "custom"
+        "type": "custom",
+        "valuesFormat": "csv"
       },
       {
         "current": {
-          "selected": false,
-          "text": "_total",
-          "value": "_total"
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",
@@ -1985,7 +2557,6 @@
         "hide": 2,
         "includeAll": false,
         "label": "Suffix _total",
-        "multi": false,
         "name": "suffix_total",
         "options": [],
         "query": {
@@ -1995,13 +2566,11 @@
         },
         "refresh": 1,
         "regex": "/.*(_total)+{.*/",
-        "skipUrlSync": false,
-        "sort": 0,
+        "regexApplyTo": "value",
         "type": "query"
       },
       {
         "current": {
-          "selected": false,
           "text": "",
           "value": ""
         },
@@ -2014,7 +2583,6 @@
         "hide": 2,
         "includeAll": false,
         "label": "Suffix _seconds",
-        "multi": false,
         "name": "suffix_seconds",
         "options": [],
         "query": {
@@ -2024,19 +2592,18 @@
         },
         "refresh": 1,
         "regex": "/otelcol_process_uptime(.*)_total{.*/",
-        "skipUrlSync": false,
-        "sort": 0,
+        "regexApplyTo": "value",
         "type": "query"
       }
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-2h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "OpenTelemetry Collector VM",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
