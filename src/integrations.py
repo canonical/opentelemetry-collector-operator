@@ -409,7 +409,7 @@ def _get_dashboards(relations: List[Relation]) -> List[Dict[str, Any]]:
     return list(aggregate.values())
 
 
-def _add_dashboards(dashboards: List[Dict[str, str]], dest_path: Path):
+def _add_dashboards(dashboards: List[Dict[str, Any]], dest_path: Path):
     """Save the dashboards to files in the specified destination folder.
 
     For K8s charms, dashboards are saved in the charm container.
@@ -426,13 +426,22 @@ def _add_dashboards(dashboards: List[Dict[str, str]], dest_path: Path):
     """
     dest_path.mkdir(parents=True, exist_ok=True)
     for dash in dashboards:
-        # Build dashboard custom filename
+        # Build dashboard custom filename.
+        # The (title, charm, rel_id) triple is not guaranteed to be unique: multiple
+        # untitled dashboards, or dashboards sharing a title, from the same principal
+        # would otherwise collide on the same filename and silently overwrite each other
+        # (see https://github.com/canonical/cos-proxy-operator/pull/241). To make the
+        # filename collision-proof regardless of the title, we append a stable content
+        # identity: the dashboard `uid` if present, else a short hash of the content.
+        content = dash["content"]
         charm_name = dash.get("charm", "charm-name")
         rel_id = dash.get("relation_id", "rel_id")
         title = dash.get("title", "").replace(" ", "_").replace("/", "_").lower()
-        filename = f"juju_{title}-{charm_name}-{rel_id}.json"
+        uid = content.get("uid") or content.get("dashboard", {}).get("uid")
+        identity = uid or sha256(json.dumps(content, sort_keys=True))[:8]
+        filename = f"juju_{title}-{charm_name}-{rel_id}-{identity}.json"
         with open(Path(dest_path, filename), mode="w", encoding="utf-8") as f:
-            f.write(json.dumps(dash["content"]))
+            f.write(json.dumps(content))
             logger.debug("updated dashboard file %s", f.name)
 
 
