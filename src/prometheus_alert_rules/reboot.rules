@@ -7,7 +7,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Host machine rebooted recently (instance {{ $labels.instance }})
+      summary: Host machine rebooted recently (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host machine rebooted recently.
           VALUE = {{ $value }}

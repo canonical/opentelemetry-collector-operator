@@ -7,7 +7,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Interface '{{ $labels.device }}' MTU size changed (instance {{ $labels.instance }})
+      summary: Interface '{{ $labels.device }}' MTU size changed (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Interface '{{ $labels.device }}' MTU size changed to {{ $value }} on host {{ $labels.instance }}.
           VALUE = {{ $value }}
@@ -18,7 +18,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Interface '{{ $labels.device }}' speed changed (instance {{ $labels.instance }})
+      summary: Interface '{{ $labels.device }}' speed changed (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Interface '{{ $labels.device }}' speed changed to {{ $value }}B/s on host {{ $labels.instance }}.
           VALUE = {{ $value }}
@@ -29,7 +29,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Interface '{{ $labels.device }}' network receive to many errors (instance {{ $labels.instance }})
+      summary: Interface '{{ $labels.device }}' network receive to many errors (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Interface '{{ $labels.device }}' has encountered {{ $value | printf "%.4f" }}% receive errors in the last two minutes on host {{ $labels.instance }}.
           VALUE = {{ $value }}
@@ -40,7 +40,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Interface '{{ $labels.device }}' network transmit to many errors (instance {{ $labels.instance }})
+      summary: Interface '{{ $labels.device }}' network transmit to many errors (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Interface '{{ $labels.device }}' has encountered {{ $value | printf "%.4f" }}% transmit errors in the last two minutes on host {{ $labels.instance }}.
           VALUE = {{ $value }}
@@ -51,7 +51,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: Host bond network is degraded (instance {{ $labels.instance }})
+      summary: Host bond network is degraded (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host bond `{{ $labels.master }}` network is degraded.
           VALUE = {{ $value }}

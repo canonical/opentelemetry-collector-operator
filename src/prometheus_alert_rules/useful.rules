@@ -7,7 +7,7 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Host has {{ $value }} systemd scopes in failed state (instance {{ $labels.instance }})
+      summary: Host has {{ $value }} systemd scopes in failed state (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host has {{ $value }} systemd scopes in failed state.
           VALUE = {{ $value }}
@@ -18,7 +18,7 @@ groups:
     labels:
       severity: info
     annotations:
-      summary: Host has {{ $value }} users logged-in (instance {{ $labels.instance }})
+      summary: Host has {{ $value }} users logged-in (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
       description: >-
         Host has {{ $value }} users logged-in.
           VALUE = {{ $value }}
