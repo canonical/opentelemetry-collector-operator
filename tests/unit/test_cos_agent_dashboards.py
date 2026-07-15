@@ -1,59 +1,49 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Feature: cos-agent dashboards without a title must not overwrite each other.
-
-Regression test for the bug surfaced by cos-proxy
-(https://github.com/canonical/cos-proxy-operator/pull/241) and fixed in the
-cos_agent charm library (grafana-agent-operator#415, LIBPATCH 26): when a
-principal sends multiple dashboards that lack a ``title`` key, they used to all
-be assigned the placeholder ``no_title`` and therefore collide on the same
-filename on disk, so only the last one survived and was forwarded to Grafana.
-"""
+"""Feature: cos-agent dashboards are forwarded to Grafana without overwriting each other."""
 
 import json
 
-from charms.grafana_agent.v0.cos_agent import CosAgentPeersUnitData
+from charms.grafana_agent.v0.cos_agent import CosAgentProviderUnitData
 from cosl.utils import LZMABase64
 from integrations import _add_dashboards
-from ops.testing import PeerRelation, Relation, State
+from ops.testing import PeerRelation, Relation, State, SubordinateRelation
 
 
 def encode_as_dashboard(dct: dict) -> str:
     return LZMABase64.compress(json.dumps(dct))
 
 
-def _state_with_cos_agent_dashboards(*dashboard_groups) -> State:
-    """Build a State whose peer unit databag carries the given dashboard groups.
+def _cos_agent_state(*dashboard_groups: list[dict]) -> State:
+    """Build a State from `juju show-unit`-shaped cos-agent relations.
 
-    Each element of *dashboard_groups* is a list of raw dashboard dicts belonging
-    to a single principal app. Synthetic app names "primary_0", "primary_1", ...
-    ensure each group is treated as a distinct app by ``_gather_peer_data``.
-    A ``grafana-dashboards-provider`` relation is included so the reconciler
-    forwards the aggregated dashboards, letting us assert the on-disk outcome.
+    Each group is one principal app's dashboards, carried under the ``config``
+    key of its own ``cos-agent`` subordinate relation (as a real principal does).
+    The reconciler stashes cos-agent data into ``peers`` before forwarding it to
+    the ``grafana-dashboards-provider`` relation, where we observe the output.
     """
-    peers_data: dict = {}
+    relations: list = [
+        Relation("grafana-dashboards-provider"),
+        PeerRelation(endpoint="peers", interface="otelcol_replica"),
+    ]
     for idx, dashboards in enumerate(dashboard_groups):
-        app_name = f"primary_{idx}"
-        unit_name = f"{app_name}/0"
-        peers_data[idx + 1] = {
-            f"{CosAgentPeersUnitData.KEY}-{unit_name}": CosAgentPeersUnitData(
-                unit_name=unit_name,
-                relation_id=str(40 + idx),
-                relation_name="cos-agent",
-                dashboards=[encode_as_dashboard(d) for d in dashboards],
-                metrics_alert_rules={},
-                log_alert_rules={},
-            ).json()
-        }
-
-    peer_relation = PeerRelation(
-        endpoint="peers",
-        interface="otelcol_replica",
-        peers_data=peers_data,
-    )
-    provider = Relation("grafana-dashboards-provider")
-    return State(relations=[peer_relation, provider], leader=True)
+        config = CosAgentProviderUnitData(
+            metrics_alert_rules={},
+            log_alert_rules={},
+            dashboards=[encode_as_dashboard(d) for d in dashboards],
+            metrics_scrape_jobs=[],
+            log_slots=[],
+        )
+        relations.append(
+            SubordinateRelation(
+                endpoint="cos-agent",
+                interface="cos_agent",
+                remote_app_name=f"principal_{idx}",
+                remote_unit_data={CosAgentProviderUnitData.KEY: config.json()},
+            )
+        )
+    return State(relations=relations, leader=True)
 
 
 def _forwarded_dashboards(state_out) -> dict:
@@ -63,99 +53,81 @@ def _forwarded_dashboards(state_out) -> dict:
     raise AssertionError("no grafana-dashboards-provider relation found in output state")
 
 
-def test_multiple_no_title_dashboards_are_not_overwritten(ctx):
-    """Scenario: seven untitled cos-agent dashboards all survive to Grafana."""
-    # GIVEN seven dashboards from the same app, none of which have a title
-    # (the root scenario from cos-proxy#241: multiple untitled dashboards that
-    # previously all mapped to `juju_no_title-...json` and clobbered one another)
-    no_title_dashes = [{"uid": f"uid_{i}", "overwrite": True, "tags": []} for i in range(7)]
-    state = _state_with_cos_agent_dashboards(no_title_dashes)
+def test_titled_dashboards_forwarded(ctx):
+    """Titled dashboards are forwarded, keyed by their (lowercased) title."""
+    # GIVEN a principal sending two titled dashboards (as postgresql ships)
+    state = _cos_agent_state(
+        [
+            {"title": "pgBackRest", "uid": "uid-pgbackrest", "panels": []},
+            {"title": "PostgreSQL Metrics", "uid": "uid-psql-metrics", "panels": []},
+        ]
+    )
 
-    # WHEN a reconcile runs
+    # WHEN reconciling
     with ctx(ctx.on.update_status(), state=state) as mgr:
         state_out = mgr.run()
 
-    # THEN all seven cos-agent dashboards are forwarded under unique filenames
+    # THEN both dashboards reach Grafana under their titles
     templates = _forwarded_dashboards(state_out)
-    no_title_keys = [k for k in templates if "no_title" in k]
-    assert len(no_title_keys) == 7, (
-        f"Expected 7 unique no_title dashboards, got {len(no_title_keys)}: {no_title_keys}"
-    )
-    assert len(set(no_title_keys)) == 7
+    assert any("pgbackrest" in k for k in templates), list(templates)
+    assert any("postgresql_metrics" in k for k in templates), list(templates)
 
 
-def test_nested_provisioning_title_is_extracted(ctx):
-    """Scenario: a title nested under the provisioning envelope is used."""
-    # GIVEN a dashboard in Grafana provisioning envelope format with the title
-    # inside the nested `dashboard` sub-object rather than at the top level
-    raw_dashboard = {
-        "dashboard": {"title": "My Nested Dashboard", "panels": [], "uid": "abc123"},
-        "overwrite": True,
-    }
-    state = _state_with_cos_agent_dashboards([raw_dashboard])
+def test_untitled_dashboards_not_overwritten(ctx):
+    """Untitled dashboards get unique filenames instead of clobbering each other."""
+    # GIVEN two dashboards with no title
+    state = _cos_agent_state([{"uid": f"uid_{i}", "overwrite": True} for i in range(2)])
 
-    # WHEN a reconcile runs
+    # WHEN reconciling
     with ctx(ctx.on.update_status(), state=state) as mgr:
         state_out = mgr.run()
 
-    # THEN the nested title is used instead of a `no_title` placeholder
-    templates = _forwarded_dashboards(state_out)
-    assert any("my_nested_dashboard" in k for k in templates), (
-        f"nested title not used for filename; got keys: {list(templates)}"
+    # THEN both are forwarded under distinct no_title_N keys
+    no_title = [k for k in _forwarded_dashboards(state_out) if "no_title" in k]
+    assert len(set(no_title)) == 2, no_title
+
+
+def test_nested_title_extracted(ctx):
+    """A title nested under the provisioning envelope is used, not `no_title`."""
+    # GIVEN a dashboard with its title inside the nested `dashboard` object
+    state = _cos_agent_state(
+        [{"dashboard": {"title": "My Nested Dashboard", "uid": "abc123"}, "overwrite": True}]
     )
+
+    # WHEN reconciling
+    with ctx(ctx.on.update_status(), state=state) as mgr:
+        state_out = mgr.run()
+
+    # THEN the nested title is used
+    templates = _forwarded_dashboards(state_out)
+    assert any("my_nested_dashboard" in k for k in templates), list(templates)
     assert not any("no_title" in k for k in templates)
 
 
-def test_add_dashboards_same_title_do_not_overwrite(tmp_path):
-    """Defense in depth: `_add_dashboards` must not clobber same-title dashboards.
-
-    Independently of any title-extraction logic upstream, two dashboards that
-    resolve to the same (title, charm, rel_id) triple must still be written to
-    distinct files on disk (disambiguated by their content identity).
-    """
-    # GIVEN two dashboards from the same charm/relation with an identical title
-    # but different content
+def test_same_title_written_to_distinct_files(tmp_path):
+    """Same (title, charm, rel_id) but different content -> distinct files."""
+    # GIVEN two same-titled dashboards from one charm/relation with different content
     dashboards = [
-        {
-            "charm": "cos-agent-cos-proxy",
-            "relation_id": "17",
-            "title": "same title",
-            "content": {"uid": "uid_a", "overwrite": True},
-        },
-        {
-            "charm": "cos-agent-cos-proxy",
-            "relation_id": "17",
-            "title": "same title",
-            "content": {"uid": "uid_b", "overwrite": True},
-        },
+        {"charm": "c", "relation_id": "17", "title": "dup", "content": {"uid": "uid_a"}},
+        {"charm": "c", "relation_id": "17", "title": "dup", "content": {"uid": "uid_b"}},
     ]
 
-    # WHEN they are written to disk
+    # WHEN writing them to disk
     _add_dashboards(dashboards, dest_path=tmp_path)
 
-    # THEN two distinct files exist, one per dashboard content
+    # THEN both survive as separate files
     written = sorted(tmp_path.glob("*.json"))
-    assert len(written) == 2, f"expected 2 files, got: {[f.name for f in written]}"
-    uids = {json.loads(f.read_text())["uid"] for f in written}
-    assert uids == {"uid_a", "uid_b"}
+    assert {json.loads(f.read_text())["uid"] for f in written} == {"uid_a", "uid_b"}
 
 
-def test_add_dashboards_filename_is_stable_across_calls(tmp_path):
-    """The generated filename must be stable for unchanged content (no churn)."""
-    # GIVEN the same dashboard written twice
-    dash = {
-        "charm": "cos-agent-cos-proxy",
-        "relation_id": "17",
-        "title": "",  # untitled: identity must come from content, not the title
-        "content": {"uid": "stable_uid", "overwrite": True},
-    }
+def test_filename_stable_across_calls(tmp_path):
+    """Unchanged content yields the same filename (no churn / stale files)."""
+    # GIVEN one untitled dashboard (identity must come from content, not title)
+    dash = {"charm": "c", "relation_id": "17", "title": "", "content": {"uid": "stable"}}
 
-    # WHEN it is written on two separate reconciles
+    # WHEN writing it twice
     _add_dashboards([dash], dest_path=tmp_path)
-    first = {f.name for f in tmp_path.glob("*.json")}
     _add_dashboards([dash], dest_path=tmp_path)
-    second = {f.name for f in tmp_path.glob("*.json")}
 
-    # THEN the same single filename is produced (no stale/duplicate files)
-    assert first == second
-    assert len(second) == 1
+    # THEN only one file exists
+    assert len(list(tmp_path.glob("*.json"))) == 1

@@ -409,7 +409,7 @@ def _get_dashboards(relations: List[Relation]) -> List[Dict[str, Any]]:
     return list(aggregate.values())
 
 
-def _add_dashboards(dashboards: List[Dict[str, str]], dest_path: Path):
+def _add_dashboards(dashboards: List[Dict[str, Any]], dest_path: Path):
     """Save the dashboards to files in the specified destination folder.
 
     For K8s charms, dashboards are saved in the charm container.
