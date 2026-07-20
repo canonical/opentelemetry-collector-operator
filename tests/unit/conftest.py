@@ -34,7 +34,7 @@ def unit_name(unit_id, app_name):
 
 @pytest.fixture
 def ctx(tmp_path, unit_id, app_name):
-    src_dirs = ["grafana_dashboards", "loki_alert_rules", "prometheus_alert_rules", "logrotate.d"]
+    src_dirs = ["grafana_dashboards", "loki_alert_rules", "prometheus_alert_rules"]
     # Create a virtual charm_root so Scenario respects the `src_dirs`
     # Related to https://github.com/canonical/operator/issues/1673
     for src_dir in src_dirs:
@@ -43,7 +43,6 @@ def ctx(tmp_path, unit_id, app_name):
         copytree(source_path, target_path, dirs_exist_ok=True)
     with (
         patch("charm.refresh_certs", lambda: True),
-        patch("charm.ensure_logrotate_timer", lambda: True),
     ):
         yield Context(
             OpenTelemetryCollectorCharm, charm_root=tmp_path, unit_id=unit_id, app_name=app_name
@@ -119,20 +118,6 @@ def config_folder(tmp_path):
     config_file = tmp_path / "config.d"
     with patch("charm.CONFIG_FOLDER", config_file):
         yield config_file
-
-
-@pytest.fixture(autouse=True)
-def otelcol_log_file(tmp_path):
-    config_file = str(tmp_path / "otelcol.log")
-    with patch("config_builder.INTERNAL_TELEMETRY_LOG_FILE", config_file):
-        yield config_file
-
-
-@pytest.fixture(autouse=True)
-def logrotate_file(tmp_path):
-    """Mock the logrotate file path and ensure it exists."""
-    with patch("charm.LOGROTATE_PATH", tmp_path / "logrotate.d/otelcol") as logrotate_file:
-        yield logrotate_file
 
 
 @pytest.fixture

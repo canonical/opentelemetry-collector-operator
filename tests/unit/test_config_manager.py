@@ -190,7 +190,11 @@ def test_add_prometheus_scrape():
         (
             {"logs": False, "metrics": False, "traces": False},
             {
-                "logs/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
+                "logs/otelcol/0": {
+                    "receivers": ["otlp/foo"],
+                    "processors": ["filter/internal-telemetry-loop-breaker/otelcol/0"],
+                    "exporters": [],
+                },
                 "metrics/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
                 "traces/otelcol/0": {"receivers": ["otlp/foo"], "exporters": []},
             },
@@ -200,6 +204,7 @@ def test_add_prometheus_scrape():
             {
                 "logs/otelcol/0": {
                     "receivers": ["otlp/foo"],
+                    "processors": ["filter/internal-telemetry-loop-breaker/otelcol/0"],
                     "exporters": ["debug/juju-config-enabled"],
                 },
                 "metrics/otelcol/0": {
@@ -217,6 +222,7 @@ def test_add_prometheus_scrape():
             {
                 "logs/otelcol/0": {
                     "receivers": ["otlp/foo"],
+                    "processors": ["filter/internal-telemetry-loop-breaker/otelcol/0"],
                     "exporters": ["debug/juju-config-enabled"],
                 },
                 "metrics/otelcol/0": {"receivers": ["otlp/foo"]},
@@ -315,6 +321,7 @@ def test_add_otlp_forwarding():
     expected_pipelines = {
         "logs/otelcol/0": {
             "receivers": ["otlp/otelcol"],
+            "processors": ["filter/internal-telemetry-loop-breaker/otelcol/0"],
             "exporters": [f"otlphttp/rel-1/{unit_name}", f"otlp/rel-2/{unit_name}"],
         },
         "metrics/otelcol/0": {
