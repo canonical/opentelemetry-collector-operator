@@ -3,11 +3,30 @@
 
 """Integration tests helpers."""
 
+import logging
 import re
 from typing import Dict, Final
 import jubilant
 import yaml
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import (
+    after_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    wait_fixed,
+)
+
+logger = logging.getLogger(__name__)
+
+# Reusable retry decorator for polling assertions in integration tests.
+# Retries only on AssertionError (so real errors surface immediately), with exponential backoff.
+RETRY = retry(
+    retry=retry_if_exception_type(AssertionError),
+    wait=wait_exponential(multiplier=1, min=2, max=45),
+    stop=stop_after_attempt(10),
+    after=after_log(logger, logging.INFO),
+)
 
 
 # Exclude some logs to avoid circular ingestion during tests
