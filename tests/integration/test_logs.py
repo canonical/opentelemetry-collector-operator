@@ -62,7 +62,7 @@ def _loop_breaker_filtered_count(juju: jubilant.Juju) -> float:
         output = juju.ssh(
             "otelcol/0",
             command=(
-                f"curl -sS http://localhost:8888/metrics "
+                "curl -sS http://localhost:8888/metrics "
                 "| grep otelcol_processor_filter_logs_filtered "
                 "| grep loop-breaker"
             ),
