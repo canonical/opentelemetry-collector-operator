@@ -107,7 +107,7 @@ def test_internal_logs_self_export(juju: jubilant.Juju, charm: str):
     # GIVEN otelcol and loki are deployed and related
     juju.deploy(charm, app="otelcol", config={"path_exclude": PATH_EXCLUDE})
     juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04")
-    juju.deploy("loki", channel="latest/stable")
+    juju.deploy("loki", channel="dev/edge")
 
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     juju.integrate("otelcol:send-loki-logs", "loki")
@@ -200,7 +200,7 @@ def test_internal_logs_cross_signal_preserved_on_metrics_outage(juju: jubilant.J
     and forwarded to Loki.
     """
     # GIVEN Loki is up and otelcol is related to a Prometheus over send-remote-write
-    juju.deploy("prometheus", channel="latest/stable")
+    juju.deploy("prometheus", channel="dev/edge")
     juju.wait(
         lambda status: jubilant.all_active(status, "prometheus"),
         error=jubilant.any_error,
