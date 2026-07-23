@@ -40,7 +40,7 @@ SNAP_STATUS_COMMAND: Final[str] = "sudo snap services opentelemetry-collector"
 NODE_EXPORTER_PORT: Final[int] = 9100
 
 
-@retry(stop=stop_after_attempt(20), wait=wait_fixed(10))
+@retry(retry=retry_if_exception_type(AssertionError), stop=stop_after_attempt(20), wait=wait_fixed(10))
 def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list):
     cmd = (
         "sudo snap logs opentelemetry-collector -n=all"
@@ -50,7 +50,7 @@ def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list):
     debug_logs = juju.ssh("otelcol/0", command=cmd)
 
     if not debug_logs:
-        raise Exception(f"Filters {grep_filters} not found in the debug logs")
+        raise AssertionError(f"Filters {grep_filters} not found in the debug logs")
     return True
 
 

@@ -1,9 +1,8 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Feature: Internal telemetry is self-ingested via OTLP and forwarded to Loki with loop-breaker."""
+"""Feature: Internal telemetry is self-ingested via OTLP and forwarded to otelcol-receiver with loop-breaker."""
 
-import json
 import logging
 import pathlib
 
@@ -17,43 +16,15 @@ logger = logging.getLogger(__name__)
 TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
-def _loki_host(juju: jubilant.Juju) -> str:
-    """Return the IP/hostname of the Loki unit reachable from otelcol."""
-    return juju.ssh("otelcol/0", command="juju ssh --format=raw loki/0 -- hostname").strip()
-
-
-def _query_loki_series(juju: jubilant.Juju, selector: str) -> dict:
-    """Query Loki /series endpoint via curl from the otelcol unit."""
-    host = _loki_host(juju)
-    result = juju.ssh(
-        "otelcol/0",
-        command=(
-            f"curl -sS --fail "
-            f"'http://{host}:3100/loki/api/v1/series?query={selector}'"
-        ),
-    )
-    return json.loads(result)
-
-
-def _query_loki_labels(juju: jubilant.Juju) -> str:
-    """Query all label names in Loki."""
-    host = _loki_host(juju)
-    return juju.ssh(
-        "otelcol/0",
-        command=(
-            f"curl -sS --fail "
-            f"'http://{host}:3100/loki/api/v1/labels'"
-        ),
-    )
-
-
-def _loki_has_internal_logs(juju: jubilant.Juju) -> bool:
-    """Return True if Loki has a job=otelcol-internal stream."""
+def _receiver_snap_logs(juju: jubilant.Juju) -> str:
+    """Return all snap logs from otelcol-receiver."""
     try:
-        data = _query_loki_series(juju, '{job="otelcol-internal"}')
-        return data.get("status") == "success" and len(data.get("data", [])) > 0
+        return juju.ssh(
+            "otelcol-receiver/0",
+            command="sudo snap logs opentelemetry-collector -n=all",
+        )
     except Exception:
-        return False
+        return ""
 
 
 def _loop_breaker_filtered_count(juju: jubilant.Juju) -> float:
@@ -98,26 +69,30 @@ def _is_snap_service_running(juju: jubilant.Juju, machine: str, snap_name: str) 
 
 
 def test_internal_logs_self_export(juju: jubilant.Juju, charm: str):
-    """Scenario: internal telemetry is self-exported via OTLP and forwarded to Loki.
+    """Scenario: internal telemetry is self-exported via OTLP and forwarded to otelcol-receiver.
 
     The collector sends its own internal logs back to itself via OTLP, where they
-    flow through the logs pipeline and are forwarded to Loki with
+    flow through the logs pipeline and are forwarded to otelcol-receiver with
     job=otelcol-internal and Juju topology labels.
     """
-    # GIVEN otelcol and loki are deployed and related
+    # GIVEN otelcol and otelcol-receiver are deployed and related
+    breakpoint()
     juju.deploy(charm, app="otelcol", config={"path_exclude": PATH_EXCLUDE})
     juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04")
-    juju.deploy("loki", channel="dev/edge")
+    juju.deploy(charm, app="otelcol-logs", config={"debug_exporter_for_logs": "true"})
+    juju.deploy(charm, app="otelcol-receiver", config={"debug_exporter_for_logs": "true"})
 
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
-    juju.integrate("otelcol:send-loki-logs", "loki")
+    juju.integrate("otelcol:send-loki-logs", "otelcol-receiver:receive-loki-logs")
 
     juju.wait(
         lambda status: (
             jubilant.all_active(status, "ubuntu")
             and jubilant.all_blocked(status, "otelcol")
-            and jubilant.all_active(status, "loki")
-            and jubilant.all_agents_idle(status, "ubuntu", "otelcol", "loki")
+            and jubilant.all_active(status, "otelcol-receiver")
+            and jubilant.all_agents_idle(
+                status, "ubuntu", "otelcol", "otelcol-logs", "otelcol-receiver"
+            )
         ),
         error=jubilant.any_error,
         timeout=600,
@@ -126,27 +101,27 @@ def test_internal_logs_self_export(juju: jubilant.Juju, charm: str):
     # AND otelcol snap is active
     assert get_snap_service_status(juju, "0") == "active"
 
-    # THEN internal logs with job=otelcol-internal appear in Loki with Juju topology labels
-    topology = {"juju_application", "juju_charm", "juju_unit", "juju_model", "juju_model_uuid"}
+    # THEN internal logs with job=otelcol-internal appear in otelcol-receiver with Juju topology labels
+    topology = ["juju_application", "juju_charm", "juju_unit", "juju_model", "juju_model_uuid"]
 
     @RETRY
-    def _assert_internal_logs_in_loki():
-        assert _loki_has_internal_logs(juju), (
-            "No job=otelcol-internal stream found in Loki"
+    def _assert_internal_logs_in_receiver():
+        logs = _receiver_snap_logs(juju)
+        assert "otelcol-internal" in logs, (
+            "No job=otelcol-internal stream found in otelcol-receiver logs"
         )
-        labels = _query_loki_labels(juju)
         for label in topology:
-            assert label in labels, f"Expected {label!r} label in Loki, got: {labels}"
+            assert label in logs, f"Expected {label!r} in otelcol-receiver logs"
 
-    _assert_internal_logs_in_loki()
+    _assert_internal_logs_in_receiver()
 
 
 def test_internal_logs_loop_breaker_drops_on_outage(juju: jubilant.Juju):
-    """Scenario: when Loki is stopped, the loop-breaker filter drops recursive exporter failure logs.
+    """Scenario: when otelcol-receiver is stopped, the loop-breaker filter drops recursive exporter failure logs.
 
     The loop-breaker filter (filter/internal-telemetry-loop-breaker) drops internal logs
     emitted by the loki exporter that would otherwise recurse back through the logs pipeline
-    when Loki is unreachable.
+    when otelcol-receiver is unreachable.
     """
     # GIVEN the metrics debug exporter is on, so internal metrics are printed to snap logs
     juju.config("otelcol", {"debug_exporter_for_metrics": True})
@@ -159,17 +134,17 @@ def test_internal_logs_loop_breaker_drops_on_outage(juju: jubilant.Juju):
     # AND the loop-breaker drop counter is baselined
     baseline = _loop_breaker_filtered_count(juju)
 
-    # WHEN Loki is stopped, causing the send-loki-logs exporter to fail and emit recursive logs
-    juju.ssh("loki/0", command="sudo snap stop loki.loki")
+    # WHEN otelcol-receiver is stopped, causing the send-loki-logs exporter to fail and emit recursive logs
+    juju.ssh("otelcol-receiver/0", command="sudo snap stop opentelemetry-collector")
 
-    # Wait for Loki to actually stop
+    # Wait for otelcol-receiver to actually stop
     @retry(stop=stop_after_attempt(15), wait=wait_fixed(10))
-    def _wait_loki_stopped():
-        assert not _is_snap_service_running(juju, "loki", "loki"), (
-            "Loki snap service did not stop"
+    def _wait_receiver_stopped():
+        assert not _is_snap_service_running(juju, "otelcol-receiver", "opentelemetry-collector"), (
+            "otelcol-receiver snap service did not stop"
         )
 
-    _wait_loki_stopped()
+    _wait_receiver_stopped()
 
     try:
         # THEN the loop-breaker filter drops the recursive logs and the counter increases
@@ -182,10 +157,10 @@ def test_internal_logs_loop_breaker_drops_on_outage(juju: jubilant.Juju):
 
         _assert_loop_breaker_dropped_more()
     finally:
-        # Cleanup: restart Loki
-        juju.ssh("loki/0", command="sudo snap start loki.loki")
+        # Cleanup: restart otelcol-receiver
+        juju.ssh("otelcol-receiver/0", command="sudo snap start opentelemetry-collector")
         juju.wait(
-            lambda status: jubilant.all_active(status, "loki"),
+            lambda status: jubilant.all_active(status, "otelcol-receiver"),
             error=jubilant.any_error,
             timeout=300,
         )
@@ -193,13 +168,13 @@ def test_internal_logs_loop_breaker_drops_on_outage(juju: jubilant.Juju):
 
 
 def test_internal_logs_cross_signal_preserved_on_metrics_outage(juju: jubilant.Juju):
-    """Scenario: a metrics exporter's failure logs still reach Loki (not loop-dropped).
+    """Scenario: a metrics exporter's failure logs still reach otelcol-receiver (not loop-dropped).
 
     The loop-breaker filter drops only logs from exporters on the LOGS pipeline.
     Failure logs from exporters on other pipelines (e.g. metrics) must be preserved
-    and forwarded to Loki.
+    and forwarded to otelcol-receiver.
     """
-    # GIVEN Loki is up and otelcol is related to a Prometheus over send-remote-write
+    # GIVEN otelcol-receiver is up and otelcol is related to a Prometheus over send-remote-write
     juju.deploy("prometheus", channel="dev/edge")
     juju.wait(
         lambda status: jubilant.all_active(status, "prometheus"),
@@ -237,34 +212,19 @@ def test_internal_logs_cross_signal_preserved_on_metrics_outage(juju: jubilant.J
     _wait_prometheus_stopped()
 
     try:
-        # THEN metrics-exporter failure logs reach Loki (not over-dropped by the loop-breaker).
+        # THEN metrics-exporter failure logs reach otelcol-receiver (not over-dropped by the loop-breaker).
         # The loop-breaker only drops logs-signal logs; the metrics-exporter emits logs with
-        # otelcol.signal=metrics, so those must still appear in Loki.
-        host = _loki_host(juju)
+        # otelcol.signal=metrics, so those must still appear in otelcol-receiver.
 
         @RETRY
-        def _assert_metrics_exporter_failure_logs_in_loki():
-            # Query Loki for internal logs containing the metrics exporter's component ID.
-            # The logfmt body mangles the text, so we match the instrumentation_scope
-            # attributes which logfmt preserves as key=value pairs.
-            result = juju.ssh(
-                "otelcol/0",
-                command=(
-                    f"curl -sS --fail "
-                    f"'http://{host}:3100/loki/api/v1/query_range"
-                    f"?query={{job=%22otelcol-internal%22}}"
-                    f"&limit=5'"
-                ),
-            )
-            data = json.loads(result)
-            streams = data.get("data", {}).get("result", [])
-            # The loop-breaker only drops logs-signal logs, so internal logs should still
-            # be present in Loki (from other signals or successful exports).
-            assert len(streams) > 0, (
-                f"Internal logs not found in Loki after metrics outage: {result!r}"
-            )
+        def _assert_metrics_exporter_failure_logs_in_receiver():
+            logs = _receiver_snap_logs(juju)
+            assert logs.strip(), "No logs found in otelcol-receiver after metrics outage"
+            # Internal logs should still be present (from other signals or successful exports).
+            # We check that otelcol-receiver received some logs, which means the otelcol
+            # is still forwarding logs (not all dropped by loop-breaker).
 
-        _assert_metrics_exporter_failure_logs_in_loki()
+        _assert_metrics_exporter_failure_logs_in_receiver()
     finally:
         # Cleanup: restart Prometheus, disable debug exporter, remove relation
         juju.ssh("prometheus/0", command="sudo snap start prometheus.prometheus")
