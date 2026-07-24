@@ -45,9 +45,12 @@ def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list):
     cmd = (
         "sudo snap logs opentelemetry-collector -n=all"
         + " | "
-        + " | ".join([f"grep {p}" for p in grep_filters])
+        + " | ".join([f"grep -F {p}" for p in grep_filters])
     )
-    debug_logs = juju.ssh("otelcol/0", command=cmd)
+    try:
+        debug_logs = juju.ssh("otelcol/0", command=cmd)
+    except Exception:
+        debug_logs = ""
 
     if not debug_logs:
         raise AssertionError(f"Filters {grep_filters} not found in the debug logs")
