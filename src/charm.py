@@ -490,6 +490,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         config_manager.add_otlp_forwarding(otlp_endpoints)
 
         # Dashboards setup
+        ## Clean stale dashboard files on all units (cleanup() is leader-only but
+        ## _add_dashboards runs on all units, causing non-leaders to accumulate stale files)
+        shutil.rmtree(self.charm_dir.absolute().joinpath(*DASHBOARDS_DEST_PATH.split("/")), ignore_errors=True)
         ## COS Agent dashboards
         integrations._add_dashboards(
             dashboards=cos_agent.dashboards,
