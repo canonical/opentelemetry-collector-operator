@@ -4,25 +4,12 @@
 """Feature: Internal telemetry is self-ingested via OTLP and forwarded to otelcol-receiver with loop-breaker."""
 
 import logging
-import pathlib
 
 import jubilant
-from helpers import PATH_EXCLUDE, RETRY, get_snap_service_status
+from helpers import PATH_EXCLUDE, RETRY, receiver_snap_logs, get_snap_service_status
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 logger = logging.getLogger(__name__)
-
-
-
-def _receiver_snap_logs(juju: jubilant.Juju) -> str:
-    """Return all snap logs from otelcol-receiver."""
-    try:
-        return juju.ssh(
-            "otelcol-receiver/0",
-            command="sudo snap logs opentelemetry-collector -n=all",
-        )
-    except Exception:
-        return ""
 
 
 def _loop_breaker_filtered_count(juju: jubilant.Juju) -> float:
@@ -46,38 +33,14 @@ def _loop_breaker_filtered_count(juju: jubilant.Juju) -> float:
     return 0.0
 
 
-def _is_snap_service_running(juju: jubilant.Juju, unit: str, snap_name: str) -> bool:
-    """Check if a snap service is running on the given unit.
-
-    Uses ``sudo snap services <snap>.<snap>`` directly to avoid assumptions
-    about service naming conventions (e.g. otelcol uses ``opentelemetry-collector``).
-    """
-    try:
-        out = juju.ssh(
-            unit,
-            command=f"sudo snap services {snap_name}.{snap_name}",
-        )
-        for line in out.strip().splitlines():
-            if line.startswith("Service"):
-                continue
-            parts = line.split()
-            if len(parts) >= 3 and parts[2].lower() == "active":
-                return True
-        return False
-    except Exception:
-        return False
-
-
 def test_internal_logs_self_export(juju: jubilant.Juju, charm: str):
     """Scenario: internal telemetry is self-exported via OTLP and forwarded to otelcol-receiver."""
     # GIVEN otelcol and otelcol-receiver are deployed and related
     # Each otelcol app gets its own ubuntu principal so they run on separate machines
     # with separate snaps (stopping one snap must not kill the others).
     juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04")
-    juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04", app="ubuntu-logs")
     juju.deploy("ubuntu", channel="latest/stable", base="ubuntu@24.04", app="ubuntu-receiver")
     juju.deploy(charm, app="otelcol", config={"path_exclude": PATH_EXCLUDE})
-    juju.deploy(charm, app="otelcol-logs", config={"debug_exporter_for_logs": "true"})
     juju.deploy(charm, app="otelcol-receiver", config={"debug_exporter_for_logs": "true"})
 
     juju.integrate("ubuntu:juju-info", "otelcol:juju-info")
@@ -86,15 +49,10 @@ def test_internal_logs_self_export(juju: jubilant.Juju, charm: str):
 
     juju.wait(
         lambda status: (
-            jubilant.all_active(status, "ubuntu", "ubuntu-logs", "ubuntu-receiver", "otelcol")
+            jubilant.all_active(status, "ubuntu", "ubuntu-receiver", "otelcol")
             and jubilant.all_blocked(status, "otelcol-receiver")
             and jubilant.all_agents_idle(
-                status,
-                "ubuntu",
-                "ubuntu-logs",
-                "ubuntu-receiver",
-                "otelcol",
-                "otelcol-receiver",
+                status, "ubuntu", "ubuntu-receiver", "otelcol", "otelcol-receiver"
             )
         ),
         error=jubilant.any_error,
@@ -102,14 +60,14 @@ def test_internal_logs_self_export(juju: jubilant.Juju, charm: str):
     )
 
     # AND otelcol snap is active
-    assert get_snap_service_status(juju, "0") == "active"
+    assert get_snap_service_status(juju, "otelcol-receiver/0") == "active"
 
     # THEN internal logs with job=otelcol-internal appear in otelcol-receiver with Juju topology labels
     topology = ["juju_application", "juju_charm", "juju_unit", "juju_model", "juju_model_uuid"]
 
     @RETRY
     def _assert_internal_logs_in_receiver():
-        logs = _receiver_snap_logs(juju)
+        logs = receiver_snap_logs(juju, "otelcol-receiver/0")
         assert "otelcol-internal" in logs, (
             "No job=otelcol-internal stream found in otelcol-receiver logs"
         )
@@ -128,11 +86,9 @@ def test_internal_logs_loop_breaker_drops_on_outage(juju: jubilant.Juju):
     juju.ssh("otelcol-receiver/0", command="sudo snap stop opentelemetry-collector")
 
     # Wait for otelcol-receiver to actually stop
-    @retry(stop=stop_after_attempt(15), wait=wait_fixed(10))
+    @RETRY
     def _wait_receiver_stopped():
-        assert not _is_snap_service_running(
-            juju, "otelcol-receiver/0", "opentelemetry-collector"
-        ), "otelcol-receiver snap service did not stop"
+        assert get_snap_service_status(juju, "otelcol-receiver/0") == "inactive"
 
     _wait_receiver_stopped()
 
@@ -151,7 +107,7 @@ def test_internal_logs_loop_breaker_drops_on_outage(juju: jubilant.Juju):
         _assert_loop_breaker_dropped_more()
     finally:
         juju.ssh("otelcol-receiver/0", command="sudo snap start opentelemetry-collector")
-        assert _is_snap_service_running(juju, "otelcol-receiver/0", "opentelemetry-collector")
+        assert get_snap_service_status(juju, "otelcol-receiver/0") == "active"
 
 
 def test_internal_logs_cross_signal_preserved_on_metrics_outage(juju: jubilant.Juju):
@@ -191,7 +147,7 @@ def test_internal_logs_cross_signal_preserved_on_metrics_outage(juju: jubilant.J
     # THEN metrics-exporter failure logs reach otelcol-receiver
     @RETRY
     def _assert_metrics_exporter_failure_logs_in_receiver():
-        logs = _receiver_snap_logs(juju)
-        assert logs.strip(), "No logs found in otelcol-receiver after metrics outage"
+        logs = receiver_snap_logs(juju, "otelcol-receiver/0")
+        assert logs, "No logs found in otelcol-receiver after metrics outage"
 
     _assert_metrics_exporter_failure_logs_in_receiver()
