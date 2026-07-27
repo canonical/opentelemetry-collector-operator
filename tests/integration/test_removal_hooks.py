@@ -36,7 +36,7 @@ def test_deploy(juju: jubilant.Juju, charm: str):
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     # THEN all units are settled
     juju.wait(
-        
+
         lambda status: (
             jubilant.all_active(status, "ubuntu")
             and jubilant.all_blocked(status, "otelcol")
