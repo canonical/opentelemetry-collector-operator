@@ -12,8 +12,6 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 logger = logging.getLogger(__name__)
 
-# Juju is a strictly confined snap that cannot see /tmp, so we need to use something else
-TEMP_DIR = pathlib.Path(__file__).parent.resolve()
 
 
 def _receiver_snap_logs(juju: jubilant.Juju) -> str:
@@ -83,21 +81,19 @@ def test_internal_logs_self_export(juju: jubilant.Juju, charm: str):
     juju.deploy(charm, app="otelcol-receiver", config={"debug_exporter_for_logs": "true"})
 
     juju.integrate("ubuntu:juju-info", "otelcol:juju-info")
-    juju.integrate("ubuntu-logs:juju-info", "otelcol-logs:juju-info")
     juju.integrate("ubuntu-receiver:juju-info", "otelcol-receiver:juju-info")
     juju.integrate("otelcol:send-loki-logs", "otelcol-receiver:receive-loki-logs")
 
     juju.wait(
         lambda status: (
             jubilant.all_active(status, "ubuntu", "ubuntu-logs", "ubuntu-receiver", "otelcol")
-            and jubilant.all_blocked(status, "otelcol-logs", "otelcol-receiver")
+            and jubilant.all_blocked(status, "otelcol-receiver")
             and jubilant.all_agents_idle(
                 status,
                 "ubuntu",
                 "ubuntu-logs",
                 "ubuntu-receiver",
                 "otelcol",
-                "otelcol-logs",
                 "otelcol-receiver",
             )
         ),

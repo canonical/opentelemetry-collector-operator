@@ -19,8 +19,6 @@ from tenacity import (
 
 logger = logging.getLogger(__name__)
 
-# Reusable retry decorator for polling assertions in integration tests.
-# Retries only on AssertionError (so real errors surface immediately), with exponential backoff.
 RETRY = retry(
     retry=retry_if_exception_type(AssertionError),
     wait=wait_exponential(multiplier=1, min=2, max=45),
