@@ -36,17 +36,15 @@ def test_deploy(juju: jubilant.Juju, charm: str):
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     # THEN all units are settled
     juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
+        
+        lambda status: (
+            jubilant.all_active(status, "ubuntu")
+            and jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_agents_idle(status, "ubuntu", "otelcol")
+        ),
         error=jubilant.any_error,
         timeout=420,
     )
-    juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
-        error=jubilant.any_error,
-        timeout=420,
-    )
-
-    juju.wait(lambda status: jubilant.all_agents_idle(status, "ubuntu", "otelcol"))
 
     assert get_snap_service_status(juju, "otelcol/0") == "active"
 
@@ -71,16 +69,14 @@ def test_remove_one_subordinate_one_machine(juju: jubilant.Juju):
     assert juju.status().get_units("otelcol").keys() == {"otelcol/0"}
     # WHEN the relation is removed
     juju.remove_relation("otelcol:juju-info", "ubuntu:juju-info")
-    juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
-        error=jubilant.any_error,
-        timeout=240,
-    )
     # THEN Otelcol has "unknown" status and a scale of 0
     juju.wait(
-        lambda status: status.apps["otelcol"].app_status.current == "unknown",
+        lambda status: (
+            jubilant.all_active(status, "ubuntu")
+            and status.apps["otelcol"].app_status.current == "unknown"
+        ),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=300,
     )
     assert juju.status().get_units("otelcol") == {}
     # AND the otelcol config directory is removed from disk
@@ -101,18 +97,18 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     juju.add_unit("ubuntu", to="0")
     juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
+        lambda status: (
+            jubilant.all_active(status, "ubuntu")
+            and jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_agents_idle(status, "ubuntu", "otelcol")
+        ),
         error=jubilant.any_error,
-        timeout=240,
-    )
-    juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
-        error=jubilant.any_error,
-        timeout=240,
+        timeout=300,
     )
 
     # THEN snap must be active, i.e. successfully started, i.e. the configs are valid
-    assert get_snap_service_status(juju, "otelcol/0") == "active"
+    assert get_snap_service_status(juju, "otelcol/1") == "active"
+    assert get_snap_service_status(juju, "otelcol/2") == "active"
 
     # AND the configs for both units should have an OTLP receiver which includes the machine hostname
     config_filename = f"{normalize_unit_name('otelcol/2')}.yaml"
@@ -125,21 +121,15 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
 
     # WHEN the relation is removed
     juju.remove_unit("ubuntu/1")
-    juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
-        error=jubilant.any_error,
-        timeout=240,
-    )
     # THEN Otelcol is in "Blocked" status with agent idle status
     juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
+        lambda status: (
+            jubilant.all_active(status, "ubuntu")
+            and jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_agents_idle(status, "ubuntu", "otelcol")
+        ),
         error=jubilant.any_error,
-        timeout=240,
-    )
-    juju.wait(
-        lambda status: jubilant.all_agents_idle(status, "otelcol"),
-        error=jubilant.any_error,
-        timeout=240,
+        timeout=300,
     )
     # AND otelcol has a scale of 1
     assert juju.status().get_units("otelcol").keys() == {"otelcol/1"}
@@ -166,21 +156,20 @@ def test_remove_two_subordinates_one_machine(juju: jubilant.Juju):
     assert otelcol_config_dir.strip() != "does not exist"
 
     # AND the snap is still active in the machine
-    assert get_snap_service_status(juju, "otelcol/0") == "active"
+    assert get_snap_service_status(juju, "otelcol/1") == "active"
 
 
 def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
     # GIVEN otelcol has 2 subordinate units on different machines
     juju.add_unit("ubuntu")
     juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
+        lambda status: (
+            jubilant.all_active(status, "ubuntu")
+            and jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_agents_idle(status, "ubuntu", "otelcol")
+        ),
         error=jubilant.any_error,
-        timeout=240,
-    )
-    juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
-        error=jubilant.any_error,
-        timeout=240,
+        timeout=300,
     )
 
     # AND the configs for both units should have an OTLP receiver which includes the machine hostname
@@ -195,16 +184,14 @@ def test_remove_two_subordinate_two_machines(juju: jubilant.Juju):
 
     # WHEN the relation is removed
     juju.remove_relation("otelcol:juju-info", "ubuntu:juju-info")
-    juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
-        error=jubilant.any_error,
-        timeout=240,
-    )
     # THEN Otelcol has "unknown" status and a scale of 0
     juju.wait(
-        lambda status: status.apps["otelcol"].app_status.current == "unknown",
+        lambda status: (
+            jubilant.all_active(status, "ubuntu")
+            and status.apps["otelcol"].app_status.current == "unknown"
+        ),
         error=jubilant.any_error,
-        timeout=240,
+        timeout=300,
     )
     assert juju.status().get_units("otelcol") == {}
     # AND there are no otelcol config files on disk
@@ -235,32 +222,25 @@ def test_two_subordinates_same_machine_expose_separate_metrics(juju: jubilant.Ju
     # GIVEN otelcol related to ubuntu (ubuntu/0 on machine 0, ubuntu/2 on machine 1)
     juju.integrate("otelcol:juju-info", "ubuntu:juju-info")
     juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu"),
+        lambda status: (
+            jubilant.all_active(status, "ubuntu")
+            and jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_agents_idle(status, "ubuntu", "otelcol")
+        ),
         error=jubilant.any_error,
-        timeout=240,
-    )
-    juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
-        error=jubilant.any_error,
-        timeout=240,
+        timeout=300,
     )
     # AND a second ubuntu app deployed on machine 0, co-located with ubuntu/0
     juju.deploy("ubuntu", app="ubuntu2", channel="latest/stable", base="ubuntu@24.04", to="0")
     juju.integrate("otelcol:juju-info", "ubuntu2:juju-info")
     juju.wait(
-        lambda status: jubilant.all_active(status, "ubuntu2"),
+        lambda status: (
+            jubilant.all_active(status, "ubuntu2")
+            and jubilant.all_blocked(status, "otelcol")
+            and jubilant.all_agents_idle(status, "ubuntu", "ubuntu2", "otelcol")
+        ),
         error=jubilant.any_error,
         timeout=420,
-    )
-    juju.wait(
-        lambda status: jubilant.all_blocked(status, "otelcol"),
-        error=jubilant.any_error,
-        timeout=420,
-    )
-    juju.wait(
-        lambda status: jubilant.all_agents_idle(status, "ubuntu", "ubuntu2", "otelcol"),
-        error=jubilant.any_error,
-        timeout=240,
     )
 
     # THEN node-exporter on machine 0 exposes separate metrics for each co-located otelcol unit,
