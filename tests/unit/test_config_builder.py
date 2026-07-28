@@ -596,7 +596,6 @@ def test_loop_breaker_filter_excludes_nop_and_debug():
     """Nop and debug exporters are excluded from filter conditions."""
     config = ConfigBuilder("unit/0", "host0", "1m", "10s")
     config.add_default_config()
-    # Add a loki exporter and a debug exporter to the logs pipeline
     config.add_component(
         Component.exporter,
         "loki/send-loki-logs/0",
@@ -605,7 +604,13 @@ def test_loop_breaker_filter_excludes_nop_and_debug():
     )
     config.add_component(
         Component.exporter,
-        "debug/juju-config-enabled",
+        "nop",
+        {},
+        pipelines=["logs/unit/0"],
+    )
+    config.add_component(
+        Component.exporter,
+        "debug",
         {"verbosity": "normal"},
         pipelines=["logs/unit/0"],
     )
