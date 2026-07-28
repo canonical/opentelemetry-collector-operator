@@ -6,6 +6,7 @@
 import copy
 
 import pytest
+import yaml
 
 from src.config_manager import ConfigManager
 from charmlibs.interfaces.otlp import OtlpEndpoint
@@ -380,3 +381,49 @@ def test_add_external_configs_skips_malformed_entries(external_configs):
     config_manager.add_external_configs(external_configs)
 
     assert config_manager.config._config == initial_config
+
+
+def test_self_ingest_loop_breaker_invariant_all_log_exporters():
+    """Every log exporter is covered by the loop-breaker; non-log exporters are not."""
+    unit_name = "otelcol/0"
+    filter_name = f"filter/internal-telemetry-loop-breaker/{unit_name}"
+    config_manager = ConfigManager(unit_name, "0", "", "")
+    config_manager.add_log_forwarding(
+        endpoints=[{"url": "http://loki/loki/api/v1/push"}],
+        insecure_skip_verify=False,
+    )
+    config_manager.add_cloud_integrator(
+        username=None,
+        password=None,
+        prometheus_url=None,
+        loki_url="http://cloud-loki/loki/api/v1/push",
+        tempo_url=None,
+    )
+    config_manager.add_otlp_forwarding(
+        relation_map={
+            0: OtlpEndpoint(
+                protocol="http",
+                endpoint="http://otlp-logs:4318",
+                telemetries=["logs"],
+                insecure=True,
+            ),
+        }
+    )
+    config_manager.add_remote_write(endpoints=[{"url": "http://mimir/api/v1/push"}])
+
+    built = yaml.safe_load(config_manager.config.build())
+    pipelines = built["service"]["pipelines"]
+    logs_pipeline = pipelines[f"logs/{unit_name}"]
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    assert filter_name in logs_pipeline.get("processors", [])
+
+    for exporter_id in logs_pipeline.get("exporters", []):
+        if exporter_id.split("/")[0] in ("nop", "debug"):
+            continue
+        covering = [c for c in conditions if exporter_id in c]
+        assert covering, f"log exporter '{exporter_id}' not covered by loop-breaker filter"
+        assert all(
+            'instrumentation_scope.attributes["otelcol.signal"] == "logs"' in c for c in covering
+        )
+    assert any("otlphttp/rel-" in c for c in conditions)
+    assert not any("prometheusremotewrite" in c for c in conditions)

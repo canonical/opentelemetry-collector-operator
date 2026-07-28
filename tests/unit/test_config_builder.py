@@ -652,3 +652,59 @@ def test_loop_breaker_filter_covers_multiple_logs_exporters():
     assert len(conditions) == 2
     assert any("loki/send-loki-logs/0" in c for c in conditions)
     assert any("otlphttp/rel-1/otelcol/0" in c for c in conditions)
+
+
+def test_loop_breaker_filter_covers_exporters_on_custom_logs_pipelines():
+    """User-supplied custom logs pipelines also get their exporters covered by the loop-breaker."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    config.add_component(
+        Component.exporter,
+        "loki/send-loki-logs/0",
+        {"endpoint": "http://loki:3100"},
+        pipelines=["logs/unit/0"],
+    )
+    config.add_component(
+        Component.exporter,
+        "otlphttp/user-custom",
+        {"endpoint": "http://custom:4318"},
+        pipelines=["logs/custom"],
+    )
+    config.add_component(
+        Component.exporter,
+        "kafka/user-bare",
+        {"endpoint": "http://kafka:9092"},
+        pipelines=["logs"],
+    )
+    config.add_component(
+        Component.exporter,
+        "prometheusremotewrite/user",
+        {"endpoint": "http://mimir:9009"},
+        pipelines=["metrics/custom"],
+    )
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    covered = {
+        eid
+        for eid in ("loki/send-loki-logs/0", "otlphttp/user-custom", "kafka/user-bare")
+        if any(eid in c for c in conditions)
+    }
+    assert covered == {"loki/send-loki-logs/0", "otlphttp/user-custom", "kafka/user-bare"}
+    assert not any("prometheusremotewrite" in c for c in conditions)
+
+
+def test_loop_breaker_filter_deduplicates_shared_exporter_across_logs_pipelines():
+    """An exporter shared by multiple logs pipelines yields exactly one drop condition."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    config.add_component(
+        Component.exporter,
+        "loki/send-loki-logs/0",
+        {"endpoint": "http://loki:3100"},
+        pipelines=["logs/unit/0", "logs/custom"],
+    )
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    assert sum("loki/send-loki-logs/0" in c for c in conditions) == 1
