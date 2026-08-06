@@ -188,6 +188,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         self._reconcile()
 
     def _reconcile(self):
+        # Re-assert this unit's snap registrations. These lockfiles are reference counts, read
+        # on removal to decide whether the last unit standing may uninstall a shared snap, so
+        # they belong to the desired state. Registering only on install/upgrade-charm left a
+        # lockfile that was deleted out of band missing until the next `juju refresh`.
+        # Refs https://github.com/canonical/opentelemetry-collector-operator/issues/208
+        manager = SingletonSnapManager(self.unit.name)
+        for snap_name in SnapMap.snaps():
+            manager.register(snap_name, SnapMap.get_revision(snap_name))
+
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
         # NOTE: Only the leader aggregates alerts, to prevent duplication. COS Agent alerts
