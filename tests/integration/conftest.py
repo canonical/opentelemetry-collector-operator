@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 """Conftest file for integration tests."""
 
+import re
 import subprocess
 from pytest import fixture
 from pytest_jubilant import pack
@@ -35,8 +36,8 @@ def charm_and_channel(charm_path_key: str, charm_channel_key: str, platform: str
     if path_from_env := os.getenv(charm_path_key):
         charm_path = str(Path(path_from_env).absolute())
         logger.info("Using local charm: %s", charm_path)
-        if "22.04" in platform:
-            return charm_path.replace("24.04", "22.04"), None
+        wanted_base = platform.split(":")[0].split("@")[1]
+        charm_path = re.sub(r"ubuntu@\d+\.\d+", f"ubuntu@{wanted_base}", charm_path)
         return charm_path, None
     for _ in range(3):
         logger.info("packing Opentelemetry-collector charm ...")
