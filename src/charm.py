@@ -184,9 +184,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # they belong to the desired state. Registering only on install/upgrade-charm left a
         # lockfile that was deleted out of band missing until the next `juju refresh`.
         # Refs https://github.com/canonical/opentelemetry-collector-operator/issues/208
-        manager = SingletonSnapManager(self.unit.name)
-        for snap_name in SnapMap.snaps():
-            manager.register(snap_name, SnapMap.get_revision(snap_name))
+        self._register_snaps()
 
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
         topology = JujuTopology.from_charm(self)
@@ -582,13 +580,24 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             return result
         return result.group(1)
 
-    def _install_snaps(self) -> None:
+    def _register_snaps(self) -> None:
+        """Reference-count this unit against every managed snap.
+
+        Registering is idempotent and cheap (one empty file per snap), which is what makes it
+        safe to call on every reconcile. Installing is neither, so it stays in `_install_snaps`.
+        """
         manager = SingletonSnapManager(self.unit.name)
+        for snap_name in SnapMap.snaps():
+            manager.register(snap_name, SnapMap.get_revision(snap_name))
+
+    def _install_snaps(self) -> None:
+        # Register before installing, so a snap that only partially installs, or whose service
+        # fails to start, is still reference counted for this unit.
+        self._register_snaps()
 
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
-            manager.register(snap_name, snap_revision)
-            revisions = manager.get_revisions(snap_name)
+            revisions = SingletonSnapManager.get_revisions(snap_name)
             if snap_revision >= (max(revisions) if revisions else 0):
                 # Install the snap
                 self.unit.status = MaintenanceStatus(f"Installing {snap_name} snap")
