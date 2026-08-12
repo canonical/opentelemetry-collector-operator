@@ -6,7 +6,7 @@
 import json
 
 from ops.testing import Relation, State
-from scenario import ActiveStatus, BlockedStatus
+from scenario import BlockedStatus
 
 
 def _receive_loki_logs_relation(*, event_data: dict) -> Relation:
