@@ -110,8 +110,9 @@ def otelcol_version():
 
 @pytest.fixture(autouse=True)
 def mock_lock_dir(tmp_path):
-    with patch("singleton_snap.SingletonSnapManager.LOCK_DIR", tmp_path / "lock_dir"):
-        yield
+    lock_dir = tmp_path / "lock_dir"
+    with patch("singleton_snap.SingletonSnapManager.LOCK_DIR", lock_dir):
+        yield lock_dir
 
 
 @pytest.fixture(autouse=True)
@@ -173,13 +174,6 @@ def mock_snap_operations():
         patch("charm.snap.Snap", return_value=mock_snap),
         patch("charm.snap.SnapCache", return_value=mock_cache),
     ):
-        yield
-
-
-@pytest.fixture(autouse=True)
-def mock_singleton_snap_manager():
-    """Mock SingletonSnapManager methods."""
-    with patch("singleton_snap.SingletonSnapManager.get_revisions", return_value={1, 2}):
         yield
 
 
