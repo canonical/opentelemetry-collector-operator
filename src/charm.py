@@ -17,6 +17,7 @@ import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiProvider
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
@@ -171,6 +172,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     """Charm the service."""
 
     loki_provider: LokiPushApiProvider
+    metrics_consumer: MetricsEndpointConsumer
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
@@ -602,9 +604,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
+        # Invalid alert rules
+        if self._has_invalid_prometheus_alerts():
+            self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
+
         # Invalid loki alert rules
         if self._has_invalid_loki_alerts():
             self.unit.status = BlockedStatus("Invalid Loki alerts. See debug-log")
+
+        # Invalid scrape jobs
+        if self._has_invalid_scrape_job():
+            self.unit.status = BlockedStatus("Invalid scrape jobs. See debug-log")
 
         # Workload version
         self.unit.set_workload_version(self._otelcol_version or "")
@@ -918,6 +928,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _has_invalid_loki_alerts(self) -> bool:
         """Check if any receive-loki-logs relation reported invalid alert rules."""
         return self.loki_provider.has_invalid_alert_rules()
+
+    def _has_invalid_prometheus_alerts(self) -> bool:
+        """Check if any metrics-endpoint relation reported invalid alert rules."""
+        return self.metrics_consumer.has_invalid_alert_rules()
+
+    def _has_invalid_scrape_job(self) -> bool:
+        """Check if any metrics-endpoint relation reported invalid scrape jobs."""
+        return self.metrics_consumer.has_invalid_scrape_jobs()
 
     @property
     def _node_exporter_info_metric_file_path(self) -> LocalPath:
