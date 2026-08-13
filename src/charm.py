@@ -16,8 +16,9 @@ from typing import Any, Dict, List, Mapping, Optional, cast
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
-from charms.operator_libs_linux.v2 import snap  # type: ignore
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
+from charms.operator_libs_linux.v1.systemd import service_start
+from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
@@ -592,6 +593,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
+        # Invalid alert rules
+        if self._has_invalid_prometheus_alerts():
+            self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
+
         # Invalid scrape jobs
         if self._has_invalid_scrape_job():
             self.unit.status = BlockedStatus("Invalid scrape jobs. See debug-log")
@@ -881,6 +886,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_server_cert_relation(self) -> bool:
         return any(self.model.relations.get("receive-server-cert", []))
+
+    def _has_invalid_prometheus_alerts(self) -> bool:
+        """Check if any metrics-endpoint relation reported invalid alert rules."""
+        return self.metrics_consumer.has_invalid_alert_rules()
 
     def _has_invalid_scrape_job(self) -> bool:
         """Check if any metrics-endpoint relation reported invalid scrape jobs."""
