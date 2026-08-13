@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Mapping, Optional, cast
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
+from charms.loki_k8s.v1.loki_push_api import LokiPushApiProvider
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
@@ -170,6 +171,7 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
 class OpenTelemetryCollectorCharm(ops.CharmBase):
     """Charm the service."""
 
+    loki_provider: LokiPushApiProvider
     metrics_consumer: MetricsEndpointConsumer
 
     def __init__(self, framework: ops.Framework):
@@ -606,6 +608,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if self._has_invalid_prometheus_alerts():
             self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
 
+        # Invalid loki alert rules
+        if self._has_invalid_loki_alerts():
+            self.unit.status = BlockedStatus("Invalid Loki alerts. See debug-log")
+
         # Invalid scrape jobs
         if self._has_invalid_scrape_job():
             self.unit.status = BlockedStatus("Invalid scrape jobs. See debug-log")
@@ -918,6 +924,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_server_cert_relation(self) -> bool:
         return any(self.model.relations.get("receive-server-cert", []))
+
+    def _has_invalid_loki_alerts(self) -> bool:
+        """Check if any receive-loki-logs relation reported invalid alert rules."""
+        return self.loki_provider.has_invalid_alert_rules()
 
     def _has_invalid_prometheus_alerts(self) -> bool:
         """Check if any metrics-endpoint relation reported invalid alert rules."""
