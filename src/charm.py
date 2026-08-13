@@ -19,7 +19,6 @@ from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v1.systemd import service_start
 from charms.operator_libs_linux.v2 import snap  # type: ignore
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
@@ -606,7 +605,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Invalid alert rules
         if self._has_invalid_prometheus_alerts():
             self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
-        
+
         # Invalid scrape jobs
         if self._has_invalid_scrape_job():
             self.unit.status = BlockedStatus("Invalid scrape jobs. See debug-log")
@@ -923,7 +922,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     def _has_invalid_prometheus_alerts(self) -> bool:
         """Check if any metrics-endpoint relation reported invalid alert rules."""
         return self.metrics_consumer.has_invalid_alert_rules()
-    
+
     def _has_invalid_scrape_job(self) -> bool:
         """Check if any metrics-endpoint relation reported invalid scrape jobs."""
         return self.metrics_consumer.has_invalid_scrape_jobs()
