@@ -151,3 +151,4 @@ def test_internal_logs_cross_signal_preserved_on_metrics_outage(juju: jubilant.J
         assert logs, "No logs found in otelcol-receiver after metrics outage"
 
     _assert_metrics_exporter_failure_logs_in_receiver()
+
