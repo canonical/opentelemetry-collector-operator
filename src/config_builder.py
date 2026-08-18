@@ -9,7 +9,14 @@ from typing import Any, Dict, List, Literal, Optional, Set, Union, cast
 
 import yaml
 
-from constants import CUSTOM_COMPONENT_ID, INTERNAL_TELEMETRY_LOG_FILE, SERVER_CERT_PATH, SERVER_CERT_PRIVATE_KEY_PATH
+from constants import (
+    CUSTOM_COMPONENT_ID,
+    INTERNAL_LOGS_FILTER_ID,
+    INTERNAL_TELEMETRY_SERVICE_NAME,
+    NON_LOOPING_EXPORTER_PREFIXES,
+    SERVER_CERT_PATH,
+    SERVER_CERT_PRIVATE_KEY_PATH,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +215,8 @@ class ConfigBuilder:
         receiver_tls: bool = False,
         exporter_skip_verify: bool = False,
         ports: Optional[Dict[str, int]] = None,
+        internal_host: str = "localhost",
+        topology_labels: Optional[Dict[str, str]] = None,
     ):
         """Generate an empty OpenTelemetry collector config.
 
@@ -219,6 +228,8 @@ class ConfigBuilder:
             receiver_tls: whether to inject TLS config in all receivers on build
             exporter_skip_verify: value for `insecure_skip_verify` in all exporters
             ports: port map produced by build_port_map(); if None the enum defaults are used
+            internal_host: FQDN of the unit, used as OTLP self-export endpoint for TLS SAN matching
+            topology_labels: Juju topology labels for Loki resource attribution
         """
         self._config = {
             "extensions": {},
@@ -239,6 +250,8 @@ class ConfigBuilder:
         self._scrape_interval = global_scrape_interval
         self._scrape_timeout = global_scrape_timeout
         self._ports: Dict[str, int] = ports if ports is not None else build_port_map()
+        self._internal_host = internal_host
+        self._topology_labels = topology_labels
 
     def build(self) -> str:
         """Build the final configuration and return it as a YAML string.
@@ -252,6 +265,7 @@ class ConfigBuilder:
             str: A YAML string representing the complete configuration.
         """
         self._add_missing_nop_exporters()
+        self._populate_loop_breaker_filter()
         if self._receiver_tls:
             self._add_tls_to_all_receivers()
         self._set_prometheus_receiver_global_timeout_and_interval(
@@ -299,17 +313,7 @@ class ConfigBuilder:
         # FIXME https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11780
         # Add TLS config to extensions
         self.add_extension("health_check", {"endpoint": f"0.0.0.0:{self._ports[Port.health.name]}"})
-        self.add_telemetry(
-            "logs",
-            {
-                "level": "INFO",
-                "disable_stacktrace": True,
-                # Write to a designated log file for internal telemetry logs. Otherwise, they go to
-                # stderr and syslog by default. This is rotated by logrotate and is configured
-                # elsewhere in the _configure_logrotate method.
-                "output_paths": [INTERNAL_TELEMETRY_LOG_FILE],
-            },
-        )
+        self._add_internal_telemetry_loop_breaker()
         self.add_telemetry(
             "metrics",
             {
@@ -387,6 +391,71 @@ class ConfigBuilder:
         """
         # https://opentelemetry.io/docs/collector/internal-telemetry
         self._config["service"]["telemetry"][category] = telem_config
+
+    def _populate_loop_breaker_filter(self):
+        """Populate the internal-telemetry loop-breaker filter's drop conditions."""
+        filter_name = f"filter/{INTERNAL_LOGS_FILTER_ID}/{self._unit_name}"
+        if filter_name not in self._config["processors"]:
+            return
+        log_exporter_ids: List[str] = []
+        for pipeline_name, pipeline in self._config["service"]["pipelines"].items():
+            if pipeline_name.split("/")[0] != "logs":
+                continue
+            for exporter_id in pipeline.get("exporters", []):
+                if (
+                    exporter_id.split("/")[0] not in NON_LOOPING_EXPORTER_PREFIXES
+                    and exporter_id not in log_exporter_ids
+                ):
+                    log_exporter_ids.append(exporter_id)
+        self._config["processors"][filter_name]["logs"]["log_record"] = [
+            f'instrumentation_scope.attributes["otelcol.component.id"] == "{exporter_id}" '
+            f'and instrumentation_scope.attributes["otelcol.signal"] == "logs"'
+            for exporter_id in log_exporter_ids
+        ]
+
+    def _add_internal_telemetry_loop_breaker(self):
+        """Configure the loop-breaker and self-ingestion of the collector's internal telemetry."""
+        self.add_component(
+            Component.processor,
+            f"filter/{INTERNAL_LOGS_FILTER_ID}/{self._unit_name}",
+            {
+                "error_mode": "ignore",
+                "logs": {"log_record": []},
+            },
+            pipelines=[f"logs/{self._unit_name}"],
+        )
+        internal_logs_otlp_exporter: Dict[str, Any] = {
+            "protocol": "http/protobuf",
+            "endpoint": (
+                f"https://{self._internal_host}:{Port.otlp_http.value}"
+                if self._receiver_tls
+                else f"http://localhost:{Port.otlp_http.value}"
+            ),
+        }
+        resource: Dict[str, Any] = {
+            "service.name": INTERNAL_TELEMETRY_SERVICE_NAME,
+            "loki.format": "logfmt",
+        }
+        if self._topology_labels:
+            resource.update(self._topology_labels)
+            if "juju_unit" in self._topology_labels:
+                resource["service.instance.id"] = self._topology_labels["juju_unit"]
+            resource["loki.resource.labels"] = ", ".join(sorted(self._topology_labels))
+        self._config["service"]["telemetry"]["resource"] = resource
+        self.add_telemetry(
+            "logs",
+            {
+                "level": "INFO",
+                "disable_stacktrace": True,
+                "processors": [
+                    {
+                        "batch": {
+                            "exporter": {"otlp": internal_logs_otlp_exporter},
+                        }
+                    }
+                ],
+            },
+        )
 
     def _add_to_pipeline(self, name: str, component: Component, pipelines: List[str]):
         """Add a pipeline component to the service::pipelines config.
