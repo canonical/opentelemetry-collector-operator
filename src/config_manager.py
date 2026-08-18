@@ -117,6 +117,8 @@ class ConfigManager:
         queue_size: int = 1000,
         max_elapsed_time_min: int = 5,
         ports: Optional[Dict[str, int]] = None,
+        internal_host: str = "localhost",
+        topology_labels: Optional[Dict[str, str]] = None,
     ):
         """Generate a default OpenTelemetry collector ConfigManager.
 
@@ -132,6 +134,8 @@ class ConfigManager:
             queue_size: size of the sending queue for exporters
             max_elapsed_time_min: maximum elapsed time for retrying failed requests in minutes
             ports: port map produced by build_port_map(); if None the enum defaults are used
+            internal_host: FQDN of the unit, used as OTLP self-export endpoint for TLS SAN matching
+            topology_labels: Juju topology labels for Loki resource attribution
         """
         self._unit_name = unit_name
         self._hostname = hostname
@@ -147,6 +151,8 @@ class ConfigManager:
             receiver_tls=receiver_tls,
             exporter_skip_verify=insecure_skip_verify,
             ports=self._ports,
+            internal_host=internal_host,
+            topology_labels=topology_labels,
         )
         self.config.add_default_config()
         self.config.add_extension("file_storage", {"directory": FILE_STORAGE_DIRECTORY})

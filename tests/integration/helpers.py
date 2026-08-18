@@ -3,11 +3,29 @@
 
 """Integration tests helpers."""
 
+import logging
 import re
 from typing import Dict, Final
 import jubilant
 import yaml
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import (
+    after_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    wait_fixed,
+)
+
+logger = logging.getLogger(__name__)
+
+
+RETRY = retry(
+    retry=retry_if_exception_type(AssertionError),
+    wait=wait_exponential(multiplier=1, min=2, max=45),
+    stop=stop_after_attempt(10),
+    after=after_log(logger, logging.INFO),
+)
 
 
 # Exclude some logs to avoid circular ingestion during tests
@@ -21,22 +39,25 @@ SNAP_STATUS_COMMAND: Final[str] = "sudo snap services opentelemetry-collector"
 NODE_EXPORTER_PORT: Final[int] = 9100
 
 
-@retry(stop=stop_after_attempt(20), wait=wait_fixed(10))
-def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list):
-    cmd = (
-        "sudo snap logs opentelemetry-collector -n=all"
-        + " | "
-        + " | ".join([f"grep {p}" for p in grep_filters])
-    )
-    debug_logs = juju.ssh("otelcol/0", command=cmd)
+def receiver_snap_logs(juju: jubilant.Juju, unit: str) -> str:
+    """Return all snap logs from the given unit."""
+    logs = juju.ssh(unit, command="sudo snap logs opentelemetry-collector -n=all")
+    return logs.strip()
 
-    if not debug_logs:
-        raise Exception(f"Filters {grep_filters} not found in the debug logs")
+
+@retry(
+    retry=retry_if_exception_type(AssertionError), stop=stop_after_attempt(20), wait=wait_fixed(10)
+)
+def is_pattern_in_debug_logs(juju: jubilant.Juju, grep_filters: list, unit: str = "otelcol/0"):
+    debug_logs = receiver_snap_logs(juju, unit)
+    for pattern in grep_filters:
+        if pattern not in debug_logs:
+            raise AssertionError(f"Filter {pattern!r} not found in the debug logs")
     return True
 
 
-def is_pattern_not_in_debug_logs(juju: jubilant.Juju, pattern: str):
-    debug_logs = juju.ssh("otelcol/0", command="sudo snap logs opentelemetry-collector -n=all")
+def is_pattern_not_in_debug_logs(juju: jubilant.Juju, pattern: str, unit: str = "otelcol/0"):
+    debug_logs = receiver_snap_logs(juju, unit)
     if re.search(pattern, debug_logs):
         raise Exception(f"Pattern {pattern} found in the debug logs")
     return True
@@ -46,14 +67,14 @@ def get_hostname(juju: jubilant.Juju, machine: str) -> str:
     return juju.ssh(f"ubuntu/{machine}", "hostname").strip()
 
 
-def get_snap_service_status(juju: jubilant.Juju, machine: str) -> str:
+def get_snap_service_status(juju: jubilant.Juju, unit: str) -> str:
     """Gets the status of the otelcol snap using `snap services opentelemetry-collector`. This function assumes that the snap is already installed.
 
     Example output:
     Service                                          Startup  Current  Notes
     opentelemetry-collector.opentelemetry-collector  enabled  active   -
     """
-    snap_status = juju.ssh(f"ubuntu/{machine}", SNAP_STATUS_COMMAND)
+    snap_status = juju.ssh(unit, SNAP_STATUS_COMMAND)
     lines = snap_status.strip().splitlines()
 
     parts = lines[1].split()
@@ -66,12 +87,10 @@ def get_otelcol_config(juju: jubilant.Juju, unit: str, config_file: str) -> dict
     return yaml.safe_load(raw)
 
 
-def get_receiver_config(
-    juju: jubilant.Juju, unit: str, receiver_name: str, otelcol_config_file: str
+def get_receiver_from_config(
+    juju: jubilant.Juju, unit: str, receiver_name: str, config_file: str
 ) -> str:
-    config_file = juju.ssh(unit, f"cat {otelcol_config_file}")
-    cfg = yaml.safe_load(config_file)
-
+    cfg = get_otelcol_config(juju, unit, config_file)
     receivers = cfg.get("receivers", {})
     for name in receivers.keys():
         if receiver_name in name:
@@ -88,4 +107,6 @@ def get_subordinate_charm_info_metrics(
     juju: jubilant.Juju, unit: str, port: int = NODE_EXPORTER_PORT
 ) -> str:
     """Fetch otelcol_subordinate_charm_info lines from node-exporter on the given unit."""
-    return juju.ssh(unit, f"curl -s localhost:{port}/metrics | grep otelcol_subordinate_charm_info || true")
+    return juju.ssh(
+        unit, f"curl -s localhost:{port}/metrics | grep otelcol_subordinate_charm_info || true"
+    )
