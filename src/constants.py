@@ -37,3 +37,10 @@ NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
     "textfile",
     f"textfile.directory={NODE_EXPORTER_TEXTFILE_DIRECTORY}",
 }
+
+# node-exporter installed from the Ubuntu archive (package-type=apt).
+# The charm does NOT manage this package's configuration; it relies on the
+# deb's stock defaults (listen :9100, textfile dir below per Debian packaging).
+NODE_EXPORTER_APT_PACKAGE: Final[str] = "prometheus-node-exporter"
+NODE_EXPORTER_APT_SERVICE: Final[str] = "prometheus-node-exporter"
+NODE_EXPORTER_APT_TEXTFILE_DIRECTORY: Final[str] = "/var/lib/prometheus/node-exporter"
