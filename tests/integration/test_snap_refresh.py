@@ -6,9 +6,9 @@
 Test progression:
 - GIVEN the charm deployed at an old revision with its snaps and lockfiles in place
 - WHEN the charm is refreshed to a locally built version
-- THEN the managed snaps are updated to the new revisions
+- THEN the otelcol snap is updated and node-exporter migrates to the apt flavor
+  (the refreshed charm defaults to package-type=apt)
 - AND no unit is blocked with "Mismatching snap revisions"
-- AND each lockfile revision matches the installed snap revision
 """
 
 import subprocess
@@ -26,8 +26,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OLD_CHARM_REVISION = 149
 OLD_CHARM_CHANNEL = "2/stable"
 
-# Snaps managed by this charm.
-MANAGED_SNAPS = ("node-exporter", "opentelemetry-collector")
+# Snaps managed by this charm after refresh (node-exporter defaults to the apt flavor).
+MANAGED_SNAPS = ("opentelemetry-collector",)
 
 
 @pytest.fixture(scope="module")
@@ -120,6 +120,19 @@ def test_snaps_updated_after_refresh(juju: jubilant.Juju):
     for snap_name in MANAGED_SNAPS:
         installed_rev = _get_installed_snap_revision(juju, snap_name, "ubuntu/0")
         assert installed_rev > 0, f"{snap_name} is not installed after refresh"
+
+    # AND node-exporter migrated from the snap (old charm) to the deb (default apt flavor)
+    snap_list = juju.ssh("ubuntu/0", command="snap list --unicode=never")
+    assert not any(
+        line.split()[0] == "node-exporter" for line in snap_list.splitlines()[1:] if line.split()
+    ), "node-exporter snap should have been removed by the apt-flavored refresh"
+    deb_status = juju.ssh(
+        "ubuntu/0",
+        command="dpkg-query -W -f '${Status}' prometheus-node-exporter 2>/dev/null || true",
+    )
+    assert "install ok installed" in deb_status, (
+        "prometheus-node-exporter deb should be installed after the apt-flavored refresh"
+    )
 
     # AND ubuntu remains active and idle
     assert jubilant.all_active(status, "ubuntu")
