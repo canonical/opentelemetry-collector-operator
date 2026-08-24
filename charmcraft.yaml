@@ -407,6 +407,25 @@ config:
         contains "max", the total physical memory of the machine is used
         instead.
       default: 100
+    package-type:
+      type: string
+      default: apt
+      description: |
+        Package source for node-exporter: "apt" installs the
+        prometheus-node-exporter deb from the Ubuntu archive; "snap"
+        installs the node-exporter snap pinned by this charm.
+
+        When this option changes, the previously used package is
+        uninstalled (unless another collector unit on the same machine
+        still uses it) and node-exporter is reinstalled from the newly
+        selected source.
+
+        With "apt", the deb's stock configuration is used as-is: the charm
+        does not enable extra collectors (systemd, logind, processes, ...)
+        and the node_exporter listen port cannot be overridden via the
+        "ports" option. The deb version depends on the machine's Ubuntu
+        release. With "snap", the charm manages the collector set and
+        listen port, and the snap is pinned to a charm-chosen revision.
 
 actions:
   reconcile:

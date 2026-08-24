@@ -234,11 +234,25 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 )
                 return
 
+        # Validate the node-exporter package-type config
+        if self._node_exporter_package_type not in ("snap", "apt"):
+            self.unit.status = BlockedStatus("Invalid package-type config: must be 'snap' or 'apt'")
+            return
+
         # Parse port overrides from Juju config
         try:
             port_map = build_port_map(cast(str, self.config.get("ports")))
         except ValueError as e:
             self.unit.status = BlockedStatus(f"Invalid ports config: {e}")
+            return
+
+        # The stock deb listens on :9100 and the charm does not manage its config,
+        # so a node_exporter port override can only be honored by the snap flavor.
+        if (
+            self._node_exporter_package_type == "apt"
+            and port_map[Port.node_exporter.name] != Port.node_exporter.value
+        ):
+            self.unit.status = BlockedStatus("node_exporter port override requires package-type=snap")
             return
 
         # Create the config manager
@@ -876,6 +890,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_server_cert_relation(self) -> bool:
         return any(self.model.relations.get("receive-server-cert", []))
+
+    @property
+    def _node_exporter_package_type(self) -> str:
+        """The configured package source for node-exporter ('snap' or 'apt')."""
+        return cast(str, self.config.get("package-type"))
 
     @property
     def _node_exporter_info_metric_file_path(self) -> LocalPath:
