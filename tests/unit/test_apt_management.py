@@ -9,17 +9,21 @@ import pytest
 
 import apt_management
 
+# The autouse mock_apt_operations fixture (conftest.py) patches apt_management.is_installed
+# for charm-level tests; capture the real function at import time to test its own logic.
+_real_is_installed = apt_management.is_installed
+
 
 def test_is_installed_true_and_false():
     with patch.object(apt_management.apt, "DebianPackage") as pkg:
         # GIVEN the package resolves as installed
         pkg.from_installed_package.return_value = object()
         # THEN is_installed is True
-        assert apt_management.is_installed("prometheus-node-exporter") is True
+        assert _real_is_installed("prometheus-node-exporter") is True
         # GIVEN the package is not installed
         pkg.from_installed_package.side_effect = apt_management.apt.PackageNotFoundError("nope")
         # THEN is_installed is False
-        assert apt_management.is_installed("prometheus-node-exporter") is False
+        assert _real_is_installed("prometheus-node-exporter") is False
 
 
 def test_install_package_delegates_to_apt_lib():
