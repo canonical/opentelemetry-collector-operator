@@ -35,6 +35,7 @@ from constants import (
     LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
+    NODE_EXPORTER_APT_PACKAGE,
     NODE_EXPORTER_DISABLED_COLLECTORS,
     NODE_EXPORTER_ENABLED_COLLECTORS,
     NODE_EXPORTER_TEXTFILE_DIRECTORY,
@@ -547,7 +548,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             [config_manager.config.hash, receive_ca_certs_hash, server_cert_hash]
         )
         if current_hash != old_hash:
-            for snap_name in SnapMap.snaps():
+            for snap_name in self._managed_snaps():
                 self._restart_snap(self.snap(snap_name))
             hash_file.write_text(current_hash)
 
@@ -564,7 +565,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # Start the otelcol snap in case it was stopped while waiting for certificates
         self.snap("opentelemetry-collector").start()
 
-        for snap_name in SnapMap.snaps():
+        for snap_name in self._managed_snaps():
             snap_revision = SnapMap.get_revision(snap_name)
             revisions = SingletonSnapManager.get_revisions(snap_name)
             installed_revision = max(revisions) if revisions else None
@@ -612,10 +613,26 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             return result
         return result.group(1)
 
+    def _managed_snaps(self) -> List[str]:
+        """Snaps this unit manages given the current config.
+
+        node-exporter is only snap-managed when package-type is 'snap'; otherwise it
+        is handled by apt (see _sync_node_exporter_package).
+        """
+        snaps = ["opentelemetry-collector"]
+        if self._node_exporter_package_type == "snap":
+            snaps.append("node-exporter")
+        return snaps
+
     def _install_snaps(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
 
-        for snap_name in SnapMap.snaps():
+        if self._node_exporter_package_type == "apt":
+            # The deb has no pinned revision; register with a constant 0 so the
+            # lockfile-based reference counting works the same as for snaps.
+            manager.register(NODE_EXPORTER_APT_PACKAGE, 0)
+
+        for snap_name in self._managed_snaps():
             snap_revision = SnapMap.get_revision(snap_name)
             manager.register(snap_name, snap_revision)
             revisions = manager.get_revisions(snap_name)
