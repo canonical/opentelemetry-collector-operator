@@ -195,3 +195,24 @@ def test_remove_hook_keeps_deb_used_by_other_unit(ctx, mock_apt_operations):
     # THEN the deb is kept for the other unit
     mock_remove_deb.assert_not_called()
     assert SingletonSnapManager.get_units(NODE_EXPORTER_APT_PACKAGE) == {"other_0"}
+
+
+def test_blocked_when_other_unit_uses_other_flavor(ctx, mock_apt_operations):
+    # GIVEN this unit wants apt but a co-located unit of another app registered the snap
+    SingletonSnapManager("other/0").register("node-exporter", 2)
+    with patch("apt_management.install_package"):
+        # WHEN the reconciler runs
+        state_out = ctx.run(ctx.on.config_changed(), State())
+    # THEN the unit blocks with an actionable message
+    assert state_out.unit_status.name == "blocked"
+    assert "package-type" in state_out.unit_status.message
+
+
+def test_no_conflict_when_all_units_agree(ctx, mock_apt_operations):
+    # GIVEN another unit also using apt
+    SingletonSnapManager("other/0").register(NODE_EXPORTER_APT_PACKAGE, 0)
+    mock_apt_operations["is_installed"].return_value = True
+    # WHEN the reconciler runs
+    state_out = ctx.run(ctx.on.config_changed(), State())
+    # THEN the unit is not blocked over package-type
+    assert "package-type" not in getattr(state_out.unit_status, "message", "")

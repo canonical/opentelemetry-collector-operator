@@ -585,6 +585,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 return
 
         self._sync_node_exporter_package(port_map[Port.node_exporter.name])
+
+        if self._node_exporter_flavor_conflict():
+            self.unit.status = BlockedStatus(
+                "Another unit on this machine uses the other node-exporter package-type; "
+                "align the package-type config on all collector apps sharing this machine"
+            )
+            return
+
         self.unit.status = ActiveStatus()
 
         if not valid_mem_limit:
@@ -625,6 +633,19 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if self._node_exporter_package_type == "snap":
             snaps.append("node-exporter")
         return snaps
+
+    def _node_exporter_flavor_conflict(self) -> bool:
+        """True when a co-located unit has node-exporter registered via the other flavor.
+
+        Both flavors would fight over the node-exporter port, so this is surfaced as
+        BlockedStatus. A same-application flavor switch trips this only transiently:
+        once every unit has reconciled, the old flavor's registrations are gone.
+        """
+        manager = SingletonSnapManager(self.unit.name)
+        other_flavor = (
+            "node-exporter" if self._node_exporter_package_type == "apt" else NODE_EXPORTER_APT_PACKAGE
+        )
+        return manager.is_used_by_other_units(other_flavor)
 
     def _install_snaps(self) -> None:
         manager = SingletonSnapManager(self.unit.name)
