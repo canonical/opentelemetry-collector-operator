@@ -661,18 +661,29 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             # Don't raise the exception to avoid failing the remove hook
 
     def _remove_node_exporter(self):
-        """Coordinate node-exporter snap removal."""
+        """Coordinate removal of node-exporter, whichever flavor(s) are present."""
         manager = SingletonSnapManager(self.unit.name)
-        snap_name = "node-exporter"
-        manager.unregister_all_for_unit(snap_name)
-        if not manager.is_used_by_other_units(snap_name):
-            self._remove_snap(snap_name)
+        manager.unregister_all_for_unit("node-exporter")
+        manager.unregister_all_for_unit(NODE_EXPORTER_APT_PACKAGE)
+        if not manager.is_used_by_other_units("node-exporter"):
+            self._remove_snap("node-exporter")
+        if not manager.is_used_by_other_units(
+            NODE_EXPORTER_APT_PACKAGE
+        ) and apt_management.is_installed(NODE_EXPORTER_APT_PACKAGE):
+            self.unit.status = MaintenanceStatus(f"Uninstalling {NODE_EXPORTER_APT_PACKAGE} deb")
+            try:
+                apt_management.remove_package(NODE_EXPORTER_APT_PACKAGE)
+            except apt_management.AptError as e:
+                # Log error but don't fail the remove hook
+                logger.error(f"Failed to uninstall {NODE_EXPORTER_APT_PACKAGE} deb: {e}")
 
-        self._remove_node_exporter_info_metric_file()
+        # Clean up this unit's info-metric file from both flavor directories
+        for directory in (NODE_EXPORTER_TEXTFILE_DIRECTORY, NODE_EXPORTER_APT_TEXTFILE_DIRECTORY):
+            self._remove_node_exporter_info_metric_file(directory)
 
-    def _remove_node_exporter_info_metric_file(self):
-        """Remove the node-exporter info metrics file."""
-        path = self._node_exporter_info_metric_file_path
+    def _remove_node_exporter_info_metric_file(self, directory: str):
+        """Remove this unit's node-exporter info metrics file from the given textfile dir."""
+        path = LocalPath(directory) / f"{self.unit.name.replace('/', '_')}.prom"
         try:
             existed = path.exists()
             path.unlink(missing_ok=True)

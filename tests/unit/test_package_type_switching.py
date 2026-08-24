@@ -164,3 +164,34 @@ def test_switch_apt_to_snap_keeps_deb_used_by_other_unit(ctx, mock_apt_operation
     # THEN the deb is NOT removed
     mock_remove_deb.assert_not_called()
     assert SingletonSnapManager.get_units(NODE_EXPORTER_APT_PACKAGE) == {"other_0"}
+
+
+def test_remove_hook_removes_deb_in_apt_mode(ctx, mock_apt_operations):
+    # GIVEN apt mode with the deb installed and registered
+    SingletonSnapManager("otelcol/0").register(NODE_EXPORTER_APT_PACKAGE, 0)
+    mock_apt_operations["is_installed"].return_value = True
+    with (
+        patch("charm.event", return_value="remove"),
+        patch("apt_management.remove_package") as mock_remove_deb,
+    ):
+        # WHEN the remove hook runs
+        ctx.run(ctx.on.remove(), State())
+    # THEN the deb is removed and unregistered
+    mock_remove_deb.assert_called_once_with(NODE_EXPORTER_APT_PACKAGE)
+    assert SingletonSnapManager.get_units(NODE_EXPORTER_APT_PACKAGE) == set()
+
+
+def test_remove_hook_keeps_deb_used_by_other_unit(ctx, mock_apt_operations):
+    # GIVEN the deb is also registered by another co-located unit
+    SingletonSnapManager("otelcol/0").register(NODE_EXPORTER_APT_PACKAGE, 0)
+    SingletonSnapManager("other/0").register(NODE_EXPORTER_APT_PACKAGE, 0)
+    mock_apt_operations["is_installed"].return_value = True
+    with (
+        patch("charm.event", return_value="remove"),
+        patch("apt_management.remove_package") as mock_remove_deb,
+    ):
+        # WHEN the remove hook runs
+        ctx.run(ctx.on.remove(), State())
+    # THEN the deb is kept for the other unit
+    mock_remove_deb.assert_not_called()
+    assert SingletonSnapManager.get_units(NODE_EXPORTER_APT_PACKAGE) == {"other_0"}
