@@ -9,12 +9,12 @@ import socket
 from collections import namedtuple
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, cast, get_args
+from typing import Any, Dict, List, Optional, cast, get_args
 
 import yaml
 from charmlibs.interfaces.otlp import OtlpEndpoint, OtlpRequirer, RuleStore
 from charmlibs.pathops import PathProtocol
-from charms.certificate_transfer_interface.v1.certificate_transfer import (
+from charmlibs.interfaces.certificate_transfer import (
     CertificateTransferRequires,
 )
 from charms.grafana_cloud_integrator.v0.cloud_config_requirer import (
@@ -154,7 +154,7 @@ def send_loki_logs(charm: CharmBase) -> List[Dict]:
     charm.__setattr__("loki_consumer", loki_consumer)
     # TODO: Luca: probably don't need this anymore
     loki_consumer.reload_alerts()
-    return loki_consumer.loki_endpoints
+    return sorted(loki_consumer.loki_endpoints, key=lambda endpoint: endpoint["url"])
 
 
 def key_value_pair_string_to_dict(key_value_pair: str) -> dict:
@@ -247,7 +247,7 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
     charm.__setattr__("remote_write", remote_write)
     # TODO: Luca: probably don't need this anymore
     remote_write.reload_alerts()
-    return remote_write.endpoints
+    return sorted(remote_write.endpoints, key=lambda endpoint: endpoint["url"])
 
 
 def _get_tracing_receiver_url(
@@ -280,7 +280,9 @@ def _get_tracing_receiver_url(
     return f"{scheme}://{socket.getfqdn()}:{ports[Port.otlp_http.name]}"
 
 
-def receive_traces(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None) -> Set:
+def receive_traces(
+    charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None
+) -> List[ReceiverProtocol]:
     """Integrate with other charms via the receive-traces relation endpoint.
 
     Returns:
@@ -291,12 +293,16 @@ def receive_traces(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] 
     tracing_provider = TracingEndpointProvider(charm, relation_name="receive-traces")
     charm.__setattr__("tracing_provider", tracing_provider)
     # Enable traces ingestion with TracingEndpointProvider, i.e. configure the receivers
-    requested_tracing_protocols = set(tracing_provider.requested_protocols()).union(
-        {
-            receiver
-            for receiver in get_args(ReceiverProtocol)
-            if charm.config.get(f"always_enable_{receiver}")
-        }
+    # Sort for deterministic iteration order: this sequence is published to the relation
+    # databag and consumed to build the collector config file.
+    requested_tracing_protocols = sorted(
+        set(tracing_provider.requested_protocols()).union(
+            {
+                receiver
+                for receiver in get_args(ReceiverProtocol)
+                if charm.config.get(f"always_enable_{receiver}")
+            }
+        )
     )
     # Send tracing receivers over relation data to charms sending traces to otel collector
     # TODO: leader-only because of
