@@ -1,7 +1,7 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
 import logging
-from typing import Any, Dict, List, Literal, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -9,6 +9,7 @@ from config_builder import Component, ConfigBuilder, Port, build_port_map
 from constants import CUSTOM_COMPONENT_ID, FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
 from charmlibs.interfaces.otlp import OtlpEndpoint
+from charms.tempo_coordinator_k8s.v0.tracing import ReceiverProtocol
 from utils import total_memory_mib
 
 logger = logging.getLogger(__name__)
@@ -453,7 +454,7 @@ class ConfigManager:
 
     def add_traces_ingestion(
         self,
-        requested_tracing_protocols: Set[Literal["zipkin", "jaeger_grpc", "jaeger_thrift_http"]],
+        requested_tracing_protocols: List[ReceiverProtocol],
     ) -> None:
         """Configure trace ingestion for supported protocols.
 
@@ -465,7 +466,7 @@ class ConfigManager:
         - jaeger_thrift_http: For traces in Jaeger Thrift over HTTP format
 
         Args:
-            requested_tracing_protocols: Set of protocol names to enable.
+            requested_tracing_protocols: List of protocol names to enable.
                                       If empty, a warning will be logged.
 
         Note:
