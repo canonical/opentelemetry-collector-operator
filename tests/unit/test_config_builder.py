@@ -493,3 +493,223 @@ def test_sanitize_escape_prometheus_scrape_configs_idempotent():
 
     # THEN the result is the same both times
     assert once == twice
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Feature: Internal telemetry forwarding (loop-breaker + OTLP self-export)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_default_internal_logs_self_export_plaintext():
+    """Without TLS: self-export over HTTP to localhost."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    built = yaml.safe_load(config.build())
+    telemetry = built["service"]["telemetry"]
+    assert telemetry["resource"]["service.name"] == "otelcol-internal"
+    assert telemetry["resource"]["loki.format"] == "logfmt"
+    logs_cfg = telemetry["logs"]
+    assert logs_cfg["level"] == "INFO"
+    assert logs_cfg["disable_stacktrace"] is True
+    batch_proc = logs_cfg["processors"][0]["batch"]
+    assert batch_proc["exporter"]["otlp"]["endpoint"] == "http://localhost:4318"
+    assert batch_proc["exporter"]["otlp"]["protocol"] == "http/protobuf"
+    assert "tls" not in batch_proc["exporter"]["otlp"]
+
+
+def test_default_internal_logs_self_export_tls():
+    """With TLS: self-export over HTTPS to FQDN."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s", receiver_tls=True, internal_host="my-fqdn.example.com")
+    config.add_default_config()
+    built = yaml.safe_load(config.build())
+    batch_proc = built["service"]["telemetry"]["logs"]["processors"][0]["batch"]
+    assert batch_proc["exporter"]["otlp"]["endpoint"] == "https://my-fqdn.example.com:4318"
+
+
+def test_internal_logs_topology_labels_in_resource():
+    """Topology labels are promoted to telemetry resource."""
+    topology = {
+        "juju_charm": "my-charm",
+        "juju_model": "mymodel",
+        "juju_model_uuid": "abcd-1234",
+        "juju_application": "my-app",
+        "juju_unit": "my-app/0",
+    }
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s", topology_labels=topology)
+    config.add_default_config()
+    built = yaml.safe_load(config.build())
+    resource = built["service"]["telemetry"]["resource"]
+    assert resource["juju_charm"] == "my-charm"
+    assert resource["juju_model"] == "mymodel"
+    assert resource["juju_model_uuid"] == "abcd-1234"
+    assert resource["juju_application"] == "my-app"
+    assert resource["juju_unit"] == "my-app/0"
+    assert resource["service.instance.id"] == "my-app/0"
+    labels = resource["loki.resource.labels"]
+    for key in ["juju_application", "juju_charm", "juju_model", "juju_model_uuid", "juju_unit"]:
+        assert key in labels
+
+
+def test_internal_logs_without_topology_labels():
+    """Without topology: resource has only service.name and loki.format."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    built = yaml.safe_load(config.build())
+    resource = built["service"]["telemetry"]["resource"]
+    assert resource == {"service.name": "otelcol-internal", "loki.format": "logfmt"}
+
+
+def test_default_internal_logs_loop_breaker_filter_present():
+    """The loop-breaker filter processor exists and is wired into the logs pipeline."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    assert filter_name in built["processors"]
+    assert built["processors"][filter_name]["error_mode"] == "ignore"
+    assert "log_record" in built["processors"][filter_name]["logs"]
+    assert filter_name in built["service"]["pipelines"]["logs/unit/0"]["processors"]
+
+
+def test_loop_breaker_filter_conditions_populated_from_logs_exporters():
+    """Filter conditions are dynamically populated from logs-pipeline exporters."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    # Add a loki exporter to the logs pipeline
+    config.add_component(
+        Component.exporter,
+        "loki/send-loki-logs/0",
+        {"endpoint": "http://loki:3100"},
+        pipelines=["logs/unit/0"],
+    )
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    assert len(conditions) == 1
+    assert "loki/send-loki-logs/0" in conditions[0]
+    assert "otelcol.component.id" in conditions[0]
+    assert "otelcol.signal" in conditions[0]
+    assert '"logs"' in conditions[0]
+
+
+def test_loop_breaker_filter_excludes_nop_and_debug():
+    """Nop and debug exporters are excluded from filter conditions."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    config.add_component(
+        Component.exporter,
+        "loki/send-loki-logs/0",
+        {"endpoint": "http://loki:3100"},
+        pipelines=["logs/unit/0"],
+    )
+    config.add_component(
+        Component.exporter,
+        "nop",
+        {},
+        pipelines=["logs/unit/0"],
+    )
+    config.add_component(
+        Component.exporter,
+        "debug",
+        {"verbosity": "normal"},
+        pipelines=["logs/unit/0"],
+    )
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    # Only the loki exporter should be in conditions, not nop or debug
+    assert len(conditions) == 1
+    assert "loki/send-loki-logs/0" in conditions[0]
+    assert all("debug" not in c for c in conditions)
+    assert all("nop" not in c for c in conditions)
+
+
+def test_loop_breaker_filter_conditions_empty_without_exporters():
+    """With no real log exporters, conditions list is empty."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    # Only the nop exporter should be present, which is excluded
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    assert conditions == []
+
+
+def test_loop_breaker_filter_covers_multiple_logs_exporters():
+    """Multiple logs-pipeline exporters each get a condition."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    config.add_component(
+        Component.exporter,
+        "loki/send-loki-logs/0",
+        {"endpoint": "http://loki:3100"},
+        pipelines=["logs/unit/0"],
+    )
+    config.add_component(
+        Component.exporter,
+        "otlphttp/rel-1/otelcol/0",
+        {"endpoint": "http://otlp:4318"},
+        pipelines=["logs/unit/0"],
+    )
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    assert len(conditions) == 2
+    assert any("loki/send-loki-logs/0" in c for c in conditions)
+    assert any("otlphttp/rel-1/otelcol/0" in c for c in conditions)
+
+
+def test_loop_breaker_filter_covers_exporters_on_custom_logs_pipelines():
+    """User-supplied custom logs pipelines also get their exporters covered by the loop-breaker."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    config.add_component(
+        Component.exporter,
+        "loki/send-loki-logs/0",
+        {"endpoint": "http://loki:3100"},
+        pipelines=["logs/unit/0"],
+    )
+    config.add_component(
+        Component.exporter,
+        "otlphttp/user-custom",
+        {"endpoint": "http://custom:4318"},
+        pipelines=["logs/custom"],
+    )
+    config.add_component(
+        Component.exporter,
+        "kafka/user-bare",
+        {"endpoint": "http://kafka:9092"},
+        pipelines=["logs"],
+    )
+    config.add_component(
+        Component.exporter,
+        "prometheusremotewrite/user",
+        {"endpoint": "http://mimir:9009"},
+        pipelines=["metrics/custom"],
+    )
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    covered = {
+        eid
+        for eid in ("loki/send-loki-logs/0", "otlphttp/user-custom", "kafka/user-bare")
+        if any(eid in c for c in conditions)
+    }
+    assert covered == {"loki/send-loki-logs/0", "otlphttp/user-custom", "kafka/user-bare"}
+    assert not any("prometheusremotewrite" in c for c in conditions)
+
+
+def test_loop_breaker_filter_deduplicates_shared_exporter_across_logs_pipelines():
+    """An exporter shared by multiple logs pipelines yields exactly one drop condition."""
+    config = ConfigBuilder("unit/0", "host0", "1m", "10s")
+    config.add_default_config()
+    config.add_component(
+        Component.exporter,
+        "loki/send-loki-logs/0",
+        {"endpoint": "http://loki:3100"},
+        pipelines=["logs/unit/0", "logs/custom"],
+    )
+    built = yaml.safe_load(config.build())
+    filter_name = "filter/internal-telemetry-loop-breaker/unit/0"
+    conditions = built["processors"][filter_name]["logs"]["log_record"]
+    assert sum("loki/send-loki-logs/0" in c for c in conditions) == 1

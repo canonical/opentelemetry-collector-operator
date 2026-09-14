@@ -11,16 +11,15 @@ SERVER_CERT_PRIVATE_KEY_PATH: Final[str] = "/var/snap/opentelemetry-collector/co
 RECV_CA_CERT_FOLDER_PATH: Final[str] = "/usr/local/share/ca-certificates/juju_receive-ca-cert"
 SERVER_CA_CERT_PATH: Final[str] = "/usr/local/share/ca-certificates/juju_receive-ca-cert/cos-ca.crt"
 CONFIG_FOLDER: Final[str] = "/etc/otelcol/config.d"
-LOGROTATE_PATH: Final[str] = "/etc/logrotate.d/otelcol"
-LOGROTATE_SRC_PATH: Final[str] = "src/logrotate.d/otelcol"
 METRICS_RULES_SRC_PATH: Final[str] = "src/prometheus_alert_rules"
 METRICS_RULES_DEST_PATH: Final[str] = "prometheus_alert_rules"
 LOKI_RULES_SRC_PATH: Final[str] = "src/loki_alert_rules"
 LOKI_RULES_DEST_PATH: Final[str] = "loki_alert_rules"
 DASHBOARDS_SRC_PATH: Final[str] = "src/grafana_dashboards"
 DASHBOARDS_DEST_PATH: Final[str] = "grafana_dashboards"
-# NOTE: this file path is hardcoded in src/logrotate.d/otelcol as well
-INTERNAL_TELEMETRY_LOG_FILE: Final[str] = "/var/snap/opentelemetry-collector/common/otelcol.log"
+INTERNAL_LOGS_FILTER_ID: Final[str] = "internal-telemetry-loop-breaker"
+INTERNAL_TELEMETRY_SERVICE_NAME: Final[str] = "otelcol-internal"
+NON_LOOPING_EXPORTER_PREFIXES: Final[tuple] = ("nop", "debug")
 # SNAP_COMMON dir: https://snapcraft.io/docs/data-locations#p-94053-system-data
 FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
 

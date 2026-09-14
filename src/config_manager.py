@@ -1,7 +1,7 @@
 """Helper module to build the configuration for OpenTelemetry Collector."""
 
 import logging
-from typing import Any, Dict, List, Literal, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -9,6 +9,7 @@ from config_builder import Component, ConfigBuilder, Port, build_port_map
 from constants import CUSTOM_COMPONENT_ID, FILE_STORAGE_DIRECTORY
 from integrations import ProfilingEndpoint
 from charmlibs.interfaces.otlp import OtlpEndpoint
+from charms.tempo_coordinator_k8s.v0.tracing import ReceiverProtocol
 from utils import total_memory_mib
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,8 @@ class ConfigManager:
         queue_size: int = 1000,
         max_elapsed_time_min: int = 5,
         ports: Optional[Dict[str, int]] = None,
+        internal_host: str = "localhost",
+        topology_labels: Optional[Dict[str, str]] = None,
     ):
         """Generate a default OpenTelemetry collector ConfigManager.
 
@@ -132,6 +135,8 @@ class ConfigManager:
             queue_size: size of the sending queue for exporters
             max_elapsed_time_min: maximum elapsed time for retrying failed requests in minutes
             ports: port map produced by build_port_map(); if None the enum defaults are used
+            internal_host: FQDN of the unit, used as OTLP self-export endpoint for TLS SAN matching
+            topology_labels: Juju topology labels for Loki resource attribution
         """
         self._unit_name = unit_name
         self._hostname = hostname
@@ -147,6 +152,8 @@ class ConfigManager:
             receiver_tls=receiver_tls,
             exporter_skip_verify=insecure_skip_verify,
             ports=self._ports,
+            internal_host=internal_host,
+            topology_labels=topology_labels,
         )
         self.config.add_default_config()
         self.config.add_extension("file_storage", {"directory": FILE_STORAGE_DIRECTORY})
@@ -447,7 +454,7 @@ class ConfigManager:
 
     def add_traces_ingestion(
         self,
-        requested_tracing_protocols: Set[Literal["zipkin", "jaeger_grpc", "jaeger_thrift_http"]],
+        requested_tracing_protocols: List[ReceiverProtocol],
     ) -> None:
         """Configure trace ingestion for supported protocols.
 
@@ -459,7 +466,7 @@ class ConfigManager:
         - jaeger_thrift_http: For traces in Jaeger Thrift over HTTP format
 
         Args:
-            requested_tracing_protocols: Set of protocol names to enable.
+            requested_tracing_protocols: List of protocol names to enable.
                                       If empty, a warning will be logged.
 
         Note:

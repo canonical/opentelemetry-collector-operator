@@ -18,6 +18,7 @@ dependencies = [
   "sh",
   "tenacity",
   "charmlibs-interfaces-otlp",
+  "charmlibs-interfaces-certificate_transfer",
 ]
 
 [project.optional-dependencies]

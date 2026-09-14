@@ -16,7 +16,8 @@ from typing import Any, Dict, List, Mapping, Optional, cast
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
-from charms.operator_libs_linux.v1.systemd import service_start
+from charms.loki_k8s.v1.loki_push_api import LokiPushApiProvider
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
@@ -32,8 +33,6 @@ from constants import (
     CONFIG_FOLDER,
     DASHBOARDS_DEST_PATH,
     EXTERNAL_CONFIG_SECRETS_DIR,
-    LOGROTATE_PATH,
-    LOGROTATE_SRC_PATH,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
     NODE_EXPORTER_DISABLED_COLLECTORS,
@@ -114,15 +113,6 @@ def refresh_certs():
     subprocess.run(["update-ca-certificates", "--fresh"], check=True)
 
 
-def ensure_logrotate_timer():
-    """Run systemctl start logrotate.timer --now to enable and start the service.
-
-    Raises:
-        SystemdError: if logrotate.timer cannot be enabled or started.
-    """
-    service_start("logrotate.timer", "--now")
-
-
 def event() -> str:
     """Return Juju hook|action name.
 
@@ -169,6 +159,9 @@ def _get_missing_mandatory_relations(charm: CharmBase) -> Optional[str]:
 class OpenTelemetryCollectorCharm(ops.CharmBase):
     """Charm the service."""
 
+    loki_provider: LokiPushApiProvider
+    metrics_consumer: MetricsEndpointConsumer
+
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
         self.external_configs: List[Dict[str, Any]] = []
@@ -188,8 +181,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         self._reconcile()
 
     def _reconcile(self):
+        # Re-assert this unit's snap registrations. These lockfiles are reference counts, read
+        # on removal to decide whether the last unit standing may uninstall a shared snap, so
+        # they belong to the desired state. Registering only on install/upgrade-charm left a
+        # lockfile that was deleted out of band missing until the next `juju refresh`.
+        # Refs https://github.com/canonical/opentelemetry-collector-operator/issues/208
+        self._register_snaps()
+
         insecure_skip_verify = cast(bool, self.config.get("tls_insecure_skip_verify"))
-        topology = JujuTopology.from_charm(self)
         # NOTE: Only the leader aggregates alerts, to prevent duplication. COS Agent alerts
         # come from peer data, so the leader can access all of them, regardless where multiple
         # principals are located.
@@ -246,6 +245,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             return
 
         # Create the config manager
+        topology = JujuTopology.from_charm(self)
+        topology_labels = {
+            "juju_charm": topology.charm_name,
+            "juju_model": topology.model,
+            "juju_model_uuid": topology.model_uuid,
+            "juju_application": topology.application,
+            "juju_unit": topology.unit,
+        }
         config_manager = ConfigManager(
             unit_name=self.unit.name,
             hostname=socket.gethostname(),
@@ -256,10 +263,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             queue_size=cast(int, self.config.get("queue_size")),
             max_elapsed_time_min=cast(int, self.config.get("max_elapsed_time_min")),
             ports=port_map,
+            internal_host=socket.getfqdn(),
+            topology_labels=topology_labels,
         )
-
-        # Self-mon logging
-        self._configure_logrotate()
 
         # Tracing setup
         requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready(), ports=port_map)
@@ -454,11 +460,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             identifier=topology.identifier,
             labels={
                 "instance": f"{topology.identifier}_{topology.unit}",
-                "juju_charm": topology.charm_name,
-                "juju_model": topology.model,
-                "juju_model_uuid": topology.model_uuid,
-                "juju_application": topology.application,
-                "juju_unit": topology.unit,
+                **topology_labels,
             },
         )
         # For now, the only incoming and outgoing metrics relations are remote-write/scrape
@@ -592,6 +594,18 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
+        # Invalid alert rules
+        if self._has_invalid_prometheus_alerts():
+            self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
+
+        # Invalid loki alert rules
+        if self._has_invalid_loki_alerts():
+            self.unit.status = BlockedStatus("Invalid Loki alerts. See debug-log")
+
+        # Invalid scrape jobs
+        if self._has_invalid_scrape_job():
+            self.unit.status = BlockedStatus("Invalid scrape jobs. See debug-log")
+
         # Workload version
         self.unit.set_workload_version(self._otelcol_version or "")
 
@@ -611,13 +625,24 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             return result
         return result.group(1)
 
-    def _install_snaps(self) -> None:
+    def _register_snaps(self) -> None:
+        """Reference-count this unit against every managed snap.
+
+        Registering is idempotent and cheap (one empty file per snap), which is what makes it
+        safe to call on every reconcile. Installing is neither, so it stays in `_install_snaps`.
+        """
         manager = SingletonSnapManager(self.unit.name)
+        for snap_name in SnapMap.snaps():
+            manager.register(snap_name, SnapMap.get_revision(snap_name))
+
+    def _install_snaps(self) -> None:
+        # Register before installing, so a snap that only partially installs, or whose service
+        # fails to start, is still reference counted for this unit.
+        self._register_snaps()
 
         for snap_name in SnapMap.snaps():
             snap_revision = SnapMap.get_revision(snap_name)
-            manager.register(snap_name, snap_revision)
-            revisions = manager.get_revisions(snap_name)
+            revisions = SingletonSnapManager.get_revisions(snap_name)
             if snap_revision >= (max(revisions) if revisions else 0):
                 # Install the snap
                 self.unit.status = MaintenanceStatus(f"Installing {snap_name} snap")
@@ -702,29 +727,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         ne_snap = self.snap("node-exporter")
         self._set_snap_configs_with_retry(ne_snap, configs)
         self._node_exporter_info_metric_file_path.write_text(self._info_metric)
-
-    def _configure_logrotate(self):
-        """Configure logrotate for otelcol's internal logs.
-
-        When we set `output_paths` in the internal logging config:
-        https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-logs
-
-        a custom logrotate configuration is needed to rotate the logs written to disk.
-        FIXME: https://github.com/canonical/opentelemetry-collector-operator/issues/139
-
-        Raises:
-            SystemdError: if logrotate.timer cannot be enabled or started.
-        """
-        ensure_logrotate_timer()
-
-        config_path = LocalPath(LOGROTATE_PATH)
-        if config_path.exists():
-            return
-
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        charm_root = self.charm_dir.absolute()
-        with open(charm_root.joinpath(*LOGROTATE_SRC_PATH.split("/")), "r") as f:
-            config_path.write_text(f.read())
 
     # We use tenacity because .set() performs a HTTP request to the snapd server which is not always ready
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
@@ -889,6 +891,18 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @property
     def _has_server_cert_relation(self) -> bool:
         return any(self.model.relations.get("receive-server-cert", []))
+
+    def _has_invalid_loki_alerts(self) -> bool:
+        """Check if any receive-loki-logs relation reported invalid alert rules."""
+        return self.loki_provider.has_invalid_alert_rules()
+
+    def _has_invalid_prometheus_alerts(self) -> bool:
+        """Check if any metrics-endpoint relation reported invalid alert rules."""
+        return self.metrics_consumer.has_invalid_alert_rules()
+
+    def _has_invalid_scrape_job(self) -> bool:
+        """Check if any metrics-endpoint relation reported invalid scrape jobs."""
+        return self.metrics_consumer.has_invalid_scrape_jobs()
 
     @property
     def _node_exporter_info_metric_file_path(self) -> LocalPath:

@@ -9,12 +9,12 @@ import socket
 from collections import namedtuple
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, cast, get_args
+from typing import Any, Dict, List, Optional, cast, get_args
 
 import yaml
 from charmlibs.interfaces.otlp import OtlpEndpoint, OtlpRequirer, RuleStore
 from charmlibs.pathops import PathProtocol
-from charms.certificate_transfer_interface.v1.certificate_transfer import (
+from charmlibs.interfaces.certificate_transfer import (
     CertificateTransferRequires,
 )
 from charms.grafana_cloud_integrator.v0.cloud_config_requirer import (
@@ -154,7 +154,7 @@ def send_loki_logs(charm: CharmBase) -> List[Dict]:
     charm.__setattr__("loki_consumer", loki_consumer)
     # TODO: Luca: probably don't need this anymore
     loki_consumer.reload_alerts()
-    return loki_consumer.loki_endpoints
+    return sorted(loki_consumer.loki_endpoints, key=lambda endpoint: endpoint["url"])
 
 
 def key_value_pair_string_to_dict(key_value_pair: str) -> dict:
@@ -247,7 +247,7 @@ def send_remote_write(charm: CharmBase) -> List[Dict[str, str]]:
     charm.__setattr__("remote_write", remote_write)
     # TODO: Luca: probably don't need this anymore
     remote_write.reload_alerts()
-    return remote_write.endpoints
+    return sorted(remote_write.endpoints, key=lambda endpoint: endpoint["url"])
 
 
 def _get_tracing_receiver_url(
@@ -280,7 +280,9 @@ def _get_tracing_receiver_url(
     return f"{scheme}://{socket.getfqdn()}:{ports[Port.otlp_http.name]}"
 
 
-def receive_traces(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None) -> Set:
+def receive_traces(
+    charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] = None
+) -> List[ReceiverProtocol]:
     """Integrate with other charms via the receive-traces relation endpoint.
 
     Returns:
@@ -291,12 +293,16 @@ def receive_traces(charm: CharmBase, tls: bool, ports: Optional[Dict[str, int]] 
     tracing_provider = TracingEndpointProvider(charm, relation_name="receive-traces")
     charm.__setattr__("tracing_provider", tracing_provider)
     # Enable traces ingestion with TracingEndpointProvider, i.e. configure the receivers
-    requested_tracing_protocols = set(tracing_provider.requested_protocols()).union(
-        {
-            receiver
-            for receiver in get_args(ReceiverProtocol)
-            if charm.config.get(f"always_enable_{receiver}")
-        }
+    # Sort for deterministic iteration order: this sequence is published to the relation
+    # databag and consumed to build the collector config file.
+    requested_tracing_protocols = sorted(
+        set(tracing_provider.requested_protocols()).union(
+            {
+                receiver
+                for receiver in get_args(ReceiverProtocol)
+                if charm.config.get(f"always_enable_{receiver}")
+            }
+        )
     )
     # Send tracing receivers over relation data to charms sending traces to otel collector
     # TODO: leader-only because of
@@ -409,7 +415,7 @@ def _get_dashboards(relations: List[Relation]) -> List[Dict[str, Any]]:
     return list(aggregate.values())
 
 
-def _add_dashboards(dashboards: List[Dict[str, str]], dest_path: Path):
+def _add_dashboards(dashboards: List[Dict[str, Any]], dest_path: Path):
     """Save the dashboards to files in the specified destination folder.
 
     For K8s charms, dashboards are saved in the charm container.
@@ -426,13 +432,22 @@ def _add_dashboards(dashboards: List[Dict[str, str]], dest_path: Path):
     """
     dest_path.mkdir(parents=True, exist_ok=True)
     for dash in dashboards:
-        # Build dashboard custom filename
+        # Build dashboard custom filename.
+        # The (title, charm, rel_id) triple is not guaranteed to be unique: multiple
+        # untitled dashboards, or dashboards sharing a title, from the same principal
+        # would otherwise collide on the same filename and silently overwrite each other
+        # (see https://github.com/canonical/cos-proxy-operator/pull/241). To make the
+        # filename collision-proof regardless of the title, we append a stable content
+        # identity: the dashboard `uid` if present, else a short hash of the content.
+        content = dash["content"]
         charm_name = dash.get("charm", "charm-name")
         rel_id = dash.get("relation_id", "rel_id")
         title = dash.get("title", "").replace(" ", "_").replace("/", "_").lower()
-        filename = f"juju_{title}-{charm_name}-{rel_id}.json"
+        uid = content.get("uid") or content.get("dashboard", {}).get("uid")
+        identity = uid or sha256(json.dumps(content, sort_keys=True))[:8]
+        filename = f"juju_{title}-{charm_name}-{rel_id}-{identity}.json"
         with open(Path(dest_path, filename), mode="w", encoding="utf-8") as f:
-            f.write(json.dumps(dash["content"]))
+            f.write(json.dumps(content))
             logger.debug("updated dashboard file %s", f.name)
 
 
