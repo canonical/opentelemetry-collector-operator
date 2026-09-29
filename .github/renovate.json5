@@ -1,0 +1,7 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>canonical/observability//.github/renovate/charms.json5",
+  ],
+  "baseBranches": ["main", "track/0.130"] 
+}
