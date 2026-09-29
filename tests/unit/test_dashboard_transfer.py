@@ -53,6 +53,6 @@ def test_dashboard_propagation(ctx):
             # THEN each Grafana instance receives otelcol's bundled dashboard and aggregated dashboards
             if "-provider" in rel.endpoint:
                 dashboard_str = rel.local_app_data["dashboards"]
-                assert "file:juju_file:dashboard-0-some-charm-1" in dashboard_str
-                assert "file:juju_file:dashboard-1-some-charm-2" in dashboard_str
+                assert f"file:juju_file:dashboard-0-some-charm-{consumer0.id}" in dashboard_str
+                assert f"file:juju_file:dashboard-1-some-charm-{consumer1.id}" in dashboard_str
                 assert "file:overview-dashboard" in dashboard_str
