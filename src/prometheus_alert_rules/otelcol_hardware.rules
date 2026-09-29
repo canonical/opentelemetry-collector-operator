@@ -2,10 +2,10 @@ groups:
   - name: Hardware
     rules:
       - alert: high-cpu-usage
-        expr: max(rate(otelcol_process_cpu_seconds_total{}[5m])*100) > 90
+        expr: rate(otelcol_process_cpu_seconds_total{}[5m])*100 > 90
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: High max CPU usage (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
+          summary: High CPU usage (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
           description: Collector needs to scale up (unit {{ $labels.juju_unit }} in model {{ $labels.juju_model }})
