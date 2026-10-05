@@ -42,10 +42,10 @@ class SnapMap:
     snap_maps = {
         "opentelemetry-collector": {
             # (confinement, arch): revision
-            ("strict", "amd64"): 80,  # 0.130
-            ("strict", "arm64"): 81,  # 0.130
-            ("strict", "s390x"): 83,  # 0.130
-            ("strict", "ppc64el"): 82,  # 0.130
+            ("strict", "amd64"): 91,  # 0.130
+            ("strict", "arm64"): 90,  # 0.130
+            ("strict", "s390x"): 94,  # 0.130
+            ("strict", "ppc64el"): 92,  # 0.130
         },
         "node-exporter": {
             # (confinement, arch): revision
