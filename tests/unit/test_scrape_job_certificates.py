@@ -8,10 +8,15 @@ from pathlib import Path
 import pytest
 from ops.testing import Relation, State
 
+from charm import validate_cert
 from config_manager import ConfigManager
 from tests.unit.conftest import (
     sample_ca_cert,
 )
+
+
+def test_validate_cert_accepts_ca_bundle(sample_ca_cert):
+    assert validate_cert(f"{sample_ca_cert}\n{sample_ca_cert}")
 
 
 @pytest.mark.parametrize(
