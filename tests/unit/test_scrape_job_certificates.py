@@ -19,6 +19,14 @@ def test_validate_cert_accepts_ca_bundle(sample_ca_cert):
     assert validate_cert(f"{sample_ca_cert}\n{sample_ca_cert}")
 
 
+@pytest.mark.parametrize("malformed_first", [True, False])
+def test_validate_cert_rejects_malformed_bundle(sample_ca_cert, sample_invalid_cert, malformed_first):
+    certificates = [sample_ca_cert, sample_invalid_cert]
+    if malformed_first:
+        certificates.reverse()
+    assert not validate_cert("\n".join(certificates))
+
+
 @pytest.mark.parametrize(
     "scrape_jobs,cert_paths,expected_update_count",
     [
