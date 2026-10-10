@@ -20,6 +20,7 @@ from charms.loki_k8s.v1.loki_push_api import LokiPushApiProvider
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
+from cryptography import x509
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -58,16 +59,19 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 
 def validate_cert(cert: str) -> bool:
-    """Validate certificate content using PEM format validation.
+    """Validate one or more PEM-encoded X.509 certificates.
 
     Args:
         cert: Certificate content to validate
 
     Returns:
-        True if the certificate has valid PEM format, False otherwise
+        True if all certificates can be parsed, False otherwise
     """
-    pem_pattern = r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----"
-    return bool(re.search(pem_pattern, cert, re.DOTALL))
+    try:
+        certificates = x509.load_pem_x509_certificates(cert.encode())
+    except ValueError:
+        return False
+    return bool(certificates)
 
 
 # TODO: move this method outside of charm.py together with the cos-agent integrations
