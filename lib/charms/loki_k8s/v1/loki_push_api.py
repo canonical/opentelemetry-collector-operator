@@ -563,7 +563,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 34
+LIBPATCH = 35
 
 PYDEPS = ["cosl"]
 
@@ -1076,9 +1076,6 @@ class LokiPushApiProvider(Object):
         self.framework.observe(events.relation_changed, self._on_logging_relation_changed)
         self.framework.observe(events.relation_departed, self._on_logging_relation_departed)
         self.framework.observe(events.relation_broken, self._on_logging_relation_broken)
-        # Consumers only compress their alert rules if we advertise that we can read them,
-        # so make sure the advertisement is (re)published after a leadership change, when no
-        # relation event may fire.
         self.framework.observe(
             self._charm.on.leader_elected,
             self._publish_encodings_to_all_relation_databags,
@@ -1337,8 +1334,6 @@ class LokiPushApiProvider(Object):
                     relation.data[relation.app].get(ALERT_RULES_KEY, "{}")
                 )
             except Exception as e:
-                # Never let unreadable remote data break the provider: a consumer could
-                # be writing rules in a format this version of the library predates.
                 unreadable[relation.id] = str(e)
                 continue
 
@@ -2730,12 +2725,14 @@ class LogForwarder(ConsumerBase):
 
     def _update_logging(self, event: RelationEvent):
         """Update the log forwarding to match the active Loki endpoints."""
-        if not (loki_endpoints := self._retrieve_endpoints_from_relation()):
+        loki_endpoints = self._retrieve_endpoints_from_relation()
+        if not loki_endpoints:
             logger.warning("No Loki endpoints available")
-            return
 
         for container in self._charm.unit.containers.values():
             if container.can_connect():
+                # Reconcile even when no endpoints remain: this disables the targets of
+                # endpoints that went away on relation-departed/relation-broken.
                 self._update_endpoints(container, loki_endpoints)
             # else: `_update_endpoints` will be called on pebble-ready anyway.
 
