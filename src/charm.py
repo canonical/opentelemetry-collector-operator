@@ -20,6 +20,7 @@ from charms.loki_k8s.v1.loki_push_api import LokiPushApiProvider
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
+from cryptography import x509
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -58,16 +59,41 @@ VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 
 def validate_cert(cert: str) -> bool:
-    """Validate certificate content using PEM format validation.
+    """Validate certificate content using real X.509 parsing.
+
+    Accepts a single PEM certificate or several concatenated certificates
+    (a CA bundle).
 
     Args:
         cert: Certificate content to validate
 
     Returns:
-        True if the certificate has valid PEM format, False otherwise
+        True if every PEM block parses as a valid X.509 certificate,
+        False otherwise
     """
-    pem_pattern = r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----"
-    return bool(re.search(pem_pattern, cert, re.DOTALL))
+    pem_blocks = re.findall(
+        r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----",
+        cert,
+        cert,
+        cert,
+
+        cert,
+        cert,
+        re.DOTALL,
+    )
+    )
+    )
+    )
+    )
+    if not pem_blocks:
+        return False
+    for block in pem_blocks:
+        pem = f"-----BEGIN CERTIFICATE-----{block}-----END CERTIFICATE-----"
+        try:
+            x509.load_pem_x509_certificate(pem.encode())
+        except ValueError:
+            return False
+    return True
 
 
 # TODO: move this method outside of charm.py together with the cos-agent integrations
