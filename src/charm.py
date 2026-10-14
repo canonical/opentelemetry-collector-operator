@@ -74,16 +74,7 @@ def validate_cert(cert: str) -> bool:
     pem_blocks = re.findall(
         r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----",
         cert,
-        cert,
-        cert,
-
-        cert,
-        cert,
         re.DOTALL,
-    )
-    )
-    )
-    )
     )
     if not pem_blocks:
         return False
