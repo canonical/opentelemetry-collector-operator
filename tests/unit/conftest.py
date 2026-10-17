@@ -233,8 +233,14 @@ def sample_ca_cert():
     """Sample CA certificate content for testing."""
     return dedent("""\
         -----BEGIN CERTIFICATE-----
-        MIIEEzCCAnugAwIBAgIVAO/E0PkhzNYw2zOnc1gUphCXMIbvMA0GCSqGSIb3DQEB
-        6vqscXomNMAY8BLg5W+QVWDIsEwWcgul7zi2EN0CyiLWkuWvTlY5
+        MIIBezCCASGgAwIBAgIUG9EYMPV+4ZkixGgcJ82JGNmwiQIwCgYIKoZIzj0EAwIw
+        EjEQMA4GA1UEAwwHVGVzdCBDQTAgFw0yNjEwMDkxNTI2MzVaGA8yMTI2MDkxNTE1
+        MjYzNVowEjEQMA4GA1UEAwwHVGVzdCBDQTBZMBMGByqGSM49AgEGCCqGSM49AwEH
+        A0IABC1BVpqqAUIFGjACdkakxYYoOd2gepVfNfORoEQ5QaPcbe44KfPpuB/jPi5r
+        rDpGEB5GJNCIxP95e/ndF61KctKjUzBRMB0GA1UdDgQWBBRr1uuyI3geqIz0GgV+
+        EDF7vBVdpTAfBgNVHSMEGDAWgBRr1uuyI3geqIz0GgV+EDF7vBVdpTAPBgNVHRMB
+        Af8EBTADAQH/MAoGCCqGSM49BAMCA0gAMEUCIGVni3bOfeZxxy23m2BQ9nDr5Lxl
+        9+yhW9xOmWiSrFe4AiEAvZKXoFfLER65n145KCfpzlfG67bYPcSR26n43WfXtgA=
         -----END CERTIFICATE-----
         """).strip()
 
@@ -249,7 +255,7 @@ def sample_incomplete_cert():
 @pytest.fixture
 def sample_invalid_cert():
     """Sample invalid CA certificate content for testing."""
-    return "INVALID_CERT_CONTENT"
+    return "-----BEGIN CERTIFICATE-----\nINVALID_CERT_CONTENT\n-----END CERTIFICATE-----"
 
 
 @pytest.fixture
