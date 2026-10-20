@@ -601,6 +601,14 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 f"{', '.join(duplicate_apps)}: both are related, which duplicates alert rules"
             )
 
+        # send-otlp overlapping with another telemetry relation to the same remote app
+        if duplicate_apps := self._apps_related_via_both_send_otlp_and_other_telemetry:
+            self.unit.status = BlockedStatus(
+                "Remove the send-otlp relation or the other telemetry relation(s) to "
+                f"{', '.join(duplicate_apps)}: send-otlp duplicates send-remote-write, "
+                "send-loki-logs, send-traces, and send-charm-traces"
+            )
+
         # Invalid alert rules
         if self._has_invalid_prometheus_alerts():
             self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
@@ -955,6 +963,28 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             for unit in rel.units
         }
         return sorted(juju_info_apps & cos_agent_apps)
+
+    @property
+    def _apps_related_via_both_send_otlp_and_other_telemetry(self) -> list[str]:
+        """Return remote app names related via send-otlp and another telemetry relation.
+
+        send-otlp aggregates all supported telemetry types (logs, metrics, and traces, but not
+        yet profiles), so it must be mutually exclusive, per remote application, with
+        send-remote-write, send-loki-logs, send-traces, and send-charm-traces. Otherwise the
+        same telemetry would be forwarded to that application twice.
+        """
+        otlp_apps = {rel.app.name for rel in self.model.relations.get("send-otlp", [])}
+        other_telemetry_apps = {
+            rel.app.name
+            for rel_name in (
+                "send-remote-write",
+                "send-loki-logs",
+                "send-traces",
+                "send-charm-traces",
+            )
+            for rel in self.model.relations.get(rel_name, [])
+        }
+        return sorted(otlp_apps & other_telemetry_apps)
 
     @property
     def _info_metric(self) -> str:
