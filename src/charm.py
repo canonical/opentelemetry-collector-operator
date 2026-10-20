@@ -594,6 +594,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
+        # Duplicate subordinate relations: would duplicate e.g. "HostDown" alert rules
+        if duplicate_apps := self._apps_related_via_both_juju_info_and_cos_agent:
+            self.unit.status = BlockedStatus(
+                "Remove the juju-info or cos-agent relation to "
+                f"{', '.join(duplicate_apps)}: both are related, which duplicates alert rules"
+            )
+
         # Invalid alert rules
         if self._has_invalid_prometheus_alerts():
             self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
@@ -927,6 +934,27 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 for unit in rel.units
             }
         )
+
+    @property
+    def _apps_related_via_both_juju_info_and_cos_agent(self) -> list[str]:
+        """Return principal app names related to this otelcol via juju-info and cos-agent.
+
+        Both relations are subordinate (scope: container), so the same otelcol unit can end
+        up related to the same principal app over both of them at once. That would cause
+        duplicated alert rules (e.g. "HostDown") to be forwarded, since node_exporter-derived
+        alerts are generated once per relation.
+        """
+        juju_info_apps = {
+            unit.app.name
+            for rel in self.model.relations.get("juju-info", [])
+            for unit in rel.units
+        }
+        cos_agent_apps = {
+            unit.app.name
+            for rel in self.model.relations.get("cos-agent", [])
+            for unit in rel.units
+        }
+        return sorted(juju_info_apps & cos_agent_apps)
 
     @property
     def _info_metric(self) -> str:
