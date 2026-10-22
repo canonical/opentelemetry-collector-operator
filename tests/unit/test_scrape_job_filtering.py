@@ -68,9 +68,7 @@ def _metrics_endpoint_relation(app_name: str, job_name: str, valid: bool) -> Rel
     )
 
 
-VALID_SCRAPE_JOB_RELATION = _metrics_endpoint_relation(
-    "scrape-job-valid", "valid-job", valid=True
-)
+VALID_SCRAPE_JOB_RELATION = _metrics_endpoint_relation("scrape-job-valid", "valid-job", valid=True)
 INVALID_SCRAPE_JOB_RELATION = _metrics_endpoint_relation(
     "scrape-job-invalid", "invalid-job", valid=False
 )
@@ -117,7 +115,7 @@ def test_invalid_scrape_job_relation_blocks(ctx, fake_cos_tool):
 
     # THEN the charm is blocked with a helpful message
     assert state_out.unit_status.name == "blocked"
-    assert state_out.unit_status.message == "Invalid scrape jobs. See debug-log"
+    assert state_out.unit_status.message == "Invalid scrape jobs; see debug-log"
 
 
 def test_invalid_scrape_job_relation_broken_recovers_to_active(ctx, fake_cos_tool):
@@ -157,9 +155,7 @@ def test_invalid_scrape_job_relation_becoming_valid_recovers_to_active(ctx, fake
     )
     recovered_state = ctx.run(
         ctx.on.relation_changed(now_valid_relation),
-        dataclasses.replace(
-            blocked_state, relations=[now_valid_relation, SEND_REMOTE_WRITE]
-        ),
+        dataclasses.replace(blocked_state, relations=[now_valid_relation, SEND_REMOTE_WRITE]),
     )
 
     # THEN the charm is active again

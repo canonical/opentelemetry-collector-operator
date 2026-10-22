@@ -10,15 +10,14 @@ import shutil
 import socket
 import subprocess
 from pathlib import Path
-
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import ops
 from charmlibs.pathops import LocalPath
 from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiProvider
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
@@ -27,7 +26,6 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 import integrations
 from config_builder import Component, Port, build_port_map
 from config_manager import ConfigManager
-from utils import hash_ca_cert_dir
 from constants import (
     CERT_DIR,
     CONFIG_FOLDER,
@@ -51,6 +49,7 @@ from snap_management import (
     SnapSpecError,
     install_snap,
 )
+from utils import hash_ca_cert_dir
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -268,7 +267,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
 
         # Tracing setup
-        requested_tracing_protocols = integrations.receive_traces(self, tls=is_tls_ready(), ports=port_map)
+        requested_tracing_protocols = integrations.receive_traces(
+            self, tls=is_tls_ready(), ports=port_map
+        )
         config_manager.add_traces_ingestion(requested_tracing_protocols)
         # Add default processors to traces
         config_manager.add_traces_processing(
@@ -316,9 +317,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                             "scrape_interval": "60s",
                             "static_configs": [
                                 {
-                                    "targets": [
-                                        f"0.0.0.0:{port_map[Port.node_exporter.name]}"
-                                    ],
+                                    "targets": [f"0.0.0.0:{port_map[Port.node_exporter.name]}"],
                                     "labels": {
                                         "instance": socket.getfqdn(),
                                         "juju_charm": topology.charm_name,
@@ -424,9 +423,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 dest_path=self.charm_dir.absolute().joinpath(LOKI_RULES_DEST_PATH),
             )
 
-
         # External-config setup
-        self.external_configs, self.external_secret_files = integrations.receive_external_configs(self)
+        self.external_configs, self.external_secret_files = integrations.receive_external_configs(
+            self
+        )
         self._write_secrets_to_disk(self.external_secret_files)
         self._configure_external_configs(config_manager)
 
@@ -583,28 +583,51 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         self._ensure_directory(NODE_EXPORTER_TEXTFILE_DIRECTORY)
         self._configure_node_exporter(port_map[Port.node_exporter.name])
-        self.unit.status = ActiveStatus()
 
         if not valid_mem_limit:
             self.unit.status = BlockedStatus(
-                "Invalid memory_limit_percentage config value: defaulting to 100, see debug-log"
+                "Invalid memory_limit_percentage config value: defaulting to 100; see debug-log"
             )
 
         # Mandatory relation pairs
-        if missing_relations := _get_missing_mandatory_relations(self):
+        elif missing_relations := _get_missing_mandatory_relations(self):
             self.unit.status = BlockedStatus(missing_relations)
 
+        # Duplicate subordinate relations: would duplicate e.g. "HostDown" alert rules
+        elif mutually_exclusive := self._apps_related_via_both_juju_info_and_cos_agent:
+            logger.warning(
+                "Remove the juju-info or cos-agent relation to "
+                f"{', '.join(mutually_exclusive)}: both are related, which duplicates alert rules"
+            )
+            self.unit.status = BlockedStatus(
+                "Mutually exclusive integrations found; see debug-log"
+            )
+
+        # send-otlp overlapping with another telemetry relation to the same remote app
+        elif mutually_exclusive := self._apps_related_via_both_send_otlp_and_other_telemetry:
+            logger.warning(
+                "Remove the send-otlp relation or the other telemetry relation(s) to "
+                f"{', '.join(mutually_exclusive)}: send-otlp duplicates send-remote-write, "
+                "send-loki-logs, send-traces, and send-charm-traces"
+            )
+            self.unit.status = BlockedStatus(
+                "Mutually exclusive integrations found; see debug-log"
+            )
+
         # Invalid alert rules
-        if self._has_invalid_prometheus_alerts():
-            self.unit.status = BlockedStatus("Invalid Prometheus alerts. See debug-log")
+        elif self._has_invalid_prometheus_alerts():
+            self.unit.status = BlockedStatus("Invalid Prometheus alerts; see debug-log")
 
         # Invalid loki alert rules
-        if self._has_invalid_loki_alerts():
-            self.unit.status = BlockedStatus("Invalid Loki alerts. See debug-log")
+        elif self._has_invalid_loki_alerts():
+            self.unit.status = BlockedStatus("Invalid Loki alerts; see debug-log")
 
         # Invalid scrape jobs
-        if self._has_invalid_scrape_job():
-            self.unit.status = BlockedStatus("Invalid scrape jobs. See debug-log")
+        elif self._has_invalid_scrape_job():
+            self.unit.status = BlockedStatus("Invalid scrape jobs; see debug-log")
+
+        else:
+            self.unit.status = ActiveStatus()
 
         # Workload version
         self.unit.set_workload_version(self._otelcol_version or "")
@@ -686,7 +709,6 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         except OSError as e:
             # Emit warning and suppress error
             logger.warning(f"failed to remove node-exporter info metric file {path}: {e}")
-
 
     def _remove_opentelemetry_collector(self):
         """Coordinate opentelemetry-collector snap and config file removal."""
@@ -910,7 +932,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
         Accomplished by enabling the textfile collector and "scraping" metrics from a text file generated by this charm for every cos_agent relation.
         """
-        return LocalPath(NODE_EXPORTER_TEXTFILE_DIRECTORY) / f"{self.unit.name.replace('/','_')}.prom"
+        return (
+            LocalPath(NODE_EXPORTER_TEXTFILE_DIRECTORY)
+            / f"{self.unit.name.replace('/', '_')}.prom"
+        )
 
     @property
     def _related_unit_pairs(self) -> list[tuple[str, str]]:
@@ -927,6 +952,45 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 for unit in rel.units
             }
         )
+
+    def _remote_apps_for_relation(self, *relation_names: str) -> set[str]:
+        remote_apps = {
+            unit.app.name
+            for rel_name in relation_names
+            for rel in self.model.relations.get(rel_name, [])
+            for unit in rel.units
+        }
+        return remote_apps
+
+    @property
+    def _apps_related_via_both_juju_info_and_cos_agent(self) -> list[str]:
+        """Return app names related to this otelcol via both juju-info and cos-agent.
+
+        The same otelcol unit may end up unintentionally related to the same app over both
+        juju-info, cos-agent. That would cause duplicated alert rules (e.g. "HostDown") to
+        be forwarded.
+        """
+        juju_info_apps = self._remote_apps_for_relation("juju-info")
+        cos_agent_apps = self._remote_apps_for_relation("cos-agent")
+        return sorted(juju_info_apps & cos_agent_apps)
+
+    @property
+    def _apps_related_via_both_send_otlp_and_other_telemetry(self) -> list[str]:
+        """Return remote app names related via send-otlp and another telemetry relation.
+
+        send-otlp aggregates all supported telemetry types (logs, metrics, and traces, but not
+        yet profiles), so it must be mutually exclusive, per remote application, with
+        send-remote-write, send-loki-logs, send-traces, and send-charm-traces. Otherwise the
+        same rule files would be forwarded to that application twice.
+        """
+        otlp_apps = self._remote_apps_for_relation("send-otlp")
+        other_telemetry_apps = self._remote_apps_for_relation(
+            "send-remote-write",
+            "send-loki-logs",
+            "send-traces",
+            "send-charm-traces",
+        )
+        return sorted(otlp_apps & other_telemetry_apps)
 
     @property
     def _info_metric(self) -> str:
