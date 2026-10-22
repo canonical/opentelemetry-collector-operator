@@ -36,7 +36,7 @@ def test_send_otlp_and_other_telemetry_to_same_app_blocks(ctx, other_relation_na
     assert "mimir" in caplog.text
 
 
-def test_send_otlp_and_other_telemetry_to_different_apps_does_not_block(ctx):
+def test_send_otlp_and_other_telemetry_to_different_apps_does_not_block(ctx, caplog):
     # GIVEN different remote apps related via send-otlp and send-remote-write
     otlp_relation = Relation(
         "send-otlp", remote_app_name="mimir", remote_app_data={"endpoints": "[]"}

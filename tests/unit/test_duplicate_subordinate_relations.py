@@ -29,7 +29,7 @@ def test_same_app_related_via_juju_info_and_cos_agent_blocks(ctx, caplog):
     assert "ubuntu" in caplog.text
 
 
-def test_different_apps_related_via_juju_info_and_cos_agent_does_not_block(ctx):
+def test_different_apps_related_via_juju_info_and_cos_agent_does_not_block(ctx, caplog):
     # GIVEN different principal apps are related via juju-info and cos-agent
     juju_info_relation = SubordinateRelation(
         "juju-info", remote_app_name="ubuntu", remote_unit_id=0
