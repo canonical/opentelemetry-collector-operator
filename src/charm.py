@@ -9,6 +9,7 @@ import re
 import shutil
 import socket
 import subprocess
+from tempfile import TemporaryDirectory
 from pathlib import Path
 
 from typing import Any, Dict, List, Mapping, Optional, cast
@@ -25,7 +26,7 @@ from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 import integrations
-from config_builder import Component, Port, build_port_map
+from config_builder import Component, Port, build_port_map, sha256
 from config_manager import ConfigManager
 from utils import hash_ca_cert_dir
 from constants import (
@@ -465,17 +466,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         # For now, the only incoming and outgoing metrics relations are remote-write/scrape
         metrics_consumer_jobs = integrations.scrape_metrics(self)
-        # Write CA certificates to disk and update job configurations
         try:
-            self._ensure_directory(CERT_DIR)
-            cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
-            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
-                metrics_consumer_jobs, cert_paths
-            )
-        except Exception as e:
-            logger.warning(f"Certificate processing failed, continuing without certs: {e}")
-            # Continue without certificate functionality
-            pass
+            scrape_cert_paths = self._configure_scrape_job_tls(metrics_consumer_jobs)
+        except (OSError, ValueError) as e:
+            logger.error("Failed to configure scrape TLS credentials: %s", e)
+            self.unit.status = BlockedStatus("Invalid scrape TLS credentials. See debug-log")
+            return
         config_manager.add_prometheus_scrape_jobs(metrics_consumer_jobs)
 
         if self._has_outgoing_metrics_relation:
@@ -551,6 +547,8 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             for snap_name in SnapMap.snaps():
                 self._restart_snap(self.snap(snap_name))
             hash_file.write_text(current_hash)
+
+        self._cleanup_scrape_certificates(scrape_cert_paths)
 
         # Set status
         if self._has_server_cert_relation and not is_tls_ready():
@@ -762,49 +760,55 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         except OSError as e:
             logger.warning("failed to remove external config secrets dir %s: %s", directory, e)
 
-    def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
-        """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
-
-        This method processes Prometheus scrape jobs, extracts CA certificate content,
-        and writes it to a unit-specific subdirectory within CERT_DIR.
-
-        Args:
-            scrape_jobs: List of scrape job dictionaries from MetricsEndpointConsumer
-
-        Returns:
-            Dictionary mapping job names to their certificate file paths
-        """
-        cert_paths = {}
-
-        # Create unit-specific certificate directory
-        unit_identifier = self.unit.name.replace("/", "_")
-        cert_dir = Path(CERT_DIR) / unit_identifier
-
-        if not cert_dir.exists():
-            cert_dir.mkdir(parents=True, exist_ok=True)
-            cert_dir.chmod(0o755)
-
+    def _configure_scrape_job_tls(self, scrape_jobs: List[Dict]) -> set[Path]:
+        """Materialize relation PEMs and preserve the remaining scrape TLS settings."""
+        cert_dir = Path(CERT_DIR) / normalize_unit_name(self.unit.name)
+        cert_paths: set[Path] = set()
         for job in scrape_jobs:
             tls_config = job.get("tls_config", {})
-            ca_content = tls_config.get("ca")
-
-            # Skip jobs without valid certificate content
-            if not (ca_content and validate_cert(ca_content)):
-                continue
-
             job_name = job.get("job_name", "default")
-            safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
-            ca_cert_path = cert_dir / f"otel_{safe_job_name}_ca.pem"
+            has_cert = bool(tls_config.get("cert") or tls_config.get("cert_file"))
+            has_key = bool(tls_config.get("key") or tls_config.get("key_file"))
+            if has_cert != has_key:
+                raise ValueError(f"Scrape job {job_name!r} requires both client certificate and key")
 
-            try:
-                ca_cert_path.write_text(ca_content)
-                ca_cert_path.chmod(0o644)
-                cert_paths[job_name] = str(ca_cert_path)
-                logger.debug(f"CA certificate for job '{job_name}' written to {ca_cert_path}")
-            except (OSError, PermissionError) as e:
-                logger.error(f"Failed to write CA certificate for job '{job_name}': {e}")
+            for field in ("ca", "cert", "key"):
+                file_field = f"{field}_file"
+                if field in tls_config and file_field in tls_config:
+                    raise ValueError(f"Scrape job {job_name!r} specifies both {field} and {file_field}")
+                content = tls_config.get(field, tls_config.get(file_field))
+                if content is None:
+                    continue
+                # The relation convention puts PEM contents in *_file; real local paths
+                # and the standard Prometheus inline fields are also supported.
+                if field not in tls_config and "-----BEGIN " not in content:
+                    cert_paths.add(Path(content))
+                    continue
+                if field != "key" and not validate_cert(content):
+                    raise ValueError(f"Scrape job {job_name!r} has an invalid {field} certificate")
+
+                cert_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+                cert_dir.chmod(0o700)
+                # Content-addressed paths make credential rotation change the config hash.
+                filename = f"scrape-{sha256(f'{job_name}:{field}:{content}')}.pem"
+                cert_path = cert_dir / filename
+                if not cert_path.exists():
+                    with TemporaryDirectory(dir=cert_dir) as staging:
+                        staged_path = LocalPath(staging) / "credential.pem"
+                        staged_path.write_text(content, mode=0o600)
+                        staged_path.rename(cert_path)
+                tls_config.pop(field, None)
+                tls_config[file_field] = str(cert_path)
+                cert_paths.add(cert_path)
 
         return cert_paths
+
+    def _cleanup_scrape_certificates(self, active_paths: set[Path]) -> None:
+        """Remove unused scrape credentials only after the new config has been loaded."""
+        cert_dir = Path(CERT_DIR) / normalize_unit_name(self.unit.name)
+        for path in cert_dir.glob("scrape-*.pem"):
+            if path not in active_paths:
+                path.unlink()
 
     def _write_secrets_to_disk(self, external_secret_files: dict[str, str]) -> None:
         if not external_secret_files:
