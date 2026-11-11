@@ -5,7 +5,7 @@ import hashlib
 import logging
 from enum import Enum, unique
 import re
-from typing import Any, Dict, List, Literal, Optional, Set, Union, cast
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union, cast
 
 import yaml
 
@@ -13,6 +13,9 @@ from constants import (
     CUSTOM_COMPONENT_ID,
     INTERNAL_LOGS_FILTER_ID,
     INTERNAL_TELEMETRY_SERVICE_NAME,
+    NODE_EXPORTER_ALWAYS_ENABLED_COLLECTORS,
+    NODE_EXPORTER_DEFAULT_COLLECTORS,
+    NODE_EXPORTER_MANAGED_COLLECTORS,
     NON_LOOPING_EXPORTER_PREFIXES,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
@@ -174,6 +177,25 @@ def build_port_map(overrides: str = "") -> Dict[str, int]:
             ports[name] = value
     _check_no_duplicate_ports(ports)
     return ports
+
+
+def parse_node_exporter_collectors(value: str) -> Tuple[Set[str], List[str]]:
+    """Parse the node_exporter_collectors option into enabled managed collectors and unknown names.
+
+    Args:
+        value: Comma-separated collector names. Empty or whitespace-only input selects the default set.
+
+    Returns:
+        A tuple of the managed collectors to enable (always including textfile) and the unknown
+        names in input order. The returned set is a new object, never a shared constant.
+    """
+    tokens = list(dict.fromkeys(token for raw in value.split(",") if (token := raw.strip())))
+    if not tokens:
+        return set(NODE_EXPORTER_DEFAULT_COLLECTORS), []
+    known = {token for token in tokens if token in NODE_EXPORTER_MANAGED_COLLECTORS}
+    unknown = [token for token in tokens if token not in NODE_EXPORTER_MANAGED_COLLECTORS]
+    return known | NODE_EXPORTER_ALWAYS_ENABLED_COLLECTORS, unknown
+
 
 @unique
 class Component(str, Enum):
