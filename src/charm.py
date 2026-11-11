@@ -719,9 +719,15 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
 
     def _configure_node_exporter(self, port: int):
         """Configure the node-exporter snap."""
+        enabled_collectors = NODE_EXPORTER_ENABLED_COLLECTORS.copy()
+        disabled_collectors = NODE_EXPORTER_DISABLED_COLLECTORS.copy()
+        for collector in ("logind", "systemd"):
+            if self.config[f"enable_{collector}_collector"]:
+                enabled_collectors.add(collector)
+                disabled_collectors.remove(collector)
         configs = {
-            "collectors": " ".join(sorted(NODE_EXPORTER_ENABLED_COLLECTORS)),
-            "no-collectors": " ".join(sorted(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "collectors": " ".join(sorted(enabled_collectors)),
+            "no-collectors": " ".join(sorted(disabled_collectors)),
             "web.listen-address": f":{port}",
         }
         ne_snap = self.snap("node-exporter")

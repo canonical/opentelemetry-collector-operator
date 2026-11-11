@@ -212,6 +212,14 @@ peers:
 
 config:
   options:
+    enable_logind_collector:
+      type: boolean
+      default: false
+      description: Enable node-exporter's logind collector. This can create many metric series.
+    enable_systemd_collector:
+      type: boolean
+      default: false
+      description: Enable node-exporter's systemd collector. This can create many metric series.
     processors:
       type: string
       description: |
