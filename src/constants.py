@@ -25,11 +25,9 @@ FILE_STORAGE_DIRECTORY: Final[str] = "/var/snap/opentelemetry-collector/common/"
 
 NODE_EXPORTER_TEXTFILE_DIRECTORY: Final[str] = "/var/snap/node-exporter/common/textfile-collector.d"
 # Ref: https://github.com/prometheus/node_exporter?tab=readme-ov-file#collectors
-NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = set()
+NODE_EXPORTER_DISABLED_COLLECTORS: Final[Set[str]] = {"logind", "systemd"}
 NODE_EXPORTER_ENABLED_COLLECTORS: Final[Set[str]] = {
     "drm",
-    "logind",
-    "systemd",
     "mountstats",
     "processes",
     "sysctl",
