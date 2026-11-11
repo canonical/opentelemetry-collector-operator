@@ -1,93 +1,75 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Feature: node-exporter collectors are selected by the node_exporter_collectors option."""
+"""Feature: node-exporter collectors are disabled through the node_exporter_disabled_collectors option."""
 
 import dataclasses
 import logging
 from unittest.mock import patch
 
 import pytest
-from config_builder import parse_node_exporter_collectors
+from config_builder import parse_node_exporter_disabled_collectors
 from ops.testing import Relation, State, SubordinateRelation
 from scenario import BlockedStatus
 
 TEXTFILE_DIR_PREFIX = "textfile.directory="
-UNKNOWN_LOG = "Ignoring unknown node-exporter collectors"
 
 
 @pytest.mark.parametrize(
-    "value, enabled, unknown",
+    "value, disabled, invalid",
     [
+        pytest.param("", set(), [], id="empty-input-disables-nothing"),
+        pytest.param(" , ", set(), [], id="commas-and-whitespace-equal-empty-input"),
+        pytest.param("logind,systemd", {"logind", "systemd"}, [], id="managed-names-disabled"),
         pytest.param(
-            "",
-            {"drm", "mountstats", "processes", "sysctl", "textfile"},
-            [],
-            id="empty-input-enables-default-set",
-        ),
-        pytest.param(
-            " , ",
-            {"drm", "mountstats", "processes", "sysctl", "textfile"},
-            [],
-            id="commas-and-whitespace-equal-empty-input",
-        ),
-        pytest.param(
-            "logind,systemd,bogus,drm,",
-            {"drm", "logind", "systemd", "textfile"},
+            "logind,bogus,systemd,drm,",
+            {"logind", "systemd", "drm"},
             ["bogus"],
-            id="unknown-names-dropped-rest-applied",
+            id="invalid-names-ignored-rest-applied",
         ),
-        pytest.param(
-            "bogus",
-            {"textfile"},
-            ["bogus"],
-            id="only-unknown-names-do-not-use-default-set",
-        ),
-        pytest.param(
-            "Logind",
-            {"textfile"},
-            ["Logind"],
-            id="matching-is-case-sensitive",
-        ),
+        pytest.param("bogus", set(), ["bogus"], id="only-invalid-names-disable-nothing"),
+        pytest.param("Logind", set(), ["Logind"], id="matching-is-case-sensitive"),
         pytest.param(
             "logind,logind,bogus,bogus",
-            {"logind", "textfile"},
+            {"logind"},
             ["bogus"],
-            id="duplicates-collapse-unknown-reported-once",
+            id="duplicates-collapse-invalid-reported-once",
         ),
+        pytest.param("textfile", set(), ["textfile"], id="textfile-cannot-be-disabled"),
         pytest.param(
-            "logind",
-            {"logind", "textfile"},
-            [],
-            id="textfile-enabled-when-omitted",
+            "textfile,logind",
+            {"logind"},
+            ["textfile"],
+            id="textfile-rejected-others-applied",
         ),
+        pytest.param("cpu", set(), ["cpu"], id="upstream-collector-not-managed"),
         pytest.param(
             " logind , systemd ",
-            {"logind", "systemd", "textfile"},
+            {"logind", "systemd"},
             [],
             id="whitespace-around-tokens-stripped",
         ),
     ],
 )
-def test_parse_node_exporter_collectors(value, enabled, unknown):
-    """Parse the option value into enabled managed collectors and unknown names."""
-    # GIVEN a node_exporter_collectors option value
+def test_parse_node_exporter_disabled_collectors(value, disabled, invalid):
+    """Parse the option value into managed collectors to disable and invalid names."""
+    # GIVEN a node_exporter_disabled_collectors option value
     # WHEN it is parsed
-    result_enabled, result_unknown = parse_node_exporter_collectors(value)
-    # THEN the enabled collectors and the unknown names match the expectation
-    assert result_enabled == enabled
-    assert result_unknown == unknown
+    result_disabled, result_invalid = parse_node_exporter_disabled_collectors(value)
+    # THEN the collectors to disable and the invalid names match the expectation
+    assert result_disabled == disabled
+    assert result_invalid == invalid
 
 
 def test_parse_returns_new_set_not_shared_constant():
     """Mutating a returned set must not leak into later calls."""
     # GIVEN a set returned for the empty input
-    enabled, _ = parse_node_exporter_collectors("")
-    # WHEN a member is removed from that set
-    enabled.discard("drm")
-    # THEN a fresh call still enables drm
-    again, _ = parse_node_exporter_collectors("")
-    assert "drm" in again
+    disabled, _ = parse_node_exporter_disabled_collectors("")
+    # WHEN a member is added to that set
+    disabled.add("drm")
+    # THEN a fresh call still disables nothing
+    again, _ = parse_node_exporter_disabled_collectors("")
+    assert again == set()
 
 
 @pytest.fixture
@@ -108,76 +90,100 @@ def _node_exporter_tokens(snap_configs):
     return enabled, disabled
 
 
-def _unknown_collector_warnings(caplog):
-    """Return WARNING records that report unknown node-exporter collectors."""
+def _warnings_naming(caplog, *names):
+    """Return WARNING records whose message mentions any of the given names."""
     return [
         record
         for record in caplog.records
-        if record.levelno == logging.WARNING and UNKNOWN_LOG in record.getMessage()
+        if record.levelno == logging.WARNING and any(name in record.getMessage() for name in names)
     ]
 
 
-def test_explicit_empty_value_enables_default_set(ctx, snap_configs, caplog):
-    """An explicit empty value enables the default collectors and no warning is logged."""
+def test_empty_value_leaves_every_managed_collector_enabled(ctx, snap_configs):
+    """With nothing disabled, all managed collectors are enabled, including logind and systemd."""
     # GIVEN the option is set to an empty string
-    state = State(config={"node_exporter_collectors": ""})
+    state = State(config={"node_exporter_disabled_collectors": ""})
     # WHEN a config_changed hook runs
     ctx.run(ctx.on.config_changed(), state)
-    # THEN the default collectors are enabled and logind and systemd are disabled
+    # THEN every managed collector is enabled and none is sent as disabled
     enabled, disabled = _node_exporter_tokens(snap_configs)
-    assert enabled == {"drm", "mountstats", "processes", "sysctl", "textfile"}
+    assert enabled == {
+        "drm",
+        "logind",
+        "mountstats",
+        "processes",
+        "sysctl",
+        "systemd",
+        "textfile",
+    }
+    assert disabled == set()
+
+
+def test_disabled_collectors_are_sent_as_no_collectors(ctx, snap_configs):
+    """Listed managed collectors are disabled and the rest stay enabled."""
+    # GIVEN two managed collectors listed as disabled
+    state = State(config={"node_exporter_disabled_collectors": "logind,systemd"})
+    # WHEN a config_changed hook runs
+    ctx.run(ctx.on.config_changed(), state)
+    # THEN the listed collectors are sent as disabled
+    enabled, disabled = _node_exporter_tokens(snap_configs)
     assert disabled == {"logind", "systemd"}
-    # AND no unknown-collector warning is logged
-    assert _unknown_collector_warnings(caplog) == []
-
-
-def test_managed_subset_enables_listed_collectors(ctx, snap_configs, caplog):
-    """Listed managed collectors are enabled and upstream collectors are not touched."""
-    # GIVEN a managed subset of collectors
-    state = State(config={"node_exporter_collectors": "drm,logind,systemd"})
-    # WHEN a config_changed hook runs
-    ctx.run(ctx.on.config_changed(), state)
-    # THEN the listed collectors and textfile are enabled
-    enabled, disabled = _node_exporter_tokens(snap_configs)
-    assert enabled == {"drm", "logind", "systemd", "textfile"}
-    # AND the unlisted managed collectors are disabled
-    assert disabled == {"mountstats", "processes", "sysctl"}
+    # AND the unlisted managed collectors and textfile remain enabled
+    assert enabled == {"drm", "mountstats", "processes", "sysctl", "textfile"}
     # AND upstream collectors appear in neither set
     assert "cpu" not in enabled | disabled
     assert "diskstats" not in enabled | disabled
-    # AND no unknown-collector warning is logged
-    assert _unknown_collector_warnings(caplog) == []
 
 
-def test_unknown_names_block_unit_and_log_warning(ctx, snap_configs, caplog):
-    """Unknown names are ignored, the rest applied, and the unit goes Blocked with a warning."""
-    # GIVEN a value with unknown names, including a case mismatch
+def test_invalid_names_block_unit_and_are_skipped(ctx, snap_configs, caplog):
+    """Invalid names are ignored, the rest applied, and the unit goes Blocked with a warning."""
+    # GIVEN a value with invalid names, including a case mismatch
     state = State(
-        config={"node_exporter_collectors": "logind,bogus,Systemd"},
+        config={"node_exporter_disabled_collectors": "logind,bogus,Systemd"},
         relations=[SubordinateRelation("cos-agent"), Relation("send-remote-write")],
     )
     # WHEN a config_changed hook runs
     state_out = ctx.run(ctx.on.config_changed(), state)
-    # THEN the known collector is applied and the unknown names are not
+    # THEN only the valid name is disabled
     enabled, disabled = _node_exporter_tokens(snap_configs)
-    assert enabled == {"logind", "textfile"}
-    assert disabled == {"drm", "mountstats", "processes", "sysctl", "systemd"}
-    # AND the unit is Blocked with a message naming the unknown collectors
+    assert disabled == {"logind"}
+    assert enabled == {"drm", "mountstats", "processes", "sysctl", "systemd", "textfile"}
+    # AND the unit is Blocked with a message naming the invalid collectors
     assert isinstance(state_out.unit_status, BlockedStatus)
     assert "bogus" in state_out.unit_status.message
     assert "Systemd" in state_out.unit_status.message
-    # AND exactly one WARNING names both unknown collectors
-    warnings = _unknown_collector_warnings(caplog)
+    # AND exactly one WARNING names both invalid collectors
+    warnings = _warnings_naming(caplog, "bogus", "Systemd")
     assert len(warnings) == 1
     assert "bogus" in warnings[0].getMessage()
     assert "Systemd" in warnings[0].getMessage()
 
 
-def test_unknown_warning_logged_even_when_relation_check_blocks(ctx, caplog):
-    """The warning is logged even when a later relation check replaces the Blocked status."""
-    # GIVEN a value with an unknown name and a cos-agent relation with no sink
+def test_textfile_cannot_be_disabled(ctx, snap_configs, caplog):
+    """Textfile stays enabled and is reported as invalid when listed."""
+    # GIVEN textfile and logind listed as disabled
     state = State(
-        config={"node_exporter_collectors": "logind,bogus"},
+        config={"node_exporter_disabled_collectors": "textfile,logind"},
+        relations=[SubordinateRelation("cos-agent"), Relation("send-remote-write")],
+    )
+    # WHEN a config_changed hook runs
+    state_out = ctx.run(ctx.on.config_changed(), state)
+    # THEN textfile is still enabled and only logind is disabled
+    enabled, disabled = _node_exporter_tokens(snap_configs)
+    assert "textfile" in enabled
+    assert "textfile" not in disabled
+    assert disabled == {"logind"}
+    # AND the unit is Blocked and a WARNING names textfile
+    assert isinstance(state_out.unit_status, BlockedStatus)
+    assert "textfile" in state_out.unit_status.message
+    assert len(_warnings_naming(caplog, "textfile")) == 1
+
+
+def test_invalid_warning_logged_even_when_relation_check_blocks(ctx, caplog):
+    """The warning is logged even when a later relation check replaces the Blocked status."""
+    # GIVEN a value with an invalid name and a cos-agent relation with no sink
+    state = State(
+        config={"node_exporter_disabled_collectors": "logind,bogus"},
         relations=[SubordinateRelation("cos-agent")],
     )
     # WHEN a config_changed hook runs
@@ -185,31 +191,33 @@ def test_unknown_warning_logged_even_when_relation_check_blocks(ctx, caplog):
     # THEN the unit is Blocked by the missing mandatory relation
     assert isinstance(state_out.unit_status, BlockedStatus)
     assert "] for cos-agent" in state_out.unit_status.message
-    # AND the warning still names the unknown collector
-    warnings = _unknown_collector_warnings(caplog)
+    # AND the warning still names the invalid collector
+    warnings = _warnings_naming(caplog, "bogus")
     assert len(warnings) == 1
-    assert "bogus" in warnings[0].getMessage()
 
 
-def test_fixing_unknown_names_clears_blocked_status(ctx, snap_configs):
-    """Removing unknown names from the option recovers the unit and applies the new set."""
-    # GIVEN a unit blocked by an unknown collector name
+def test_fixing_invalid_names_clears_blocked_status(ctx, snap_configs):
+    """Removing invalid names from the option recovers the unit and applies the new set."""
+    # GIVEN a unit blocked by an invalid collector name
     relations = [SubordinateRelation("cos-agent"), Relation("send-remote-write")]
     blocked_state = ctx.run(
         ctx.on.config_changed(),
-        State(config={"node_exporter_collectors": "logind,bogus,Systemd"}, relations=relations),
+        State(
+            config={"node_exporter_disabled_collectors": "logind,bogus,Systemd"},
+            relations=relations,
+        ),
     )
     assert isinstance(blocked_state.unit_status, BlockedStatus)
-    # WHEN the option is corrected to known names only
+    # WHEN the option is corrected to valid names only
     recovered_state = ctx.run(
         ctx.on.config_changed(),
         dataclasses.replace(
-            blocked_state, config={"node_exporter_collectors": "logind,systemd"}
+            blocked_state, config={"node_exporter_disabled_collectors": "logind"}
         ),
     )
     # THEN the unit is no longer Blocked
     assert not isinstance(recovered_state.unit_status, BlockedStatus)
-    # AND the corrected collector set is applied
+    # AND the corrected set is applied
     enabled, disabled = _node_exporter_tokens(snap_configs)
-    assert enabled == {"logind", "systemd", "textfile"}
-    assert disabled == {"drm", "mountstats", "processes", "sysctl"}
+    assert disabled == {"logind"}
+    assert enabled == {"drm", "mountstats", "processes", "sysctl", "systemd", "textfile"}

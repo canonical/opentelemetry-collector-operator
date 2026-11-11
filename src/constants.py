@@ -34,11 +34,4 @@ NODE_EXPORTER_MANAGED_COLLECTORS: Final[Set[str]] = {
     "systemd",
     "textfile",
 }
-NODE_EXPORTER_DEFAULT_COLLECTORS: Final[Set[str]] = {
-    "drm",
-    "mountstats",
-    "processes",
-    "sysctl",
-    "textfile",
-}
 NODE_EXPORTER_ALWAYS_ENABLED_COLLECTORS: Final[Set[str]] = {"textfile"}
