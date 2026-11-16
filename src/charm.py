@@ -25,7 +25,7 @@ from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 import integrations
-from config_builder import Component, Port, build_port_map
+from config_builder import Component, Port, build_port_map, sha256
 from config_manager import ConfigManager
 from utils import hash_ca_cert_dir
 from constants import (
@@ -811,7 +811,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         for job in scrape_jobs:
             tls_config = job.get("tls_config", {})
             job_name = job.get("job_name", "default")
-            safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
+            # Keep the file name readable, but suffix it with a hash of the original job
+            # name: distinct names that sanitize to the same string (e.g. "job-1" and
+            # "job/1") must not overwrite each other's credentials.
+            safe_job_name = f"{job_name.replace('/', '_').replace(' ', '_')}_{sha256(job_name)[:8]}"
             job_cert_paths = {}
 
             for kind, tls_keys, validate, permissions in specs:

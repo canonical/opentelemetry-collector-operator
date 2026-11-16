@@ -263,6 +263,17 @@ def sample_private_key():
 
 
 @pytest.fixture
+def second_ca_cert():
+    """A second, distinct sample CA certificate content for testing."""
+    return dedent("""\
+        -----BEGIN CERTIFICATE-----
+        MIIB1zCCAX+gAwIBAgIUOvHQwWQ6PnWp3lCqiFyEhdGVu6gMA0GCSqGSIb3DQEB
+        CwAwCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJDQTElMCMGA1UEAwwcSm9iLzEg
+        RGlzdGluY3QgQ0EgQ2VydGlmaWNhdGUwHhcNMjUwMTAxMDAwMDAwWhcNMjcw
+        -----END CERTIFICATE-----""").strip()
+
+
+@pytest.fixture
 def sample_client_cert():
     """Sample client certificate content for testing."""
     return dedent("""\

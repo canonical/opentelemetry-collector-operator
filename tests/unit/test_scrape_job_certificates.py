@@ -17,9 +17,9 @@ INLINE_CA = "-----BEGIN CERTIFICATE-----\nSAMPLE_CA\n-----END CERTIFICATE-----"
 SECOND_CA = "-----BEGIN CERTIFICATE-----\nOTHER_CA\n-----END CERTIFICATE-----"
 INLINE_KEY = "-----BEGIN RSA PRIVATE KEY-----\nSAMPLE_KEY\n-----END RSA PRIVATE KEY-----"
 INLINE_CERT = "-----BEGIN CERTIFICATE-----\nSAMPLE_CERT\n-----END CERTIFICATE-----"
-CA_PATH = "/tmp/test_certs/otelcol_0/otel_test_job_ca.pem"
-KEY_PATH = "/tmp/test_certs/otelcol_0/otel_test_job_key.pem"
-CERT_PATH = "/tmp/test_certs/otelcol_0/otel_test_job_cert.pem"
+CA_PATH = "/tmp/test_certs/otelcol_0/otel_test-job_4990bd27_ca.pem"
+KEY_PATH = "/tmp/test_certs/otelcol_0/otel_test-job_4990bd27_key.pem"
+CERT_PATH = "/tmp/test_certs/otelcol_0/otel_test-job_4990bd27_cert.pem"
 
 
 @pytest.fixture
@@ -165,8 +165,36 @@ def test_write_tls_certificates_to_disk_sanitizes_job_names(ctx, sample_ca_cert)
         cert_paths = charm._write_tls_certificates_to_disk(scrape_jobs)
 
         assert cert_paths[job_name] == {
-            "ca": "/tmp/test_certs/otelcol_0/otel_test_job_with_spaces_and_dashes_ca.pem"
+            "ca": "/tmp/test_certs/otelcol_0/otel_test_job_with_spaces-and-dashes_293dcd03_ca.pem"
         }
+
+
+def test_write_tls_certificates_to_disk_no_filename_collisions(
+    ctx, sample_ca_cert, second_ca_cert
+):
+    """Test that distinct job names that sanitize to the same string get distinct files.
+
+    "job-1" and "job/1" both sanitize to "job_1"; without a hash of the original
+    name in the file name they would overwrite each other's credentials.
+    """
+    relation = Relation("metrics-endpoint")
+    state = State(leader=True, relations=[relation])
+    scrape_jobs = [
+        {"job_name": "job-1", "tls_config": {"ca_file": sample_ca_cert}},
+        {"job_name": "job/1", "tls_config": {"ca_file": second_ca_cert}},
+    ]
+
+    with ctx(ctx.on.relation_joined(relation), state) as manager_ctx:
+        charm = manager_ctx.charm
+        cert_paths = charm._write_tls_certificates_to_disk(scrape_jobs)
+
+        path_one = Path(cert_paths["job-1"]["ca"])
+        path_two = Path(cert_paths["job/1"]["ca"])
+        assert path_one != path_two
+        assert path_one.exists()
+        assert path_two.exists()
+        assert path_one.read_text() == sample_ca_cert
+        assert path_two.read_text() == second_ca_cert
 
 
 def test_scrape_job_pem_content_is_not_rendered_in_config(ctx, manager, sample_ca_cert):
@@ -188,6 +216,6 @@ def test_scrape_job_pem_content_is_not_rendered_in_config(ctx, manager, sample_c
 
         tls_config = updated_jobs[0]["tls_config"]
         assert sample_ca_cert not in str(tls_config)
-        assert tls_config["ca_file"].endswith("otel_test_job_ca.pem")
+        assert tls_config["ca_file"].endswith("otel_test-job_4990bd27_ca.pem")
         assert tls_config["server_name"] == "juju-apiserver"
         assert Path(tls_config["ca_file"]).read_text() == sample_ca_cert
