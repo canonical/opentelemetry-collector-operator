@@ -253,6 +253,27 @@ def sample_invalid_cert():
 
 
 @pytest.fixture
+def sample_private_key():
+    """Sample private key content for testing."""
+    return dedent("""\
+        -----BEGIN RSA PRIVATE KEY-----
+        MIIEpAIBAAKCAQEAwxKxPqB/NBOOfJUA9t4gCjGcNnHvEjQc8g8MJp8qN3lqf8d4
+        d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8
+        -----END RSA PRIVATE KEY-----""").strip()
+
+
+@pytest.fixture
+def sample_client_cert():
+    """Sample client certificate content for testing."""
+    return dedent("""\
+        -----BEGIN CERTIFICATE-----
+        MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiIMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
+        BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
+        aWRnaXRzIFB0eUzMkQwHhcNMTMwOTEyMjE1MjAyWhcNMTQwOTEyMjE1MjAyWjBF
+        -----END CERTIFICATE-----""").strip()
+
+
+@pytest.fixture
 def config_manager():
     """Create a ConfigManager instance for testing."""
     return ConfigManager(

@@ -70,6 +70,19 @@ def validate_cert(cert: str) -> bool:
     return bool(re.search(pem_pattern, cert, re.DOTALL))
 
 
+def validate_private_key(key: str) -> bool:
+    """Validate private key content using PEM format validation.
+
+    Args:
+        key: Private key content to validate
+
+    Returns:
+        True if the key has a valid PEM format, False otherwise
+    """
+    pem_pattern = r"-----BEGIN( .*)? PRIVATE KEY-----(.*?)-----END( .*)? PRIVATE KEY-----"
+    return bool(re.search(pem_pattern, key, re.DOTALL))
+
+
 # TODO: move this method outside of charm.py together with the cos-agent integrations
 def _filelog_receiver_config(
     include: List[str], exclude: List[str], attributes: Dict[str, Optional[str]]
@@ -465,11 +478,11 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         )
         # For now, the only incoming and outgoing metrics relations are remote-write/scrape
         metrics_consumer_jobs = integrations.scrape_metrics(self)
-        # Write CA certificates to disk and update job configurations
+        # Write TLS certificates to disk and update job configurations
         try:
             self._ensure_directory(CERT_DIR)
-            cert_paths = self._write_ca_certificates_to_disk(metrics_consumer_jobs)
-            metrics_consumer_jobs = config_manager.update_jobs_with_ca_paths(
+            cert_paths = self._write_tls_certificates_to_disk(metrics_consumer_jobs)
+            metrics_consumer_jobs = config_manager.update_jobs_with_cert_paths(
                 metrics_consumer_jobs, cert_paths
             )
         except Exception as e:
@@ -762,47 +775,67 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         except OSError as e:
             logger.warning("failed to remove external config secrets dir %s: %s", directory, e)
 
-    def _write_ca_certificates_to_disk(self, scrape_jobs: List[Dict]) -> Dict[str, str]:
-        """Write CA certificates from jobs to a dedicated directory and return mapping of job names to file paths.
+    def _write_tls_certificates_to_disk(
+        self, scrape_jobs: List[Dict]
+    ) -> Dict[str, Dict[str, str]]:
+        """Write TLS certificates from jobs to disk and return job name to cert type to file path.
 
-        This method processes Prometheus scrape jobs, extracts CA certificate content,
-        and writes it to a unit-specific subdirectory within CERT_DIR.
+        Certificates may arrive inline in a job's tls_config under the file spelling
+        (`ca_file`, `key_file`, `cert_file`) or the content spelling (`ca`, `key`,
+        `cert`); both are accepted. Valid PEM material is written to a unit-specific
+        subdirectory within CERT_DIR, and the returned paths are meant to replace the
+        inline content in the scrape job config.
 
         Args:
             scrape_jobs: List of scrape job dictionaries from MetricsEndpointConsumer
 
         Returns:
-            Dictionary mapping job names to their certificate file paths
+            Dictionary mapping job names to dicts of cert type -> file path. Jobs
+            without valid inline PEM material are omitted.
         """
         cert_paths = {}
 
         # Create unit-specific certificate directory
         unit_identifier = self.unit.name.replace("/", "_")
         cert_dir = Path(CERT_DIR) / unit_identifier
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        cert_dir.chmod(0o755)
 
-        if not cert_dir.exists():
-            cert_dir.mkdir(parents=True, exist_ok=True)
-            cert_dir.chmod(0o755)
+        # Prometheus accepts both the inline (`ca`) and the file (`ca_file`) spelling
+        specs = (
+            ("ca", ("ca_file", "ca"), validate_cert, 0o644),
+            ("key", ("key_file", "key"), validate_private_key, 0o600),
+            ("cert", ("cert_file", "cert"), validate_cert, 0o644),
+        )
 
         for job in scrape_jobs:
             tls_config = job.get("tls_config", {})
-            ca_content = tls_config.get("ca")
-
-            # Skip jobs without valid certificate content
-            if not (ca_content and validate_cert(ca_content)):
-                continue
-
             job_name = job.get("job_name", "default")
             safe_job_name = job_name.replace("/", "_").replace(" ", "_").replace("-", "_")
-            ca_cert_path = cert_dir / f"otel_{safe_job_name}_ca.pem"
+            job_cert_paths = {}
 
-            try:
-                ca_cert_path.write_text(ca_content)
-                ca_cert_path.chmod(0o644)
-                cert_paths[job_name] = str(ca_cert_path)
-                logger.debug(f"CA certificate for job '{job_name}' written to {ca_cert_path}")
-            except (OSError, PermissionError) as e:
-                logger.error(f"Failed to write CA certificate for job '{job_name}': {e}")
+            for kind, tls_keys, validate, permissions in specs:
+                content = next((tls_config[key] for key in tls_keys if tls_config.get(key)), None)
+                if not content or "-----BEGIN" not in content:
+                    continue
+                if not validate(content):
+                    logger.warning(
+                        f"Ignoring malformed PEM {kind} for job '{job_name}'; "
+                        "it is passed through to the workload config as-is"
+                    )
+                    continue
+                cert_path = cert_dir / f"otel_{safe_job_name}_{kind}.pem"
+
+                try:
+                    cert_path.write_text(content)
+                    cert_path.chmod(permissions)
+                    job_cert_paths[kind] = str(cert_path)
+                    logger.debug(f"{kind} for job '{job_name}' written to {cert_path}")
+                except (OSError, PermissionError) as e:
+                    logger.error(f"Failed to write {kind} for job '{job_name}': {e}")
+
+            if job_cert_paths:
+                cert_paths[job_name] = job_cert_paths
 
         return cert_paths
 
