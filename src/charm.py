@@ -827,8 +827,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 cert_path = cert_dir / f"otel_{safe_job_name}_{kind}.pem"
 
                 try:
-                    cert_path.write_text(content)
-                    cert_path.chmod(permissions)
+                    with os.fdopen(
+                        os.open(cert_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, permissions),
+                        "w",
+                    ) as cert_file:
+                        os.fchmod(cert_file.fileno(), permissions)
+                        cert_file.write(content)
                     job_cert_paths[kind] = str(cert_path)
                     logger.debug(f"{kind} for job '{job_name}' written to {cert_path}")
                 except (OSError, PermissionError) as e:
