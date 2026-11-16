@@ -16,16 +16,19 @@ log = logging.getLogger(__name__)
 
 
 def get_system_arch() -> str:
-    """Returns the architecture of this machine, mapping some values to amd64 or arm64.
+    """Returns the architecture of this machine, mapping some values to amd64, arm64 or ppc64el.
 
     If platform is x86_64 or amd64, it returns amd64.
     If platform is aarch64, arm64, armv8b, or armv8l, it returns arm64.
+    If platform is ppc64le, it returns ppc64el.
     """
     arch = platform.machine().lower()
     if arch in ["x86_64", "amd64"]:
         arch = "amd64"
     elif arch in ["aarch64", "arm64", "armv8b", "armv8l"]:
         arch = "arm64"
+    elif arch in ["ppc64le", "ppc64el"]:
+        arch = "ppc64el"
     # else: keep arch as is
     return arch
 
