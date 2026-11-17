@@ -265,15 +265,6 @@ def second_ca_cert():
         -----END CERTIFICATE-----""").strip()
 
 
-@pytest.fixture
-def sample_client_cert():
-    """Sample client certificate content for testing."""
-    return dedent("""\
-        -----BEGIN CERTIFICATE-----
-        MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiIMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-        BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-        aWRnaXRzIFB0eUzMkQwHhcNMTMwOTEyMjE1MjAyWhcNMTQwOTEyMjE1MjAyWjBF
-        -----END CERTIFICATE-----""").strip()
 
 
 @pytest.fixture
