@@ -252,14 +252,6 @@ def sample_invalid_cert():
     return "INVALID_CERT_CONTENT"
 
 
-@pytest.fixture
-def sample_private_key():
-    """Sample private key content for testing."""
-    return dedent("""\
-        -----BEGIN RSA PRIVATE KEY-----
-        MIIEpAIBAAKCAQEAwxKxPqB/NBOOfJUA9t4gCjGcNnHvEjQc8g8MJp8qN3lqf8d4
-        d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8d4d8
-        -----END RSA PRIVATE KEY-----""").strip()
 
 
 @pytest.fixture
