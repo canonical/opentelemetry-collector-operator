@@ -266,6 +266,13 @@ def test_scrape_job_pem_content_is_not_rendered_in_config(ctx, manager, sample_c
             id="failed key write: the CA gets its path, the key does not reach the config",
         ),
         pytest.param(
+            {"ca_file": INLINE_CA, "cert_file": INLINE_CERT, "key_file": INLINE_KEY, "server_name": "juju-apiserver"},
+            True,
+            {"test-job": {"ca": CA_PATH}},
+            {"ca_file": CA_PATH, "server_name": "juju-apiserver"},
+            id="failed key write: the orphaned client cert is dropped too (cert without key cannot load)",
+        ),
+        pytest.param(
             {"ca_file": MALFORMED_PEM},
             False,
             {},

@@ -861,6 +861,17 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 except (OSError, PermissionError) as e:
                     logger.error(f"Failed to write {kind} for job '{job_name}': {e}")
 
+            # Client material is only usable as a pair: a lone cert_file or
+            # key_file makes the receiver reject the whole configuration.
+            if ("key" in job_cert_paths) != ("cert" in job_cert_paths):
+                orphaned = "key" if "key" in job_cert_paths else "cert"
+                job_cert_paths.pop(orphaned)
+                logger.warning(
+                    f"Dropping the written {orphaned} for job '{job_name}': its "
+                    "counterpart could not be written to disk, and the receiver "
+                    "rejects a certificate without a key (and vice versa)"
+                )
+
             # The file-spelling keys require a path: inline PEM there makes the
             # Prometheus receiver reject the whole configuration, so the material
             # that could not be written to disk is dropped from the job instead.
