@@ -380,6 +380,19 @@ config:
         Example — override only the ports that conflict with other services:
           juju config opentelemetry-collector ports="loki_http=3501,otlp_grpc=4320"
       default: ""
+    node_exporter_disabled_collectors:
+      type: string
+      description: |
+        Comma-separated list of node-exporter collectors to disable. All managed collectors are
+        enabled by default.
+
+        Managed collectors: drm, logind, mountstats, processes, sysctl, systemd and textfile.
+        textfile is always enabled and cannot be disabled.
+        Invalid names are ignored and the unit goes Blocked; see juju debug-log.
+        Other node-exporter collectors keep their upstream defaults.
+
+        Example: juju config opentelemetry-collector node_exporter_disabled_collectors="logind,systemd"
+      default: ""
     memory_limit_percentage:
       type: int
       description: |

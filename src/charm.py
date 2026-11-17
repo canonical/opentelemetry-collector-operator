@@ -11,7 +11,7 @@ import socket
 import subprocess
 from pathlib import Path
 
-from typing import Any, Dict, List, Mapping, Optional, cast
+from typing import Any, Dict, List, Mapping, Optional, Set, cast
 
 import ops
 from charmlibs.pathops import LocalPath
@@ -25,7 +25,7 @@ from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 import integrations
-from config_builder import Component, Port, build_port_map
+from config_builder import Component, Port, build_port_map, parse_node_exporter_disabled_collectors
 from config_manager import ConfigManager
 from utils import hash_ca_cert_dir
 from constants import (
@@ -35,8 +35,7 @@ from constants import (
     EXTERNAL_CONFIG_SECRETS_DIR,
     LOKI_RULES_DEST_PATH,
     METRICS_RULES_DEST_PATH,
-    NODE_EXPORTER_DISABLED_COLLECTORS,
-    NODE_EXPORTER_ENABLED_COLLECTORS,
+    NODE_EXPORTER_MANAGED_COLLECTORS,
     NODE_EXPORTER_TEXTFILE_DIRECTORY,
     RECV_CA_CERT_FOLDER_PATH,
     SERVER_CA_CERT_PATH,
@@ -582,12 +581,22 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 return
 
         self._ensure_directory(NODE_EXPORTER_TEXTFILE_DIRECTORY)
-        self._configure_node_exporter(port_map[Port.node_exporter.name])
+        disabled_collectors, invalid_collectors = parse_node_exporter_disabled_collectors(
+            cast(str, self.config.get("node_exporter_disabled_collectors", ""))
+        )
+        self._configure_node_exporter(port_map[Port.node_exporter.name], disabled_collectors)
         self.unit.status = ActiveStatus()
 
         if not valid_mem_limit:
             self.unit.status = BlockedStatus(
                 "Invalid memory_limit_percentage config value: defaulting to 100, see debug-log"
+            )
+
+        if invalid_collectors:
+            names = ", ".join(invalid_collectors)
+            logger.warning(f"Ignoring invalid node-exporter collectors: {names}")
+            self.unit.status = BlockedStatus(
+                f"Invalid node-exporter collectors ignored: {names}. See debug-log"
             )
 
         # Mandatory relation pairs
@@ -717,11 +726,13 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         # TODO: Luca if the snap is used by other units, we should probably `ensure`
         # that the max_revision is installed instead.
 
-    def _configure_node_exporter(self, port: int):
+    def _configure_node_exporter(self, port: int, disabled_collectors: Set[str]):
         """Configure the node-exporter snap."""
+        textfile_dir = f"textfile.directory={NODE_EXPORTER_TEXTFILE_DIRECTORY}"
+        enabled_collectors = NODE_EXPORTER_MANAGED_COLLECTORS - disabled_collectors
         configs = {
-            "collectors": " ".join(sorted(NODE_EXPORTER_ENABLED_COLLECTORS)),
-            "no-collectors": " ".join(sorted(NODE_EXPORTER_DISABLED_COLLECTORS)),
+            "collectors": " ".join(sorted({*enabled_collectors, textfile_dir})),
+            "no-collectors": " ".join(sorted(disabled_collectors)),
             "web.listen-address": f":{port}",
         }
         ne_snap = self.snap("node-exporter")
