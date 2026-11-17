@@ -786,6 +786,12 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         subdirectory within CERT_DIR, and the returned paths are meant to replace the
         inline content in the scrape job config.
 
+        File-spelling keys whose material could not be written to disk (a failed
+        write, or malformed PEM) are dropped from the job's tls_config: inline PEM
+        where a path is required prevents the Prometheus receiver from loading the
+        configuration. The content spelling is left as-is, since it carries PEM
+        natively.
+
         Args:
             scrape_jobs: List of scrape job dictionaries from MetricsEndpointConsumer
 
@@ -822,10 +828,7 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                 if not content or "-----BEGIN" not in content:
                     continue
                 if not validate(content):
-                    logger.warning(
-                        f"Ignoring malformed PEM {kind} for job '{job_name}'; "
-                        "it is passed through to the workload config as-is"
-                    )
+                    logger.warning(f"Ignoring malformed PEM {kind} for job '{job_name}'")
                     continue
                 cert_path = cert_dir / f"otel_{safe_job_name}_{kind}.pem"
 
@@ -840,6 +843,21 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
                     logger.debug(f"{kind} for job '{job_name}' written to {cert_path}")
                 except (OSError, PermissionError) as e:
                     logger.error(f"Failed to write {kind} for job '{job_name}': {e}")
+
+            # The file-spelling keys require a path: inline PEM there makes the
+            # Prometheus receiver reject the whole configuration, so the material
+            # that could not be written to disk is dropped from the job instead.
+            # The content spelling carries PEM natively and is left as-is.
+            for kind, (file_key, _), _, _ in specs:
+                if kind in job_cert_paths:
+                    continue
+                inline = tls_config.get(file_key)
+                if inline and "-----BEGIN" in inline:
+                    tls_config.pop(file_key)
+                    logger.warning(
+                        f"Dropping inline {file_key} for job '{job_name}': it could not "
+                        "be written to disk and the Prometheus receiver requires a path"
+                    )
 
             if job_cert_paths:
                 cert_paths[job_name] = job_cert_paths
