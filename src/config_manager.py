@@ -650,37 +650,39 @@ class ConfigManager:
                 ],
             )
 
-    def update_jobs_with_ca_paths(
-        self, metrics_consumer_jobs: List[Dict], cert_paths: Dict[str, str]
+    def update_jobs_with_cert_paths(
+        self, metrics_consumer_jobs: List[Dict], cert_paths: Dict[str, Dict[str, str]]
     ) -> List[Dict]:
         """Update jobs to use certificate file paths instead of certificate content.
 
         This method updates the TLS configuration of Prometheus scrape jobs to
-        reference CA certificates by file path instead of containing the
-        certificate content directly.
+        reference CA certificates, private keys, and client certificates by file
+        path instead of containing the certificate content directly.
+
+        Jobs without certificates written to disk are left untouched: their
+        tls_config, including any inline material and fields such as server_name,
+        is passed through to the workload config as-is.
 
         Args:
             metrics_consumer_jobs: List of scrape job dictionaries from MetricsEndpointConsumer
-            cert_paths: Dictionary mapping job names to their certificate file paths
+            cert_paths: Dictionary mapping job names to dicts of cert type -> file path
 
         Returns:
-            List of updated scrape job dictionaries with ca_file pointing to file paths
+            List of updated scrape job dictionaries with *_file fields pointing to file paths
         """
         for job in metrics_consumer_jobs:
             job_name = job.get("job_name", "default")
 
-            if job_name not in cert_paths:
-                job.pop("tls_config", None)
-                continue
-
-            tls_config = job.get("tls_config", {})
-            tls_config["ca_file"] = cert_paths[job_name]
-            if "ca" in tls_config:
-                tls_config.pop("ca")
-            job["tls_config"] = tls_config
-            logger.debug(
-                f"Updated job '{job_name}' to use certificate path: {cert_paths[job_name]}"
-            )
+            if job_name in cert_paths:
+                tls_config = job.get("tls_config", {})
+                mapping = {"ca": "ca_file", "key": "key_file", "cert": "cert_file"}
+                for key, file_key in mapping.items():
+                    if key not in cert_paths[job_name]:
+                        continue
+                    tls_config.pop(key, None)
+                    tls_config[file_key] = cert_paths[job_name][key]
+                job["tls_config"] = tls_config
+                logger.debug(f"updated job '{job_name}' with certificate paths")
 
         return metrics_consumer_jobs
 
