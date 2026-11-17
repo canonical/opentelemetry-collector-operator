@@ -5,7 +5,7 @@ import hashlib
 import logging
 from enum import Enum, unique
 import re
-from typing import Any, Dict, List, Literal, Optional, Set, Union, cast
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union, cast
 
 import yaml
 
@@ -13,6 +13,8 @@ from constants import (
     CUSTOM_COMPONENT_ID,
     INTERNAL_LOGS_FILTER_ID,
     INTERNAL_TELEMETRY_SERVICE_NAME,
+    NODE_EXPORTER_ALWAYS_ENABLED_COLLECTORS,
+    NODE_EXPORTER_MANAGED_COLLECTORS,
     NON_LOOPING_EXPORTER_PREFIXES,
     SERVER_CERT_PATH,
     SERVER_CERT_PRIVATE_KEY_PATH,
@@ -174,6 +176,24 @@ def build_port_map(overrides: str = "") -> Dict[str, int]:
             ports[name] = value
     _check_no_duplicate_ports(ports)
     return ports
+
+
+def parse_node_exporter_disabled_collectors(value: str) -> Tuple[Set[str], List[str]]:
+    """Parse the disabled-collectors option into collectors to disable and invalid names.
+
+    Args:
+        value: Comma-separated collector names. Empty or whitespace-only input disables nothing.
+
+    Returns:
+        A tuple of the managed collectors to disable and the invalid names in input order.
+        textfile is always enabled, so it is reported as invalid. The returned set is a new object.
+    """
+    tokens = list(dict.fromkeys(token for raw in value.split(",") if (token := raw.strip())))
+    disableable = NODE_EXPORTER_MANAGED_COLLECTORS - NODE_EXPORTER_ALWAYS_ENABLED_COLLECTORS
+    known = {token for token in tokens if token in disableable}
+    invalid = [token for token in tokens if token not in disableable]
+    return known, invalid
+
 
 @unique
 class Component(str, Enum):
