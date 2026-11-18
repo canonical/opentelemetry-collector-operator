@@ -252,6 +252,21 @@ def sample_invalid_cert():
     return "INVALID_CERT_CONTENT"
 
 
+
+
+@pytest.fixture
+def second_ca_cert():
+    """A second, distinct sample CA certificate content for testing."""
+    return dedent("""\
+        -----BEGIN CERTIFICATE-----
+        MIIB1zCCAX+gAwIBAgIUOvHQwWQ6PnWp3lCqiFyEhdGVu6gMA0GCSqGSIb3DQEB
+        CwAwCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJDQTElMCMGA1UEAwwcSm9iLzEg
+        RGlzdGluY3QgQ0EgQ2VydGlmaWNhdGUwHhcNMjUwMTAxMDAwMDAwWhcNMjcw
+        -----END CERTIFICATE-----""").strip()
+
+
+
+
 @pytest.fixture
 def config_manager():
     """Create a ConfigManager instance for testing."""
