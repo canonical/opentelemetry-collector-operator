@@ -149,6 +149,9 @@ def mock_snap_operations():
     mock_snap.start.return_value = None
     mock_snap.stop.return_value = None
     mock_snap.restart.return_value = None
+    # An empty config document, as `snap get -d` would return for a snap
+    # without any configuration set
+    mock_snap.get.return_value = {}
 
     # Create a mock for SnapCache that returns the mock snap
     mock_cache = MagicMock()
@@ -159,7 +162,13 @@ def mock_snap_operations():
         patch("charm.snap.Snap", return_value=mock_snap),
         patch("charm.snap.SnapCache", return_value=mock_cache),
     ):
-        yield
+        yield mock_snap
+
+
+@pytest.fixture
+def mock_snap(mock_snap_operations):
+    """The shared mock snap instance that every `charm.snap` call resolves to."""
+    return mock_snap_operations
 
 
 @pytest.fixture
