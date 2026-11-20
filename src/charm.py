@@ -96,7 +96,9 @@ _PROXY_URL_PATTERN = re.compile(
     r"^(https?|socks5h?)://([^/]*@)?([a-z0-9.-]+|\[[0-9a-f:.]+\])(?::([0-9]{1,5}))?/?$"
 )
 # the scheme and the credentials (userinfo) part of a proxy URL, used for redaction
-_PROXY_USERINFO_PATTERN = re.compile(r"^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)?[^/?#]*@")
+_PROXY_USERINFO_PATTERN = re.compile(
+    r"^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)?.*@", re.DOTALL
+)
 
 
 def _is_valid_proxy_url(url: str) -> bool:
@@ -876,10 +878,10 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         logger.info("applying the model proxy settings to the opentelemetry-collector snap")
         try:
             self._set_proxy_snap_configs_with_retry(snap, config)
-        except (SnapError, TimeoutError) as e:
-            # The snapd change failed (e.g. the snap's configure hook rejected a
-            # value the charm considered valid) or never completed. Not an error
-            # state: the unit blocks and the previous settings stay applied.
+        except SnapError as e:
+            # A failed snapd change (e.g. a configure-hook rejection) rolls back
+            # the configuration. A timeout leaves the outcome unknown and must
+            # propagate so Juju can retry the hook.
             # SnapAPIError is deliberately not caught: snapd being unreachable is
             # not a settings problem, and a hook retry is the right recovery.
             message = (
