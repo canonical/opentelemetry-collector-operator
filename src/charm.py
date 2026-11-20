@@ -19,10 +19,11 @@ from charms.grafana_agent.v0.cos_agent import COSAgentRequirer
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiProvider
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.operator_libs_linux.v2 import snap  # type: ignore
+from charms.operator_libs_linux.v2.snap import JSONAble, SnapAPIError, SnapError  # type: ignore
 from cosl import JujuTopology, MandatoryRelationPairs
 from ops import BlockedStatus, CharmBase, RelationChangedEvent
 from ops.model import ActiveStatus, MaintenanceStatus, WaitingStatus
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 import integrations
 from config_builder import (
@@ -86,6 +87,60 @@ def validate_private_key(key: str) -> bool:
     """
     pem_pattern = r"-----BEGIN( .*)? PRIVATE KEY-----(.*?)-----END( .*)? PRIVATE KEY-----"
     return bool(re.search(pem_pattern, key, re.DOTALL))
+
+
+# scheme://[user[:pass]@]host[:port][/], where the host is a hostname, an IPv4 address
+# or a bracketed IPv6 address. Keep in sync with `is_valid_proxy_url` in the snap's
+# configure hook (opentelemetry-collector-snap: {latest,0.130}/snap/hooks/configure).
+_PROXY_URL_PATTERN = re.compile(
+    r"^(https?|socks5h?)://([^/]*@)?([a-z0-9.-]+|\[[0-9a-f:.]+\])(?::([0-9]{1,5}))?/?$"
+)
+# the scheme and the credentials (userinfo) part of a proxy URL, used for redaction
+_PROXY_USERINFO_PATTERN = re.compile(r"^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)?[^/?#]*@")
+
+
+def _is_valid_proxy_url(url: str) -> bool:
+    """Whether the snap's configure hook would accept this proxy URL.
+
+    The rules are the hook's: one of the schemes below (case-insensitive), a hostname,
+    an IPv4 address or a bracketed IPv6 address, an optional port in the 1-65535 range
+    and an optional trailing slash.
+    """
+    # fullmatch, as `$` would also accept a trailing newline
+    match = _PROXY_URL_PATTERN.fullmatch(url.lower())
+    if match is None:
+        return False
+    return match.group(4) is None or 1 <= int(match.group(4)) <= 65535
+
+
+def _redact_proxy_credentials(url: str) -> str:
+    """Mask the credentials embedded in a proxy URL before logging or showing it."""
+    return _PROXY_USERINFO_PATTERN.sub(r"\g<scheme>***@", url)
+
+
+def _validate_proxy_config(config: Mapping[str, str]) -> Optional[str]:
+    """Validate the proxy settings the charm would apply to the collector snap.
+
+    The rules match the snap's configure hook, which has the final say: a value the
+    hook rejects makes `snap set` fail and would error the hook instead of blocking
+    the unit.
+
+    Args:
+        config: proxy snap options, as built by `OpenTelemetryCollectorCharm._proxy_snap_config`
+
+    Returns:
+        An error message naming the offending Juju model setting, or None if the
+        settings are valid.
+    """
+    for option in ("https-proxy", "http-proxy"):
+        value = config.get(option, "")
+        if value and not _is_valid_proxy_url(value):
+            return (
+                f'Invalid juju-{option} "{_redact_proxy_credentials(value)}": expected '
+                "scheme://[user[:pass]@]host[:port][/], with an http://, https://, "
+                "socks5:// or socks5h:// scheme"
+            )
+    return None
 
 
 # TODO: move this method outside of charm.py together with the cos-agent integrations
@@ -580,6 +635,22 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
         if feature_gates:
             self.snap("opentelemetry-collector").set({"feature-gates": feature_gates})
 
+        # Apply the model's proxy settings; a change restarts the snap via its
+        # configure hook.
+        # NOTE: the snap is shared by every collector unit on this machine, but the
+        # proxy settings are model-wide, so co-located units observe the same values.
+        # A proxy value rejected by the charm's or the snap's validation is not
+        # applied, so the snap keeps its last good proxy settings; the unit reports
+        # the problem in the status section below.
+        proxy_config = self._proxy_snap_config
+        proxy_error = _validate_proxy_config(proxy_config)
+        if proxy_error:
+            logger.error(proxy_error)
+        else:
+            proxy_error = self._sync_proxy_snap_config(
+                self.snap("opentelemetry-collector"), proxy_config
+            )
+
         # Start the otelcol snap in case it was stopped while waiting for certificates
         self.snap("opentelemetry-collector").start()
 
@@ -617,6 +688,9 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
             self.unit.status = BlockedStatus(
                 f"Invalid node-exporter collectors ignored: {names}. See debug-log"
             )
+        # Invalid model proxy settings, or a proxy value the snap rejected
+        if proxy_error:
+            self.unit.status = BlockedStatus(proxy_error)
 
         # Mandatory relation pairs
         if missing_relations := _get_missing_mandatory_relations(self):
@@ -762,6 +836,75 @@ class OpenTelemetryCollectorCharm(ops.CharmBase):
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
     def _set_snap_configs_with_retry(self, snap, configs: Mapping[str, snap.JSONAble]):
         snap.set(configs)  # type: ignore
+
+    @property
+    def _proxy_snap_config(self) -> Dict[str, str]:
+        """Proxy settings for the collector, derived from the Juju model proxy settings.
+
+        Juju exposes the model-level proxy settings (juju-http-proxy, juju-https-proxy,
+        juju-no-proxy) to charms via the JUJU_CHARM_*_PROXY environment variables. When
+        any proxy is set, local addresses are appended to no-proxy so that local scrapes
+        and the internal telemetry exporter bypass the proxy.
+        """
+        proxies = {
+            "https-proxy": os.environ.get("JUJU_CHARM_HTTPS_PROXY", ""),
+            "http-proxy": os.environ.get("JUJU_CHARM_HTTP_PROXY", ""),
+            "no-proxy": os.environ.get("JUJU_CHARM_NO_PROXY", ""),
+        }
+        if any(proxies.values()):
+            local_addresses = ["localhost", "127.0.0.1", "::1", "0.0.0.0", socket.getfqdn()]
+            entries = [entry for entry in proxies["no-proxy"].split(",") if entry]
+            proxies["no-proxy"] = ",".join(dict.fromkeys(entries + local_addresses))
+        return proxies
+
+    def _sync_proxy_snap_config(
+        self, snap: snap.Snap, config: Mapping[str, str]
+    ) -> Optional[str]:
+        """Apply the model's proxy settings to the snap, only when they changed.
+
+        Every `snap set` runs the snap's configure hook, which restarts the
+        collector, so unchanged values must not be written again.
+
+        Returns:
+            An error message if the settings could not be applied, else None. A
+            failure leaves the previously applied proxy settings in place: snapd
+            discards the whole configuration change when the hook fails.
+        """
+        current = snap.get(None, typed=True)
+        if config == {key: str(current.get(key) or "") for key in config}:
+            return None
+        logger.info("applying the model proxy settings to the opentelemetry-collector snap")
+        try:
+            self._set_proxy_snap_configs_with_retry(snap, config)
+        except (SnapError, TimeoutError) as e:
+            # The snapd change failed (e.g. the snap's configure hook rejected a
+            # value the charm considered valid) or never completed. Not an error
+            # state: the unit blocks and the previous settings stay applied.
+            # SnapAPIError is deliberately not caught: snapd being unreachable is
+            # not a settings problem, and a hook retry is the right recovery.
+            message = (
+                "Failed to apply the model proxy settings; "
+                "keeping the previously applied ones. See debug-log"
+            )
+            logger.error(f"{message}: {e}")
+            return message
+        return None
+
+    # We use tenacity because .set() performs a HTTP request to the snapd server
+    # which is not always ready. Only those API errors are retried: a failed or
+    # timed-out snapd change (SnapError, TimeoutError) would fail the same way
+    # again. reraise surfaces the original exception instead of a RetryError.
+    @retry(
+        retry=retry_if_exception_type(SnapAPIError),
+        stop=stop_after_attempt(5),
+        wait=wait_fixed(5),
+        reraise=True,
+    )
+    def _set_proxy_snap_configs_with_retry(self, snap: snap.Snap, config: Mapping[str, str]) -> None:
+        # A JSON null clears the option, so the whole proxy configuration is one
+        # snapd change and the snap's configure hook restarts the collector once
+        typed_config: Dict[str, JSONAble] = {key: value or None for key, value in config.items()}
+        snap.set(typed_config, typed=True)
 
     # We use tenacity because .restart() might rarely fail due to some timing issues with snapd
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(5))
